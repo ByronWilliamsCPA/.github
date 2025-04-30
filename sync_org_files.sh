@@ -1,21 +1,15 @@
 #!/usr/bin/env bash
-# sync_org_files.sh
-# Copies community files from the org-level .github repo into a downstream project.
-# Usage: bash sync_org_files.sh
-
 set -euo pipefail
 
 # SPDX header + compliance note
-read -r -d '' HEADER <<'EOF'
-<!-- SPDX-FileCopyrightText: © 2019–2025 Byron Williams -->
+HEADER='<!-- SPDX-FileCopyrightText: © 2019–2025 Byron Williams -->
 <!-- SPDX-License-Identifier: MIT -->
 
 > **NOTE:** This file is maintained centrally in the organization’s `.github` repository.
 > For the latest version, see:
-> https://github.com/williaby/.github/blob/main/{{FILE_PATH}}
-EOF
+> https://github.com/williaby/.github/blob/main/{{FILE_PATH}}'
 
-# List of files to sync
+# Files to sync
 FILES=(
   "CODE_OF_CONDUCT.md"
   "SECURITY.md"
@@ -30,16 +24,14 @@ FILES=(
 
 for f in "${FILES[@]}"; do
   org_url="https://raw.githubusercontent.com/williaby/.github/main/$f"
-  echo "Generating $f from org…"
+  echo ">>> Syncing $f from $org_url"
   mkdir -p "$(dirname "$f")"
   {
-    # 1) SPDX header + compliance pointer
-    printf "%s
-
-" "$HEADER" | sed "s|{{FILE_PATH}}|$f|g"
-    # 2) The org-level version
-    curl -fsSL "$org_url"
+    # 1) SPDX header + replace placeholder
+    printf "%s\n\n" "$HEADER" | sed "s|{{FILE_PATH}}|$f|g"
+    # 2) Org-level content
+    curl --fail -s "$org_url"
   } > "$f"
 done
 
-echo "All files generated with SPDX headers and pointers to the org repository."
+echo "✓ All files synced."
