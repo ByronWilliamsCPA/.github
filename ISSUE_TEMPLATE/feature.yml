@@ -1,5 +1,5 @@
 # ✨ Feature request
-# Last updated: April 30, 2025
+# Last updated: November 16, 2025
 
 ---
 <!-- Doc A: enhancement_template -->
@@ -25,29 +25,39 @@ body:
         - label: "I have searched existing issues at https://github.com/<org>/<repo>/issues"
         - label: "I am using the latest version of the project"
 
-  - type: input
-    id: feature-short-description
+  - type: textarea
+    id: feature-description
     attributes:
-      label: "Short, descriptive title"
-      description: "Provide a concise title for your feature"
+      label: "Feature description"
+      description: "Provide a clear and concise description of the feature"
+      placeholder: "A brief summary of the feature you're proposing..."
+    validations:
+      required: true
 
   - type: textarea
     id: motivation
     attributes:
       label: "Motivation"
       description: "Why is this feature needed? What problem does it solve?"
+      placeholder: "Explain the problem this feature would solve..."
+    validations:
+      required: true
 
   - type: textarea
     id: proposed-solution
     attributes:
       label: "Proposed solution"
       description: "Describe how you propose to implement this feature"
+      placeholder: "Describe your proposed solution in detail..."
+    validations:
+      required: true
 
   - type: textarea
     id: alternatives
     attributes:
       label: "Alternatives considered"
       description: "Describe other options you considered and why you chose this solution"
+      placeholder: "What other approaches did you consider?"
 
   - type: checkboxes
     attributes:

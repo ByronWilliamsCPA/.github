@@ -18,8 +18,12 @@ FILES=(
   "GOVERNANCE.md"
   "CODEOWNERS"
   "FUNDING.yml"
+  "LICENSE"
+  "pull_request_template.md"
+  "dependabot.yml"
   ".github/ISSUE_TEMPLATE/bug.yml"
   ".github/ISSUE_TEMPLATE/feature.yml"
+  ".github/ISSUE_TEMPLATE/config.yml"
 )
 
 for f in "${FILES[@]}"; do

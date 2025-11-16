@@ -62,6 +62,6 @@ credit will be anonymous.
 This policy is based on community best practices and has drawn on elements from
 multiple sources within our organization’s previous drafts.
 
-_Last updated: April 30, 2025_  
+_Last updated: November 16, 2025_  
 
 [upgrade‐guide]: https://github.com/williaby/.github/blob/main/UPGRADE_GUIDE.md  

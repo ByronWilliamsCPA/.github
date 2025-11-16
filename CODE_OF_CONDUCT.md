@@ -79,4 +79,4 @@ This Code of Conduct is adapted from the
 and incorporates an enforcement framework inspired by
 Mozilla’s Community Participation Guidelines.
 
-## Last updated: April 30, 2025
+## Last updated: November 16, 2025
