@@ -1,5 +1,5 @@
 # 🐞 Bug report
-# Last updated: April 30, 2025
+# Last updated: November 16, 2025
 
 ---
 <!-- Doc A: bug_report_template -->
@@ -27,33 +27,45 @@ body:
         - label: "I have searched existing issues at https://github.com/<org>/<repo>/issues"
         - label: "I am using the latest version of the project"
 
-  - type: input
+  - type: textarea
     id: steps-to-reproduce
     attributes:
       label: "Steps to reproduce"
       description: "List the minimal steps to reproduce the bug"
       placeholder: |
-        1. 
-        2. 
+        1.
+        2.
+        3.
+    validations:
+      required: true
 
-  - type: input
+  - type: textarea
     id: expected-behavior
     attributes:
       label: "Expected behavior"
       placeholder: "What you expected to happen"
+    validations:
+      required: true
 
-  - type: input
+  - type: textarea
     id: actual-behavior
     attributes:
       label: "Actual behavior"
       placeholder: "What actually happened"
+    validations:
+      required: true
 
-  - type: input
+  - type: textarea
     id: environment
     attributes:
       label: "Environment"
       description: "OS, browser, version, etc."
-      placeholder: "e.g., Ubuntu 22.04, Chrome 112"
+      placeholder: |
+        - OS: Ubuntu 22.04
+        - Browser: Chrome 112
+        - Version: 1.0.0
+    validations:
+      required: true
 
   - type: textarea
     id: additional-context

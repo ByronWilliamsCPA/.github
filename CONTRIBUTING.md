@@ -95,4 +95,4 @@ help improve our code, documentation, and community processes.
    npm test
    ```
 
-## Last updated: April 30, 2025
+## Last updated: November 16, 2025

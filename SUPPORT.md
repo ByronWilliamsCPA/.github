@@ -42,4 +42,4 @@ details on which versions are in scope.
 We welcome and encourage contributions to improve our support processes.
 Feel free to submit pull requests against this document or associated workflows.
 
-_Last updated: April 30, 2025_  
+_Last updated: November 16, 2025_  

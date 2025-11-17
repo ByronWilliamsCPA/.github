@@ -33,11 +33,23 @@ and support best practices.
   Indicates our solo-practitioner stance and points to non-financial
   contribution paths.
 
-- `.github/ISSUE_TEMPLATE/bug.yml`  
+- `.github/ISSUE_TEMPLATE/bug.yml`
   Structured template for filing bug reports.
 
-- `.github/ISSUE_TEMPLATE/feature.yml`  
+- `.github/ISSUE_TEMPLATE/feature.yml`
   Structured template for proposing new features.
+
+- `.github/ISSUE_TEMPLATE/config.yml`
+  Configuration for issue template chooser and external links.
+
+- [`pull_request_template.md`](./pull_request_template.md)
+  Standard template for pull request descriptions.
+
+- [`dependabot.yml`](./dependabot.yml)
+  Automated dependency update configuration for multiple ecosystems.
+
+- [`LICENSE`](./LICENSE)
+  MIT License for organization projects.
 
 ## How It Works
 
@@ -53,4 +65,4 @@ overridden by a repo-specific copy).
 3. If you maintain a repository that needs specialized adjustments, copy the
     relevant file into your repo’s root or `.github/` folder and tailor it accordingly.
 
-_Last updated: April 30, 2025_  
+_Last updated: November 16, 2025_  

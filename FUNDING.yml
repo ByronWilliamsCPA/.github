@@ -1,20 +1,19 @@
 # FUNDING.yml
-
 # This organization is maintained by a solo practitioner and is not seeking monetary funding.
 # Contributions of code, bug reports, and feedback are highly appreciated.
-# See our Contributing guide for details: ./CONTRIBUTING.md
+# See our Contributing guide for details: https://github.com/williaby/.github/blob/main/CONTRIBUTING.md
 # For more on funding configuration, see:
 # https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-funding
 
----
-custom:
-  - "./CONTRIBUTING.md"
-
 # Uncomment and fill in when seeking sponsorship:
-# github: your-org
-# patreon: your-org
-# open_collective: your-org
-# ko_fi: your-org
-# liberapay: your-org
+# github: williaby
+# patreon: williaby
+# open_collective: williaby
+# ko_fi: williaby
+# tidelift: npm/package-name
+# community_bridge: project-name
+# liberapay: williaby
+# issuehunt: williaby
+# custom: ["https://example.com", "https://example2.com"]
 
-# Last updated: April 30, 2025
+# Last updated: November 16, 2025

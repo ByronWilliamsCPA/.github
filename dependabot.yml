@@ -1,0 +1,150 @@
+# Dependabot configuration for automated dependency updates
+# For full documentation, see:
+# https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+
+version: 2
+
+updates:
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    reviewers:
+      - "williaby"
+    open-pull-requests-limit: 5
+
+  # Python dependencies (pip)
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    labels:
+      - "dependencies"
+      - "python"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    reviewers:
+      - "williaby"
+    open-pull-requests-limit: 5
+    versioning-strategy: increase
+
+  # JavaScript/Node.js dependencies (npm)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    labels:
+      - "dependencies"
+      - "javascript"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    reviewers:
+      - "williaby"
+    open-pull-requests-limit: 5
+    versioning-strategy: increase
+    ignore:
+      # Ignore major version updates for specific packages if needed
+      # - dependency-name: "*"
+      #   update-types: ["version-update:semver-major"]
+
+  # Docker
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    reviewers:
+      - "williaby"
+    open-pull-requests-limit: 3
+
+  # Terraform
+  - package-ecosystem: "terraform"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    labels:
+      - "dependencies"
+      - "terraform"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    reviewers:
+      - "williaby"
+    open-pull-requests-limit: 3
+
+  # Go modules
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    labels:
+      - "dependencies"
+      - "go"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    reviewers:
+      - "williaby"
+    open-pull-requests-limit: 5
+
+  # Cargo (Rust)
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    labels:
+      - "dependencies"
+      - "rust"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    reviewers:
+      - "williaby"
+    open-pull-requests-limit: 5
+
+  # Bundler (Ruby)
+  - package-ecosystem: "bundler"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    labels:
+      - "dependencies"
+      - "ruby"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    reviewers:
+      - "williaby"
+    open-pull-requests-limit: 5
+
+# Last updated: November 16, 2025
