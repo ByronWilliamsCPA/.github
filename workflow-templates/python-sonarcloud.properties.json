@@ -1,0 +1,14 @@
+{
+  "name": "Python Code Quality with SonarCloud",
+  "description": "Continuous code quality and security analysis using SonarCloud. Tracks bugs, code smells, vulnerabilities, security hotspots, and test coverage with quality gate enforcement.",
+  "iconName": "graph",
+  "categories": [
+    "Python",
+    "Code Quality",
+    "Security"
+  ],
+  "filePatterns": [
+    ".*\\.py$",
+    "sonar-project.properties$"
+  ]
+}

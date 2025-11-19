@@ -1,0 +1,14 @@
+{
+  "name": "Publish Python Package to PyPI",
+  "description": "Publish Python packages to PyPI and TestPyPI using OIDC Trusted Publishing. Supports both automated release triggers and manual workflow dispatch with secure, token-free authentication.",
+  "iconName": "rocket",
+  "categories": [
+    "Python",
+    "Deployment",
+    "Publishing"
+  ],
+  "filePatterns": [
+    "pyproject.toml$",
+    "setup.py$"
+  ]
+}

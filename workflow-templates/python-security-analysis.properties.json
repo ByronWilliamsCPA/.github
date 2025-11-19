@@ -1,0 +1,16 @@
+{
+  "name": "Python Security Analysis",
+  "description": "Comprehensive Python security scanning with CodeQL, Bandit, Safety, OSV Scanner, and OWASP Dependency Check. Includes vulnerability detection, dependency scanning, and SARIF reporting to GitHub Security tab.",
+  "iconName": "shield-lock",
+  "categories": [
+    "Python",
+    "Security",
+    "Code Scanning"
+  ],
+  "filePatterns": [
+    "pyproject.toml$",
+    "poetry.lock$",
+    "requirements.*\\.txt$",
+    ".*\\.py$"
+  ]
+}

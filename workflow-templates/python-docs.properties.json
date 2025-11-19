@@ -1,0 +1,14 @@
+{
+  "name": "Python Documentation with MkDocs",
+  "description": "Build, validate, and deploy Python project documentation using MkDocs. Includes docstring enforcement, link checking with Lychee, and automatic GitHub Pages deployment.",
+  "iconName": "book",
+  "categories": [
+    "Python",
+    "Documentation"
+  ],
+  "filePatterns": [
+    "mkdocs.yml$",
+    "docs/.*\\.md$",
+    ".*\\.py$"
+  ]
+}
