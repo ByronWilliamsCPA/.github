@@ -51,6 +51,21 @@ and support best practices.
 - [`LICENSE`](./LICENSE)
   MIT License for organization projects.
 
+## Workflow Templates
+
+The [`workflow-templates/`](./workflow-templates/) directory contains reusable GitHub Actions workflows for Python projects:
+
+- **Python CI Pipeline** - Comprehensive CI with UV, pytest, MyPy, and Ruff
+- **Codecov Upload** - Secure coverage reporting workflow
+- **Security Analysis** - CodeQL, Bandit, Safety, OSV Scanner, and OWASP checks
+- **Documentation** - MkDocs build, validation, and GitHub Pages deployment
+- **Release** - SLSA Level 3 provenance and Sigstore signing
+- **Publish to PyPI** - OIDC Trusted Publishing for PyPI/TestPyPI
+- **Fuzz Testing** - ClusterFuzzLite integration
+- **SonarCloud** - Continuous code quality monitoring
+
+See the [workflow-templates README](./workflow-templates/README.md) for detailed documentation.
+
 ## How It Works
 
 All of these files live in the `.github/` directory at the **organization**

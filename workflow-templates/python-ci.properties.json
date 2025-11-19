@@ -1,0 +1,15 @@
+{
+  "name": "Python CI Pipeline",
+  "description": "Comprehensive Python CI workflow with UV dependency management, testing with pytest, type checking with MyPy, and linting with Ruff. Includes multi-version Python testing (3.10-3.14) and code coverage enforcement.",
+  "iconName": "python",
+  "categories": [
+    "Python",
+    "Continuous Integration"
+  ],
+  "filePatterns": [
+    "pyproject.toml$",
+    "uv.lock$",
+    "requirements.*\\.txt$",
+    ".*\\.py$"
+  ]
+}

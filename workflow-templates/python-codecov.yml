@@ -1,0 +1,182 @@
+# Python Project - Codecov Coverage Upload
+# Dedicated workflow for uploading test coverage reports to Codecov
+#
+# This workflow:
+#   - Runs after CI workflow completes successfully
+#   - Downloads coverage artifacts from CI
+#   - Uploads coverage reports to Codecov for tracking and analysis
+#
+# Triggered by:
+#   - CI workflow completion (workflow_run)
+#
+# Security:
+#   - Uses workflow_run to avoid PR code execution
+#   - No checkout needed (prevents pwn request attacks)
+#   - Requires CODECOV_TOKEN secret
+
+name: Codecov
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
+
+permissions: read-all
+
+jobs:
+  upload-coverage:
+    name: Upload Coverage to Codecov
+    runs-on: ubuntu-latest
+    # Only run if CI succeeded
+    if: ${{  github.event.workflow_run.conclusion == 'success'  }}
+    permissions:
+      contents: read        # Required for downloading artifacts
+      actions: read         # Required for workflow_run artifact download
+
+    steps:
+      - name: Harden the runner (Audit outbound calls)
+        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7 # v2.10.1
+        with:
+          egress-policy: audit
+
+      # NOTE: No checkout needed - workflow only downloads artifacts and uploads to Codecov
+      # Checking out PR code with workflow_run would create a security vulnerability
+      # See: https://securitylab.github.com/research/github-actions-preventing-pwn-requests/
+
+      - name: Download coverage artifacts (Python 3.10)
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: test-results-3.10
+          github-token: ${{  secrets.GITHUB_TOKEN  }}
+          run-id: ${{  github.event.workflow_run.id  }}
+          path: coverage-3.10
+        continue-on-error: true
+
+      - name: Download coverage artifacts (Python 3.11)
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: test-results-3.11
+          github-token: ${{  secrets.GITHUB_TOKEN  }}
+          run-id: ${{  github.event.workflow_run.id  }}
+          path: coverage-3.11
+        continue-on-error: true
+
+      - name: Download coverage artifacts (Python 3.12)
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: test-results-3.12
+          github-token: ${{  secrets.GITHUB_TOKEN  }}
+          run-id: ${{  github.event.workflow_run.id  }}
+          path: coverage-3.12
+        continue-on-error: true
+
+      - name: Download coverage artifacts (Python 3.13)
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: test-results-3.13
+          github-token: ${{  secrets.GITHUB_TOKEN  }}
+          run-id: ${{  github.event.workflow_run.id  }}
+          path: coverage-3.13
+        continue-on-error: true
+
+      - name: Download coverage artifacts (Python 3.14)
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: test-results-3.14
+          github-token: ${{  secrets.GITHUB_TOKEN  }}
+          run-id: ${{  github.event.workflow_run.id  }}
+          path: coverage-3.14
+        continue-on-error: true
+
+      # Upload coverage for each Python version
+      - name: Upload coverage to Codecov (Python 3.10)
+        if: hashFiles('coverage-3.10/coverage.xml') != ''
+        uses: codecov/codecov-action@f1b7348826d750ac29741abc9d1623d8da5dcd4f # v4.3.1
+        with:
+          file: coverage-3.10/coverage.xml
+          fail_ci_if_error: false
+          token: ${{  secrets.CODECOV_TOKEN  }}
+          flags: python-3.10
+          name: Python Project Coverage (Python 3.10)
+          verbose: true
+          commit_parent: ${{  github.event.workflow_run.head_sha  }}
+        continue-on-error: true
+
+      - name: Upload coverage to Codecov (Python 3.11)
+        if: hashFiles('coverage-3.11/coverage.xml') != ''
+        uses: codecov/codecov-action@f1b7348826d750ac29741abc9d1623d8da5dcd4f # v4.3.1
+        with:
+          file: coverage-3.11/coverage.xml
+          fail_ci_if_error: false
+          token: ${{  secrets.CODECOV_TOKEN  }}
+          flags: python-3.11
+          name: Python Project Coverage (Python 3.11)
+          verbose: true
+          commit_parent: ${{  github.event.workflow_run.head_sha  }}
+        continue-on-error: true
+
+      - name: Upload coverage to Codecov (Python 3.12)
+        if: hashFiles('coverage-3.12/coverage.xml') != ''
+        uses: codecov/codecov-action@f1b7348826d750ac29741abc9d1623d8da5dcd4f # v4.3.1
+        with:
+          file: coverage-3.12/coverage.xml
+          fail_ci_if_error: false
+          token: ${{  secrets.CODECOV_TOKEN  }}
+          flags: python-3.12
+          name: Python Project Coverage (Python 3.12)
+          verbose: true
+          commit_parent: ${{  github.event.workflow_run.head_sha  }}
+        continue-on-error: true
+
+      - name: Upload coverage to Codecov (Python 3.13)
+        if: hashFiles('coverage-3.13/coverage.xml') != ''
+        uses: codecov/codecov-action@f1b7348826d750ac29741abc9d1623d8da5dcd4f # v4.3.1
+        with:
+          file: coverage-3.13/coverage.xml
+          fail_ci_if_error: false
+          token: ${{  secrets.CODECOV_TOKEN  }}
+          flags: python-3.13
+          name: Python Project Coverage (Python 3.13)
+          verbose: true
+          commit_parent: ${{  github.event.workflow_run.head_sha  }}
+        continue-on-error: true
+
+      - name: Upload coverage to Codecov (Python 3.14)
+        if: hashFiles('coverage-3.14/coverage.xml') != ''
+        uses: codecov/codecov-action@f1b7348826d750ac29741abc9d1623d8da5dcd4f # v4.3.1
+        with:
+          file: coverage-3.14/coverage.xml
+          fail_ci_if_error: false
+          token: ${{  secrets.CODECOV_TOKEN  }}
+          flags: python-3.14
+          name: Python Project Coverage (Python 3.14)
+          verbose: true
+          commit_parent: ${{  github.event.workflow_run.head_sha  }}
+        continue-on-error: true
+
+      - name: Coverage upload summary
+        if: always()
+        env:
+          GH_REPOSITORY: ${{  github.repository  }}
+        run: |
+          echo "## 📊 Codecov Upload Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          uploaded=0
+          for version in 3.10 3.11 3.12 3.13 3.14; do
+            if [ -f "coverage-${version}/coverage.xml" ]; then
+              echo "- ✅ Python ${version}: Coverage uploaded" >> $GITHUB_STEP_SUMMARY
+              uploaded=$((uploaded + 1))
+            else
+              echo "- ⚠️ Python ${version}: No coverage report found" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ $uploaded -gt 0 ]; then
+            echo "📈 View coverage at: https://app.codecov.io/gh/${GH_REPOSITORY}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ No coverage reports were uploaded" >> $GITHUB_STEP_SUMMARY
+            echo "This may indicate the test suite did not run or failed" >> $GITHUB_STEP_SUMMARY
+          fi

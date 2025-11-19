@@ -1,0 +1,14 @@
+{
+  "name": "Python Release with SLSA Provenance",
+  "description": "Automated Python package release workflow with SLSA Level 3 provenance attestations, Sigstore signing, SBOM generation, and GitHub Releases creation. Includes comprehensive supply chain security.",
+  "iconName": "package",
+  "categories": [
+    "Python",
+    "Deployment",
+    "Security"
+  ],
+  "filePatterns": [
+    "pyproject.toml$",
+    "setup.py$"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "name": "Python Codecov Upload",
+  "description": "Securely upload Python test coverage reports to Codecov after CI completes. Uses workflow_run trigger to prevent pwn request vulnerabilities and supports multi-version Python coverage reporting.",
+  "iconName": "shield-check",
+  "categories": [
+    "Python",
+    "Code Quality",
+    "Testing"
+  ],
+  "filePatterns": [
+    "coverage\\.xml$",
+    ".*\\.py$"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "name": "Python Fuzz Testing with ClusterFuzzLite",
+  "description": "Automated fuzz testing for Python projects using Google's ClusterFuzzLite. Detects security vulnerabilities in input validators, parsers, and file handlers with AddressSanitizer and SARIF reporting.",
+  "iconName": "bug",
+  "categories": [
+    "Python",
+    "Security",
+    "Testing"
+  ],
+  "filePatterns": [
+    ".*\\.py$",
+    "fuzz_.*\\.py$"
+  ]
+}
