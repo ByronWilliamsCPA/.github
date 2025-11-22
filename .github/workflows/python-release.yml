@@ -1,65 +1,166 @@
-# Python Release - Reusable Workflow
-# Builds signed releases with SLSA provenance and SBOM generation
+# ============================================================================
+# Reusable Python Release Workflow
+# ============================================================================
+# Builds signed releases with SLSA provenance, SBOM generation, and semantic versioning
 #
 # Usage from downstream repos:
-#   on:
-#     push:
-#       tags: ['v*']
-#
 #   jobs:
 #     release:
 #       uses: williaby/.github/.github/workflows/python-release.yml@main
 #       with:
-#         package-name: 'my-package'
+#         python-version: '3.12'
+#         semantic-release: true
+#         pypi-package-name: 'my-package'
 #       permissions:
 #         contents: write
 #         id-token: write
 #         attestations: write
+#
+# Features:
+#   - Pre-release testing
+#   - Semantic versioning with python-semantic-release
+#   - Manual release mode (tag-based)
+#   - PyPI publishing with OIDC trusted publishing
+#   - Sigstore artifact signing
+#   - SBOM generation
+# ============================================================================
 
 name: Python Release (Reusable)
 
 on:
   workflow_call:
     inputs:
-      package-name:
-        description: 'Package name for release notes'
-        type: string
-        required: false
-        default: 'python-package'
-
       python-version:
-        description: 'Python version for building'
-        type: string
+        description: 'Python version to use'
         required: false
+        type: string
         default: '3.12'
-
+      coverage-threshold:
+        description: 'Minimum code coverage percentage for pre-release tests'
+        required: false
+        type: number
+        default: 80
+      source-directory:
+        description: 'Source code directory'
+        required: false
+        type: string
+        default: 'src'
+      semantic-release:
+        description: 'Use semantic release (true) or manual tag-based (false)'
+        required: false
+        type: boolean
+        default: true
+      force-release:
+        description: 'Force release type (empty for auto)'
+        required: false
+        type: string
+        default: ''
+      publish-to-pypi:
+        description: 'Publish to PyPI after release'
+        required: false
+        type: boolean
+        default: true
+      pypi-package-name:
+        description: 'PyPI package name'
+        required: false
+        type: string
+        default: ''
+      pypi-url:
+        description: 'PyPI upload URL'
+        required: false
+        type: string
+        default: 'https://upload.pypi.org/legacy/'
+      run-tests:
+        description: 'Run tests before release'
+        required: false
+        type: boolean
+        default: true
       generate-sbom:
         description: 'Generate Software Bill of Materials'
-        type: boolean
         required: false
+        type: boolean
         default: true
-
       sign-artifacts:
         description: 'Sign artifacts with Sigstore'
-        type: boolean
         required: false
+        type: boolean
         default: true
+    outputs:
+      released:
+        description: 'Whether a release was created'
+        value: ${{ jobs.release.outputs.released }}
+      version:
+        description: 'The released version'
+        value: ${{ jobs.release.outputs.version }}
+      tag:
+        description: 'The release tag'
+        value: ${{ jobs.release.outputs.tag }}
 
 permissions:
   contents: write
+  issues: write
+  pull-requests: write
   id-token: write
   attestations: write
 
 jobs:
-  build:
-    name: Build Distribution
+  # ============================================================================
+  # Job 1: Run Tests Before Release
+  # ============================================================================
+  test:
+    name: Pre-Release Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-      id-token: write
-      attestations: write
+    if: inputs.run-tests
+    timeout-minutes: 15
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7  # v2.10.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install ${{ inputs.python-version }}
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Run tests
+        run: |
+          uv run pytest \
+            --cov=${{ inputs.source-directory }} \
+            --cov-report=term-missing \
+            --cov-fail-under=${{ inputs.coverage-threshold }} \
+            -v
+
+      - name: Run type checker
+        run: uv run basedpyright ${{ inputs.source-directory }}/
+
+      - name: Run linter
+        run: uv run ruff check ${{ inputs.source-directory }}/
+
+  # ============================================================================
+  # Job 2: Build and Create Release
+  # ============================================================================
+  release:
+    name: Build & Release
+    needs: test
+    if: always() && (needs.test.result == 'success' || needs.test.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     outputs:
+      released: ${{ steps.semantic-release.outputs.released || steps.manual-release.outputs.released }}
+      version: ${{ steps.semantic-release.outputs.version || steps.manual-release.outputs.version }}
+      tag: ${{ steps.semantic-release.outputs.tag || steps.manual-release.outputs.tag }}
       hashes: ${{ steps.hash.outputs.hashes }}
 
     steps:
@@ -72,42 +173,93 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
         with:
           fetch-depth: 0
+          token: ${{ github.token }}
 
       - name: Set up Python
         uses: actions/setup-python@8d9ed9ac5c53483de85588cdf95a591a75ab9f55  # v5.5.0
         with:
           python-version: ${{ inputs.python-version }}
 
-      - name: Install UV
+      - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
 
-      - name: Build distribution packages
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Build package
         run: |
           uv build
-          echo "📦 Built packages:"
+          echo "Built packages:"
           ls -lh dist/
 
       - name: Generate SBOM
-        if: ${{ inputs.generate-sbom }}
+        if: inputs.generate-sbom
         run: |
-          echo "📋 Generating Software Bill of Materials..."
+          echo "Generating Software Bill of Materials..."
           pip install cyclonedx-bom==4.6.1
-
-          # Generate SBOM from dependencies
           uv export --format requirements-txt --output-file requirements-all.txt --no-hashes
           cyclonedx-py requirements requirements-all.txt --of json -o dist/sbom.json
-
           rm -f requirements-all.txt
-
-          echo "✅ SBOM generated: dist/sbom.json"
+          echo "SBOM generated: dist/sbom.json"
 
       - name: Generate artifact hashes
         id: hash
         working-directory: dist
         run: |
           echo "hashes=$(sha256sum * | base64 -w0)" >> "$GITHUB_OUTPUT"
+
+      # Semantic Release Mode
+      - name: Python Semantic Release
+        if: inputs.semantic-release
+        id: semantic-release
+        uses: python-semantic-release/python-semantic-release@v9.21.1
+        with:
+          github_token: ${{ github.token }}
+          git_committer_name: "github-actions[bot]"
+          git_committer_email: "github-actions[bot]@users.noreply.github.com"
+          force: ${{ inputs.force-release }}
+
+      - name: Sign artifacts with Sigstore
+        if: inputs.sign-artifacts && (steps.semantic-release.outputs.released == 'true' || !inputs.semantic-release)
+        uses: sigstore/gh-action-sigstore-python@v3.0.0
+        with:
+          inputs: ./dist/*.tar.gz ./dist/*.whl
+          release-signing-artifacts: true
+
+      - name: Upload to GitHub Release (Semantic)
+        if: inputs.semantic-release && steps.semantic-release.outputs.released == 'true'
+        uses: python-semantic-release/publish-action@v9.21.1
+        with:
+          github_token: ${{ github.token }}
+          tag: ${{ steps.semantic-release.outputs.tag }}
+
+      # Manual Release Mode
+      - name: Manual Release
+        if: "!inputs.semantic-release"
+        id: manual-release
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          VERSION="${TAG#v}"
+          echo "released=true" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release (Manual)
+        if: "!inputs.semantic-release"
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.manual-release.outputs.tag }}
+          generate_release_notes: true
+          files: |
+            dist/*.whl
+            dist/*.tar.gz
+            dist/*.json
+            dist/*.sig
+            dist/*.crt
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
 
       - name: Upload distribution artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
@@ -116,14 +268,37 @@ jobs:
           path: dist/
           retention-days: 5
 
-  sign-and-release:
-    name: Sign & Create Release
-    needs: build
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      id-token: write
+      - name: Release Summary
+        if: steps.semantic-release.outputs.released == 'true' || steps.manual-release.outputs.released == 'true'
+        run: |
+          VERSION="${{ steps.semantic-release.outputs.version || steps.manual-release.outputs.version }}"
+          TAG="${{ steps.semantic-release.outputs.tag || steps.manual-release.outputs.tag }}"
+          echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** $VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** $TAG" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Security Features" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ inputs.sign-artifacts }}" == "true" ]; then
+            echo "- Sigstore signing: enabled" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ "${{ inputs.generate-sbom }}" == "true" ]; then
+            echo "- SBOM generated: enabled" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "- SHA256 hashes: available" >> $GITHUB_STEP_SUMMARY
 
+  # ============================================================================
+  # Job 3: Publish to PyPI
+  # ============================================================================
+  publish-pypi:
+    name: Publish to PyPI
+    needs: release
+    if: inputs.publish-to-pypi && (needs.release.outputs.released == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/project/${{ inputs.pypi-package-name }}/
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7  # v2.10.1
@@ -136,58 +311,19 @@ jobs:
           name: release-dist
           path: dist/
 
-      - name: Sign artifacts with Sigstore
-        if: ${{ inputs.sign-artifacts }}
-        uses: sigstore/gh-action-sigstore-python@v3.0.0
-        with:
-          inputs: ./dist/*.tar.gz ./dist/*.whl
-          release-signing-artifacts: true
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
 
-      - name: Create GitHub Release
+      - name: Publish to PyPI
+        # Uses trusted publishing (OIDC) - configure at pypi.org/manage/account/publishing/
+        run: uv publish --trusted-publishing always dist/*.whl dist/*.tar.gz
         env:
-          GH_TOKEN: ${{ github.token }}
+          UV_PUBLISH_URL: ${{ inputs.pypi-url }}
+
+      - name: PyPI Summary
         run: |
-          TAG_NAME="${GITHUB_REF#refs/tags/}"
-          echo "Creating release for tag: $TAG_NAME"
-
-          gh release create "$TAG_NAME" \
-            --repo ${{ github.repository }} \
-            --title "${{ inputs.package-name }} $TAG_NAME" \
-            --notes "## 🎉 Release $TAG_NAME
-
-          ### 📦 Installation
-
-          \`\`\`bash
-          pip install ${{ inputs.package-name }}==${TAG_NAME#v}
-          \`\`\`
-
-          ### 🔒 Security
-
-          - All artifacts are signed with Sigstore
-          - SBOM (Software Bill of Materials) included
-          - SHA256 hashes available for verification
-
-          ### 📋 Verification
-
-          Verify signatures using:
-          \`\`\`bash
-          cosign verify-blob \\
-            --certificate <artifact>.crt \\
-            --signature <artifact>.sig \\
-            --certificate-identity-regexp 'https://github.com/${{ github.repository }}' \\
-            --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \\
-            <artifact>
-          \`\`\`" \
-            dist/*
-
-      - name: Upload release summary
-        run: |
-          echo "## 🎉 Release Published" >> $GITHUB_STEP_SUMMARY
+          echo "## PyPI Publication" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Tag**: ${GITHUB_REF#refs/tags/}" >> $GITHUB_STEP_SUMMARY
-          echo "**Package**: ${{ inputs.package-name }}" >> $GITHUB_STEP_SUMMARY
+          echo "Published **${{ inputs.pypi-package-name }}** version **${{ needs.release.outputs.version }}** to PyPI" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 🔒 Security Features" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Sigstore signing" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ SBOM generated" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ SHA256 hashes" >> $GITHUB_STEP_SUMMARY
+          echo "[View on PyPI](https://pypi.org/project/${{ inputs.pypi-package-name }}/${{ needs.release.outputs.version }}/)" >> $GITHUB_STEP_SUMMARY

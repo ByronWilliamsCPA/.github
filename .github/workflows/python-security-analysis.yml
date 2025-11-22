@@ -137,7 +137,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --only main --no-interaction
+        run: uv sync --no-dev
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@48ab28a6f5dbc2a99bf1e0131198dd8f1df78169  # v3.27.5
@@ -218,7 +218,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --all-extras --no-interaction
+        run: uv sync --all-extras
 
       - name: Bandit Static Analysis
         if: ${{ inputs.run-bandit }}
@@ -233,8 +233,7 @@ jobs:
         if: ${{ inputs.run-safety }}
         run: |
           echo "🛡️ Scanning dependencies for vulnerabilities..."
-          pip install poetry-plugin-export
-          poetry export -f requirements.txt --output requirements-scan.txt
+          uv export --format requirements-txt --no-hashes --output-file requirements-scan.txt
           uv run safety check \
             --file requirements-scan.txt \
             --json --output safety-report.json || true
@@ -272,7 +271,7 @@ jobs:
         uses: google/osv-scanner-action/osv-scanner-action@9bb69575e74019c2ad085a1860787043adf47ccb  # v2.2.4
         with:
           scan-args: |-
-            --lockfile=poetry.lock
+            --lockfile=uv.lock
             --format=json
             --output=osv-results.json
 

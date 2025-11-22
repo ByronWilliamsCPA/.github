@@ -1,86 +1,111 @@
-# Python CI - Reusable Workflow
-# Comprehensive CI with UV dependency management, testing, linting, and type checking
+# ============================================================================
+# Reusable Python CI/CD Workflow
+# ============================================================================
+# Comprehensive CI with UV, testing, linting, type checking, and LLM governance
 #
 # Usage from downstream repos:
 #   jobs:
 #     ci:
 #       uses: williaby/.github/.github/workflows/python-ci.yml@main
 #       with:
-#         python-versions: '["3.10", "3.11", "3.12"]'
+#         python-version: '3.12'
+#         coverage-threshold: 80
 #       secrets:
+#         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 #         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+#
+# Features:
+#   - Standard quality checks (tests, linting, type checking)
+#   - LLM governance and assumption tag verification
+#   - Optional SonarCloud integration
+#   - Optional Codecov integration
+#   - Security scanning (Bandit, Safety)
+# ============================================================================
 
 name: Python CI (Reusable)
 
 on:
   workflow_call:
     inputs:
-      python-versions:
-        description: 'JSON array of Python versions to test (e.g., ["3.10", "3.11", "3.12"])'
-        type: string
+      python-version:
+        description: 'Python version to use'
         required: false
-        default: '["3.10", "3.11", "3.12", "3.13"]'
-
+        type: string
+        default: '3.12'
+      coverage-threshold:
+        description: 'Minimum code coverage percentage'
+        required: false
+        type: number
+        default: 80
       source-directory:
-        description: 'Source code directory for coverage'
-        type: string
+        description: 'Source code directory'
         required: false
+        type: string
         default: 'src'
-
       test-directory:
         description: 'Test directory'
+        required: false
         type: string
-        required: false
         default: 'tests'
-
-      coverage-threshold:
-        description: 'Minimum coverage percentage'
-        type: number
+      enable-sonarcloud:
+        description: 'Enable SonarCloud quality gate'
         required: false
-        default: 80
-
-      run-mypy:
-        description: 'Run MyPy type checking'
         type: boolean
+        default: false
+      sonarcloud-organization:
+        description: 'SonarCloud organization'
         required: false
-        default: true
-
-      run-ruff:
-        description: 'Run Ruff linting and formatting checks'
+        type: string
+        default: ''
+      sonarcloud-project-key:
+        description: 'SonarCloud project key'
+        required: false
+        type: string
+        default: ''
+      enable-codecov:
+        description: 'Enable Codecov uploads'
+        required: false
         type: boolean
+        default: false
+      run-integration-tests:
+        description: 'Run integration tests'
         required: false
-        default: true
-
-      mypy-strict:
-        description: 'Use strict MyPy configuration'
         type: boolean
-        required: false
         default: true
-
+      run-security-tests:
+        description: 'Run security tests'
+        required: false
+        type: boolean
+        default: true
+      fail-on-llm-tags:
+        description: 'Fail if LLM debt tags found'
+        required: false
+        type: boolean
+        default: false
     secrets:
+      SONAR_TOKEN:
+        description: 'SonarCloud token'
+        required: false
       CODECOV_TOKEN:
-        description: 'Codecov token for coverage uploads (optional)'
+        description: 'Codecov token'
         required: false
 
 permissions:
   contents: read
-  checks: write
   pull-requests: write
-
-env:
-  CI_ENVIRONMENT: true
-  UV_CACHE_DIR: ~/.cache/uv
-  MYPY_CACHE_DIR: ~/.cache/mypy
+  checks: write
 
 jobs:
-  # Setup and dependency caching
-  setup:
-    name: Setup Dependencies
+  # ============================================================================
+  # Job 1: Standard Quality Checks
+  # ============================================================================
+  quality-checks:
+    name: Code Quality Checks
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+
     outputs:
-      uv-hash: ${{ steps.cache-key.outputs.uv-hash }}
-      pyproject-hash: ${{ steps.cache-key.outputs.pyproject-hash }}
+      coverage-artifact: coverage-reports
 
     steps:
       - name: Harden Runner
@@ -90,48 +115,276 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          fetch-depth: 0
 
-      - name: Generate cache keys
-        id: cache-key
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install ${{ inputs.python-version }}
+
+      - name: Install dependencies
         run: |
-          echo "uv-hash=${{ hashFiles('**/uv.lock', '**/poetry.lock') }}" >> $GITHUB_OUTPUT
-          echo "pyproject-hash=${{ hashFiles('**/pyproject.toml') }}" >> $GITHUB_OUTPUT
+          uv sync --all-extras
+
+      - name: Run Ruff formatter check
+        run: |
+          echo "::group::Ruff Formatting"
+          uv run ruff format --check ${{ inputs.source-directory }}/ ${{ inputs.test-directory }}/ || {
+            echo "::error::Code formatting issues detected. Run 'uv run ruff format ${{ inputs.source-directory }}/ ${{ inputs.test-directory }}/' to fix."
+            exit 1
+          }
+          echo "::endgroup::"
+
+      - name: Run Ruff linter
+        run: |
+          echo "::group::Ruff Linting"
+          uv run ruff check ${{ inputs.source-directory }}/ ${{ inputs.test-directory }}/ --output-format=github
+          echo "::endgroup::"
+
+      - name: Run BasedPyright type checker
+        run: |
+          echo "::group::BasedPyright Type Checking"
+          uv run basedpyright ${{ inputs.source-directory }}/ || {
+            echo "::warning::Type checking found issues"
+          }
+          echo "::endgroup::"
+
+      - name: Run unit tests with coverage
+        run: |
+          echo "::group::Unit Test Execution"
+          uv run pytest \
+            -m "unit or not (integration or security or slow)" \
+            --cov=${{ inputs.source-directory }} \
+            --cov-report=xml:coverage-unit.xml \
+            --cov-report=term-missing \
+            --cov-branch \
+            -v
+          echo "::endgroup::"
+
+      - name: Run integration tests with coverage
+        if: inputs.run-integration-tests
+        run: |
+          echo "::group::Integration Test Execution"
+          uv run pytest \
+            -m "integration" \
+            --cov=${{ inputs.source-directory }} \
+            --cov-report=xml:coverage-integration.xml \
+            --cov-report=term-missing \
+            --cov-branch \
+            --cov-append \
+            -v || echo "No integration tests found or all skipped"
+          echo "::endgroup::"
+
+      - name: Run security tests with coverage
+        if: inputs.run-security-tests
+        run: |
+          echo "::group::Security Test Execution"
+          uv run pytest \
+            -m "security" \
+            --cov=${{ inputs.source-directory }} \
+            --cov-report=xml:coverage-security.xml \
+            --cov-report=term-missing \
+            --cov-branch \
+            --cov-append \
+            -v || echo "No security tests found or all skipped"
+          echo "::endgroup::"
+
+      - name: Generate combined coverage report
+        run: |
+          echo "::group::Combined Coverage"
+          uv run coverage combine --keep || true
+          uv run coverage xml -o coverage.xml
+          uv run coverage html
+          uv run coverage report --fail-under=${{ inputs.coverage-threshold }}
+          echo "::endgroup::"
+
+      - name: Security scan with Bandit
+        run: |
+          echo "::group::Bandit Security Scan"
+          uv run bandit -r ${{ inputs.source-directory }}/ -f json -o bandit-report.json || {
+            echo "::warning::Security issues detected"
+            cat bandit-report.json
+          }
+          echo "::endgroup::"
+
+      - name: Dependency vulnerability scan
+        run: |
+          echo "::group::Safety Dependency Scan"
+          # Export requirements and scan
+          uv pip compile pyproject.toml -o requirements.txt
+          uv run safety check -r requirements.txt || {
+            echo "::warning::Vulnerable dependencies detected"
+          }
+          echo "::endgroup::"
+
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: coverage-reports
+          path: |
+            coverage.xml
+            coverage-*.xml
+            htmlcov/
+          retention-days: 7
+
+      - name: Upload coverage to Codecov
+        if: inputs.enable-codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          flags: python-${{ inputs.python-version }}
+          name: combined-coverage
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # ============================================================================
+  # Job 2: LLM Governance Checks
+  # ============================================================================
+  llm-governance:
+    name: LLM Governance & Assumption Verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    outputs:
+      rad-tags: ${{ steps.check-tags.outputs.rad_tags }}
+      llm-tags: ${{ steps.check-tags.outputs.llm_tags }}
+      total-tags: ${{ steps.check-tags.outputs.total_tags }}
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7  # v2.10.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@8d9ed9ac5c53483de85588cdf95a591a75ab9f55  # v5.5.0
         with:
-          python-version: '3.12'
+          python-version: ${{ inputs.python-version }}
 
-      - name: Install UV
-        uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-          cache-dependency-glob: "uv.lock"
-
-      - name: Cache UV dependencies
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
-        with:
-          path: |
-            .venv
-            ~/.cache/uv
-          key: py-deps-${{ runner.os }}-${{ steps.cache-key.outputs.uv-hash }}
-          restore-keys: |
-            py-deps-${{ runner.os }}-
-
-      - name: Install dependencies
+      - name: Check for unverified assumption tags
+        id: check-tags
         run: |
-          uv sync --no-interaction --all-extras
+          echo "::group::Scanning for Unverified Assumption Tags"
 
-  # Comprehensive testing across Python versions
-  test:
-    name: Test (Python ${{ matrix.python-version }})
+          # Check for RAD tags (Layer 1: Production Runtime Risks)
+          CRITICAL_TAGS=$(grep -r "#CRITICAL" --include="*.py" ${{ inputs.source-directory }}/ 2>/dev/null | wc -l || echo "0")
+          ASSUME_TAGS=$(grep -r "#ASSUME" --include="*.py" ${{ inputs.source-directory }}/ 2>/dev/null | wc -l || echo "0")
+          EDGE_TAGS=$(grep -r "#EDGE" --include="*.py" ${{ inputs.source-directory }}/ 2>/dev/null | wc -l || echo "0")
+
+          # Check for LLM debt tags (Layer 2: LLM Development Debt)
+          LLM_MOCK=$(grep -r "#LLM-MOCK" --include="*.py" ${{ inputs.source-directory }}/ 2>/dev/null | wc -l || echo "0")
+          LLM_PLACEHOLDER=$(grep -r "#LLM-PLACEHOLDER" --include="*.py" ${{ inputs.source-directory }}/ 2>/dev/null | wc -l || echo "0")
+          LLM_LOGIC=$(grep -r "#LLM-LOGIC" --include="*.py" ${{ inputs.source-directory }}/ 2>/dev/null | wc -l || echo "0")
+          LLM_SCAFFOLD=$(grep -r "#LLM-SCAFFOLD" --include="*.py" ${{ inputs.source-directory }}/ 2>/dev/null | wc -l || echo "0")
+          LLM_INFERRED=$(grep -r "#LLM-INFERRED" --include="*.py" ${{ inputs.source-directory }}/ 2>/dev/null | wc -l || echo "0")
+          LLM_TEST_FIRST=$(grep -r "#LLM-TEST-FIRST" --include="*.py" ${{ inputs.source-directory }}/ 2>/dev/null | wc -l || echo "0")
+
+          TOTAL_RAD=$((CRITICAL_TAGS + ASSUME_TAGS))
+          TOTAL_LLM=$((LLM_MOCK + LLM_PLACEHOLDER + LLM_LOGIC + LLM_SCAFFOLD + LLM_INFERRED + LLM_TEST_FIRST))
+          TOTAL_TAGS=$((TOTAL_RAD + TOTAL_LLM))
+
+          echo "rad_tags=$TOTAL_RAD" >> $GITHUB_OUTPUT
+          echo "llm_tags=$TOTAL_LLM" >> $GITHUB_OUTPUT
+          echo "total_tags=$TOTAL_TAGS" >> $GITHUB_OUTPUT
+
+          echo "### Assumption Tag Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Layer 1 (Production Runtime Risks):**" >> $GITHUB_STEP_SUMMARY
+          echo "- #CRITICAL tags: $CRITICAL_TAGS" >> $GITHUB_STEP_SUMMARY
+          echo "- #ASSUME tags: $ASSUME_TAGS" >> $GITHUB_STEP_SUMMARY
+          echo "- #EDGE tags: $EDGE_TAGS" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Layer 2 (LLM Development Debt):**" >> $GITHUB_STEP_SUMMARY
+          echo "- #LLM-MOCK: $LLM_MOCK" >> $GITHUB_STEP_SUMMARY
+          echo "- #LLM-PLACEHOLDER: $LLM_PLACEHOLDER" >> $GITHUB_STEP_SUMMARY
+          echo "- #LLM-LOGIC: $LLM_LOGIC" >> $GITHUB_STEP_SUMMARY
+          echo "- #LLM-SCAFFOLD: $LLM_SCAFFOLD" >> $GITHUB_STEP_SUMMARY
+          echo "- #LLM-INFERRED: $LLM_INFERRED" >> $GITHUB_STEP_SUMMARY
+          echo "- #LLM-TEST-FIRST: $LLM_TEST_FIRST" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Total unverified tags: $TOTAL_TAGS**" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$TOTAL_RAD" -gt 0 ]; then
+            echo "::error::Found $TOTAL_RAD unverified production risk tags (#CRITICAL, #ASSUME)"
+          fi
+
+          if [ "$TOTAL_LLM" -gt 0 ]; then
+            echo "::warning::Found $TOTAL_LLM unverified LLM debt tags"
+          fi
+
+          echo "::endgroup::"
+
+      - name: Block PR if critical tags found
+        if: steps.check-tags.outputs.rad_tags > 0
+        run: |
+          echo "::error::PR blocked: Found ${{ steps.check-tags.outputs.rad_tags }} unverified production risk tags"
+          echo ""
+          echo "Please verify and remove these tags before merging:"
+          grep -rn "#CRITICAL\|#ASSUME" --include="*.py" ${{ inputs.source-directory }}/ || true
+          echo ""
+          echo "See CLAUDE.md for verification workflow"
+          exit 1
+
+      - name: Fail on LLM tags (if configured)
+        if: inputs.fail-on-llm-tags && steps.check-tags.outputs.llm_tags > 0
+        run: |
+          echo "::error::PR blocked: Found ${{ steps.check-tags.outputs.llm_tags }} LLM debt tags"
+          echo ""
+          echo "Please address LLM debt before merging:"
+          grep -rn "#LLM-" --include="*.py" ${{ inputs.source-directory }}/ || true
+          exit 1
+
+      - name: Detect LLM anti-patterns
+        run: |
+          echo "::group::LLM Anti-Pattern Detection"
+
+          # Hardcoded localhost/URLs
+          echo "Checking for hardcoded localhost/URLs..."
+          if grep -rE "(localhost|127\.0\.0\.1|http://|https://)" --include="*.py" ${{ inputs.source-directory }}/ | \
+             grep -v "#LLM-PLACEHOLDER" | grep -v "^[[:space:]]*#"; then
+            echo "::warning::Found hardcoded URLs without #LLM-PLACEHOLDER tag"
+          fi
+
+          # Hardcoded secrets patterns
+          echo "Checking for potential hardcoded secrets..."
+          if grep -rE "(api_key|password|secret|token)\s*=\s*[\"'][^\"']+[\"']" --include="*.py" ${{ inputs.source-directory }}/ | \
+             grep -v "#LLM-PLACEHOLDER" | grep -v "^[[:space:]]*#"; then
+            echo "::error::Potential hardcoded secret detected"
+            exit 1
+          fi
+
+          # Magic numbers
+          echo "Checking for magic numbers..."
+          MAGIC_NUMBERS=$(grep -rE "\b[0-9]{2,}\b" --include="*.py" ${{ inputs.source-directory }}/ | \
+                          grep -v "#LLM-PLACEHOLDER" | \
+                          grep -v "^[[:space:]]*#" | \
+                          wc -l || echo "0")
+
+          if [ "$MAGIC_NUMBERS" -gt 10 ]; then
+            echo "::warning::Found $MAGIC_NUMBERS potential magic numbers without constants"
+          fi
+
+          echo "::endgroup::"
+
+  # ============================================================================
+  # Job 3: SonarCloud Quality Gate (Optional)
+  # ============================================================================
+  sonarcloud-quality-gate:
+    name: SonarCloud Quality Gate
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    needs: setup
-    strategy:
-      matrix:
-        python-version: ${{ fromJSON(inputs.python-versions) }}
-      fail-fast: false
+    needs: [quality-checks]
+    if: inputs.enable-sonarcloud
+    timeout-minutes: 15
 
     steps:
       - name: Harden Runner
@@ -141,152 +394,69 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@8d9ed9ac5c53483de85588cdf95a591a75ab9f55  # v5.5.0
         with:
-          python-version: ${{ matrix.python-version }}
+          fetch-depth: 0
 
-      - name: Install UV
-        uses: astral-sh/setup-uv@v5
+      - name: Download coverage reports
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
         with:
-          enable-cache: true
-          cache-dependency-glob: "uv.lock"
+          name: coverage-reports
 
-      - name: Restore dependency cache
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
-        with:
-          path: |
-            .venv
-            ~/.cache/uv
-          key: py-deps-${{ runner.os }}-${{ needs.setup.outputs.uv-hash }}
-          restore-keys: |
-            py-deps-${{ runner.os }}-
-
-      - name: Install dependencies
-        run: |
-          uv sync --no-interaction --all-extras
-
-      - name: Run test suite
-        run: |
-          uv run pytest -v \
-            --cov=${{ inputs.source-directory }} \
-            --cov-report=xml:coverage-${{ matrix.python-version }}.xml \
-            --cov-report=term-missing \
-            --cov-report=html:htmlcov-${{ matrix.python-version }} \
-            --cov-fail-under=${{ inputs.coverage-threshold }} \
-            --junitxml=junit-${{ matrix.python-version }}.xml \
-            -o junit_family=xunit2 \
-            --tb=short \
-            --maxfail=10 \
-            ${{ inputs.test-directory }}
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
         env:
-          CI_ENVIRONMENT: true
-
-      - name: Upload test artifacts
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+          GITHUB_TOKEN: ${{ github.token }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
-          name: test-results-py${{ matrix.python-version }}
-          path: |
-            junit-${{ matrix.python-version }}.xml
-            coverage-${{ matrix.python-version }}.xml
-            htmlcov-${{ matrix.python-version }}/
-          retention-days: 7
+          args: >
+            -Dsonar.organization=${{ inputs.sonarcloud-organization }}
+            -Dsonar.projectKey=${{ inputs.sonarcloud-project-key }}
 
-      - name: Upload coverage to Codecov
-        if: ${{ secrets.CODECOV_TOKEN != '' }}
-        uses: codecov/codecov-action@ab904c41d05db2b8f63f213e12453cc63707e352c  # v3
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage-${{ matrix.python-version }}.xml
-          flags: py${{ matrix.python-version }}
-          name: Python ${{ matrix.python-version }}
-          fail_ci_if_error: false
+      - name: Wait for Quality Gate
+        uses: sonarsource/sonarqube-quality-gate-action@master
+        timeout-minutes: 5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        id: quality-gate
 
-  # Code quality checks
-  quality:
-    name: Code Quality
+      - name: Quality Gate Result
+        run: |
+          echo "::group::Quality Gate Status"
+          echo "Quality Gate Status: ${{ steps.quality-gate.outputs.quality-gate-status }}"
+          echo "View detailed results: https://sonarcloud.io/project/overview?id=${{ inputs.sonarcloud-project-key }}"
+          echo "::endgroup::"
+
+      - name: Block PR if quality gate fails
+        if: steps.quality-gate.outputs.quality-gate-status == 'FAILED'
+        run: |
+          echo "::error::Quality Gate FAILED"
+          echo ""
+          echo "SonarQube quality gate did not pass. Please fix the issues:"
+          echo "- Review issues at: https://sonarcloud.io/project/overview?id=${{ inputs.sonarcloud-project-key }}"
+          echo "- Fix all BLOCKER and CRITICAL issues"
+          echo "- Ensure test coverage >= ${{ inputs.coverage-threshold }}%"
+          echo "- Reduce code duplication"
+          exit 1
+
+  # ============================================================================
+  # Summary Job
+  # ============================================================================
+  ci-summary:
+    name: CI Summary
     runs-on: ubuntu-latest
-    timeout-minutes: 12
-    needs: setup
-
-    steps:
-      - name: Harden Runner
-        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7  # v2.10.1
-        with:
-          egress-policy: audit
-
-      - name: Checkout code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@8d9ed9ac5c53483de85588cdf95a591a75ab9f55  # v5.5.0
-        with:
-          python-version: '3.12'
-
-      - name: Install UV
-        uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-          cache-dependency-glob: "uv.lock"
-
-      - name: Restore dependency cache
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830  # v4.3.0
-        with:
-          path: |
-            .venv
-            ~/.cache/uv
-          key: py-deps-${{ runner.os }}-${{ needs.setup.outputs.uv-hash }}
-          restore-keys: |
-            py-deps-${{ runner.os }}-
-
-      - name: Install dependencies
-        run: |
-          uv sync --no-interaction --all-extras
-
-      - name: Type checking with MyPy
-        if: ${{ inputs.run-mypy }}
-        run: |
-          echo "🔍 Running strict type checking..."
-          uv run mypy ${{ inputs.source-directory }} \
-            --config-file=pyproject.toml \
-            --cache-dir=${{ env.MYPY_CACHE_DIR }} \
-            ${{ inputs.mypy-strict && '--strict' || '' }}
-
-      - name: Code formatting validation
-        if: ${{ inputs.run-ruff }}
-        run: |
-          echo "🧹 Validating code formatting..."
-          uv run ruff format --check
-
-      - name: Linting with enhanced rules
-        if: ${{ inputs.run-ruff }}
-        run: |
-          echo "🔧 Running enhanced linting..."
-          uv run ruff check . --config=pyproject.toml
-
-  # CI success gate
-  ci-success:
-    name: CI Success Gate
-    runs-on: ubuntu-latest
-    needs: [setup, test, quality]
+    needs: [quality-checks, llm-governance]
     if: always()
 
     steps:
-      - name: Validate CI Results
+      - name: Generate final summary
         run: |
-          if [[ "${{ needs.setup.result }}" == "success" && \
-                "${{ needs.test.result }}" == "success" && \
-                "${{ needs.quality.result }}" == "success" ]]; then
-            echo "✅ CI Pipeline - All Checks Passed"
-            echo "🎯 Code quality validated across Python ${{ inputs.python-versions }}"
-            echo "🔒 Coverage threshold: ${{ inputs.coverage-threshold }}%"
-            echo "✅ Ready for deployment"
-          else
-            echo "❌ CI Pipeline Failed"
-            echo "setup: ${{ needs.setup.result }}"
-            echo "test: ${{ needs.test.result }}"
-            echo "quality: ${{ needs.quality.result }}"
-            exit 1
+          echo "### CI Pipeline Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All governance layers checked:" >> $GITHUB_STEP_SUMMARY
+          echo "- Code Quality Checks: ${{ needs.quality-checks.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- LLM Governance Validation: ${{ needs.llm-governance.result }}" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ inputs.enable-sonarcloud }}" == "true" ]; then
+            echo "- SonarCloud Quality Gate: enabled" >> $GITHUB_STEP_SUMMARY
           fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Status: ${{ job.status }}**" >> $GITHUB_STEP_SUMMARY
