@@ -6,7 +6,7 @@
 # Usage from downstream repos:
 #   jobs:
 #     pr-validation:
-#       uses: ByronWilliamsCPA/.github/.github/workflows/python-pr-validation.yml@main
+#       uses: williaby/.github/.github/workflows/python-pr-validation.yml@main
 #       with:
 #         python-version: '3.12'
 #         require-tests: true
@@ -111,8 +111,9 @@ jobs:
       - name: Validate PR title (Conventional Commits)
         id: validate-title
         if: ${{ inputs.require-conventional-commits }}
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
-          PR_TITLE="${{ github.event.pull_request.title }}"
           echo "PR Title: $PR_TITLE"
 
           # Conventional commit regex
@@ -134,10 +135,10 @@ jobs:
       - name: Validate PR description
         id: validate-description
         if: ${{ inputs.require-description }}
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          MIN_LENGTH: ${{ inputs.min-description-length }}
         run: |
-          PR_BODY="${{ github.event.pull_request.body }}"
-          MIN_LENGTH=${{ inputs.min-description-length }}
-
           if [ -z "$PR_BODY" ]; then
             echo "valid=false" >> $GITHUB_OUTPUT
             echo "::error::PR description is required"
@@ -202,7 +203,7 @@ jobs:
           python-version: ${{ inputs.python-version }}
 
       - name: Install UV
-        uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081  # v5
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2
         with:
           enable-cache: true
 
@@ -260,7 +261,7 @@ jobs:
           python-version: ${{ inputs.python-version }}
 
       - name: Install UV
-        uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081  # v5
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2
         with:
           enable-cache: true
 
@@ -304,9 +305,10 @@ jobs:
 
       - name: Check for breaking change indicators
         id: breaking
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
         run: |
           # Check PR title for breaking change indicator
-          PR_TITLE="${{ github.event.pull_request.title }}"
           if [[ "$PR_TITLE" =~ "!" ]] || [[ "$PR_TITLE" =~ "BREAKING" ]]; then
             echo "has_breaking=true" >> $GITHUB_OUTPUT
             echo "::warning::PR indicates breaking changes"

@@ -6,7 +6,7 @@
 # Usage from downstream repos:
 #   jobs:
 #     release:
-#       uses: ByronWilliamsCPA/.github/.github/workflows/python-release.yml@main
+#       uses: williaby/.github/.github/workflows/python-release.yml@main
 #       with:
 #         python-version: '3.12'
 #         semantic-release: true
@@ -124,7 +124,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install uv
-        uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081  # v5
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2
         with:
           enable-cache: true
 
@@ -181,7 +181,7 @@ jobs:
           python-version: ${{ inputs.python-version }}
 
       - name: Install uv
-        uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081  # v5
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2
         with:
           enable-cache: true
 
@@ -214,7 +214,7 @@ jobs:
       - name: Python Semantic Release
         if: inputs.semantic-release
         id: semantic-release
-        uses: python-semantic-release/python-semantic-release@v9.21.1
+        uses: python-semantic-release/python-semantic-release@86e0ab1159fc51ecdc0cc2fb059530b285aab21f  # v9.21.1
         with:
           github_token: ${{ github.token }}
           git_committer_name: "github-actions[bot]"
@@ -223,14 +223,14 @@ jobs:
 
       - name: Sign artifacts with Sigstore
         if: inputs.sign-artifacts && (steps.semantic-release.outputs.released == 'true' || !inputs.semantic-release)
-        uses: sigstore/gh-action-sigstore-python@v3.0.0
+        uses: sigstore/gh-action-sigstore-python@f514d46b907ebcd5bedc05145c03b69c1edd8b46  # v3.0.0
         with:
           inputs: ./dist/*.tar.gz ./dist/*.whl
           release-signing-artifacts: true
 
       - name: Upload to GitHub Release (Semantic)
         if: inputs.semantic-release && steps.semantic-release.outputs.released == 'true'
-        uses: python-semantic-release/publish-action@v9.21.1
+        uses: python-semantic-release/publish-action@e821354c8e6d662b71478ac398ad3f38cb783692  # v9.21.1
         with:
           github_token: ${{ github.token }}
           tag: ${{ steps.semantic-release.outputs.tag }}
@@ -239,8 +239,10 @@ jobs:
       - name: Manual Release
         if: "!inputs.semantic-release"
         id: manual-release
+        env:
+          TAG_INPUT: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
-          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          TAG="$TAG_INPUT"
           VERSION="${TAG#v}"
           echo "released=true" >> $GITHUB_OUTPUT
           echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -248,7 +250,7 @@ jobs:
 
       - name: Create GitHub Release (Manual)
         if: "!inputs.semantic-release"
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@5be0e66d93ac7ed76da52eca8bb058f665c3a5fe  # v2.4.2
         with:
           tag_name: ${{ steps.manual-release.outputs.tag }}
           generate_release_notes: true
@@ -312,7 +314,7 @@ jobs:
           path: dist/
 
       - name: Install uv
-        uses: astral-sh/setup-uv@e58605a9b6da7c637471fab8847a5e5a6b8df081  # v5
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2
 
       - name: Publish to PyPI
         # Uses trusted publishing (OIDC) - configure at pypi.org/manage/account/publishing/
