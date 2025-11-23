@@ -237,7 +237,7 @@ jobs:
 
       # Manual Release Mode
       - name: Manual Release
-        if: "!inputs.semantic-release"
+        if: ${{ !inputs.semantic-release }}
         id: manual-release
         env:
           TAG_INPUT: ${{ github.event.inputs.tag || github.ref_name }}
@@ -249,7 +249,7 @@ jobs:
           echo "tag=$TAG" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release (Manual)
-        if: "!inputs.semantic-release"
+        if: ${{ !inputs.semantic-release }}
         uses: softprops/action-gh-release@5be0e66d93ac7ed76da52eca8bb058f665c3a5fe  # v2.4.2
         with:
           tag_name: ${{ steps.manual-release.outputs.tag }}
