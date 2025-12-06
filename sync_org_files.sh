@@ -2,12 +2,12 @@
 set -euo pipefail
 
 # SPDX header + compliance note
-HEADER='<!-- SPDX-FileCopyrightText: © 2019–2025 Byron Williams -->
+HEADER="<!-- SPDX-FileCopyrightText: © 2019–2025 Byron Williams -->
 <!-- SPDX-License-Identifier: MIT -->
 
-> **NOTE:** This file is maintained centrally in the organization’s `.github` repository.
+> **NOTE:** This file is maintained centrally in the organization's \`.github\` repository.
 > For the latest version, see:
-> https://github.com/ByronWilliamsCPA/.github/blob/main/{{FILE_PATH}}'
+> https://github.com/ByronWilliamsCPA/.github/blob/main/{{FILE_PATH}}"
 
 # Files to sync
 FILES=(
