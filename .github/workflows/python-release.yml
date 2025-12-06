@@ -110,7 +110,7 @@ jobs:
   test:
     name: Pre-Release Tests
     runs-on: ubuntu-latest
-    if: inputs.run-tests
+    if: ${{ inputs.run-tests }}
     timeout-minutes: 15
     steps:
       - name: Harden Runner
@@ -195,7 +195,7 @@ jobs:
           ls -lh dist/
 
       - name: Generate SBOM
-        if: inputs.generate-sbom
+        if: ${{ inputs.generate-sbom }}
         run: |
           echo "Generating Software Bill of Materials..."
           pip install cyclonedx-bom==4.6.1
@@ -212,7 +212,7 @@ jobs:
 
       # Semantic Release Mode
       - name: Python Semantic Release
-        if: inputs.semantic-release
+        if: ${{ inputs.semantic-release }}
         id: semantic-release
         uses: python-semantic-release/python-semantic-release@86e0ab1159fc51ecdc0cc2fb059530b285aab21f  # v9.21.1
         with:
@@ -222,14 +222,14 @@ jobs:
           force: ${{ inputs.force-release }}
 
       - name: Sign artifacts with Sigstore
-        if: inputs.sign-artifacts && (steps.semantic-release.outputs.released == 'true' || !inputs.semantic-release)
+        if: ${{ inputs.sign-artifacts && (steps.semantic-release.outputs.released == 'true' || !inputs.semantic-release) }}
         uses: sigstore/gh-action-sigstore-python@f514d46b907ebcd5bedc05145c03b69c1edd8b46  # v3.0.0
         with:
           inputs: ./dist/*.tar.gz ./dist/*.whl
           release-signing-artifacts: true
 
       - name: Upload to GitHub Release (Semantic)
-        if: inputs.semantic-release && steps.semantic-release.outputs.released == 'true'
+        if: ${{ inputs.semantic-release && steps.semantic-release.outputs.released == 'true' }}
         uses: python-semantic-release/publish-action@e821354c8e6d662b71478ac398ad3f38cb783692  # v9.21.1
         with:
           github_token: ${{ github.token }}
@@ -295,7 +295,7 @@ jobs:
   publish-pypi:
     name: Publish to PyPI
     needs: release
-    if: inputs.publish-to-pypi && (needs.release.outputs.released == 'true')
+    if: ${{ inputs.publish-to-pypi && (needs.release.outputs.released == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:

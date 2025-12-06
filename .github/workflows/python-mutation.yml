@@ -232,7 +232,7 @@ jobs:
             const passed = '${{ steps.analyze.outputs.passed }}' === 'true';
             const threshold = '${{ inputs.mutation-threshold }}';
 
-            const emoji = passed ? '' : '';
+            const emoji = passed ? '✅' : '⚠️';
             const status = passed ? 'Passed' : 'Below Threshold';
 
             const body = `## ${emoji} Mutation Testing Results

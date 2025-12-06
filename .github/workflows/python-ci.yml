@@ -325,7 +325,7 @@ jobs:
           echo "::endgroup::"
 
       - name: Block PR if critical tags found
-        if: steps.check-tags.outputs.rad_tags > 0
+        if: ${{ fromJSON(steps.check-tags.outputs.rad_tags) > 0 }}
         run: |
           echo "::error::PR blocked: Found ${{ steps.check-tags.outputs.rad_tags }} unverified production risk tags"
           echo ""
@@ -336,7 +336,7 @@ jobs:
           exit 1
 
       - name: Fail on LLM tags (if configured)
-        if: inputs.fail-on-llm-tags && steps.check-tags.outputs.llm_tags > 0
+        if: ${{ inputs.fail-on-llm-tags && fromJSON(steps.check-tags.outputs.llm_tags) > 0 }}
         run: |
           echo "::error::PR blocked: Found ${{ steps.check-tags.outputs.llm_tags }} LLM debt tags"
           echo ""

@@ -80,7 +80,7 @@ on:
     outputs:
       matrix-result:
         description: 'Overall matrix test result'
-        value: ${{ jobs.test-matrix.result }}
+        value: ${{ jobs.compatibility-summary.outputs.result }}
 
 permissions:
   contents: read
@@ -179,8 +179,14 @@ jobs:
     needs: [build-matrix, test-matrix]
     runs-on: ubuntu-latest
     if: always()
+    outputs:
+      result: ${{ steps.result.outputs.result }}
 
     steps:
+      - name: Set result output
+        id: result
+        run: echo "result=${{ needs.test-matrix.result }}" >> $GITHUB_OUTPUT
+
       - name: Generate compatibility matrix summary
         run: |
           echo "## Python Compatibility Matrix Results" >> $GITHUB_STEP_SUMMARY

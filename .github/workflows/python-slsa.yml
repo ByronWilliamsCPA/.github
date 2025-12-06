@@ -1,12 +1,16 @@
 # ============================================================================
-# Reusable SLSA Provenance Workflow
+# SLSA Provenance Workflow Template
 # ============================================================================
 # Generates SLSA Level 3 provenance attestations for Python packages
 #
-# Usage from downstream repos:
+# IMPORTANT: This is a TEMPLATE, not a reusable workflow!
+# GitHub Actions does not support nested reusable workflow calls.
+# You must copy the 'provenance' job directly into your release workflow.
+#
+# Usage - Copy this job into your workflow:
 #   jobs:
 #     build:
-#       # First build your package and output base64-encoded hashes
+#       runs-on: ubuntu-latest
 #       outputs:
 #         hashes: ${{ steps.hash.outputs.hashes }}
 #       steps:
@@ -20,26 +24,40 @@
 #             name: dist
 #             path: dist/
 #
+#     # Copy this job directly into your workflow
 #     provenance:
 #       needs: build
-#       uses: ByronWilliamsCPA/.github/.github/workflows/python-slsa.yml@main
-#       with:
-#         base64-subjects: ${{ needs.build.outputs.hashes }}
 #       permissions:
 #         actions: read
 #         id-token: write
 #         contents: write
+#       uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
+#       with:
+#         base64-subjects: ${{ needs.build.outputs.hashes }}
+#         upload-assets: true
+#         upload-tag-name: ${{ github.ref_name }}
+#         provenance-name: multiple.intoto.jsonl
 #
 # Features:
 #   - SLSA Level 3 provenance generation
 #   - Supply chain security attestations
 #   - Automatic release artifact attachment
+#
+# Why can't this be a reusable workflow?
+#   GitHub Actions doesn't allow reusable workflows to call other reusable
+#   workflows. Since SLSA provenance requires calling the official
+#   slsa-framework generator (which is itself a reusable workflow),
+#   you must call it directly from your workflow.
+#
+# See: https://docs.github.com/en/actions/using-workflows/reusing-workflows#limitations
 # ============================================================================
 
-name: SLSA Provenance (Reusable)
+name: SLSA Provenance (Template)
 
+# This workflow demonstrates SLSA provenance generation
+# It can be triggered manually for testing or referenced as a template
 on:
-  workflow_call:
+  workflow_dispatch:
     inputs:
       base64-subjects:
         description: 'Base64-encoded SHA256 hashes of artifacts (sha256sum * | base64 -w0)'
@@ -72,7 +90,7 @@ permissions:
 jobs:
   provenance:
     name: Generate SLSA Provenance
-    # Use the official SLSA generator
+    # Use the official SLSA generator directly
     uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.0.0
     with:
       base64-subjects: ${{ inputs.base64-subjects }}
