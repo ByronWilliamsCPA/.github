@@ -39,7 +39,7 @@ permissions:
 
 jobs:
   fips-check:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-fips-compatibility.yml@main
+    uses: ByronWilliamsCPA/.github/workflows/python-fips-compatibility.yml@main
     permissions:
       contents: read
       pull-requests: write
@@ -50,7 +50,7 @@ jobs:
 ```yaml
 jobs:
   fips-check:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-fips-compatibility.yml@main
+    uses: ByronWilliamsCPA/.github/workflows/python-fips-compatibility.yml@main
     with:
       # Treat warnings as errors (default: false)
       strict-mode: true
@@ -96,7 +96,7 @@ on:
 
 jobs:
   fips-check:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-fips-compatibility.yml@main
+    uses: ByronWilliamsCPA/.github/workflows/python-fips-compatibility.yml@main
     with:
       strict-mode: ${{ github.event.inputs.strict_mode || false }}
       enable-runtime-test: ${{ github.event_name == 'schedule' }}

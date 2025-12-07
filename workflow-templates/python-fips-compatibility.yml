@@ -22,7 +22,7 @@ on:
       - 'src/**/*.py'
       - 'pyproject.toml'
       - 'requirements*.txt'
-      - '.github/workflows/fips-compatibility.yml'
+      - '.github/workflows/python-fips-compatibility.yml'
   pull_request:
     branches: [main, master]
     paths:
@@ -52,15 +52,15 @@ permissions:
 jobs:
   fips-check:
     name: FIPS Compliance Check
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-fips-compatibility.yml@main
+    uses: ByronWilliamsCPA/.github/workflows/python-fips-compatibility.yml@main
     with:
-      strict-mode: ${{ github.event.inputs.strict_mode == 'true' || false }}
+      strict-mode: ${{ github.event.inputs.strict_mode || false }}
       include-tests: true
       fix-hints: true
       artifact-retention-days: 30
       python-version: '3.12'
       script-path: 'scripts/check_fips_compatibility.py'
-      enable-runtime-test: ${{ github.event.inputs.enable_runtime_test == 'true' || github.event_name == 'schedule' }}
+      enable-runtime-test: ${{ github.event.inputs.enable_runtime_test || github.event_name == 'schedule' }}
     permissions:
       contents: read
       pull-requests: write
