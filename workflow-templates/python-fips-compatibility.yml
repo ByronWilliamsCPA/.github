@@ -1,0 +1,66 @@
+# Python Project - FIPS Compatibility
+# Validates FIPS 140-2/140-3 compliance for cryptographic operations
+#
+# This workflow:
+#   - Checks for non-FIPS cryptographic algorithms
+#   - Scans dependencies for FIPS compatibility issues
+#   - Provides fix hints for common issues
+#   - Posts PR comments with results
+#
+# Triggered by:
+#   - Push to main/master branches
+#   - Pull requests to main/master branches
+#   - Weekly scheduled runs
+#   - Manual workflow dispatch
+
+name: FIPS Compatibility
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'src/**/*.py'
+      - 'pyproject.toml'
+      - 'requirements*.txt'
+      - '.github/workflows/fips-compatibility.yml'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'src/**/*.py'
+      - 'pyproject.toml'
+      - 'requirements*.txt'
+  schedule:
+    # Run weekly on Monday at 10 AM UTC
+    - cron: '0 10 * * 1'
+  workflow_dispatch:
+    inputs:
+      strict_mode:
+        description: 'Treat warnings as errors'
+        required: false
+        default: false
+        type: boolean
+      enable_runtime_test:
+        description: 'Enable runtime FIPS test'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  fips-check:
+    name: FIPS Compliance Check
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-fips-compatibility.yml@main
+    with:
+      strict-mode: ${{ github.event.inputs.strict_mode == 'true' || false }}
+      include-tests: true
+      fix-hints: true
+      artifact-retention-days: 30
+      python-version: '3.12'
+      script-path: 'scripts/check_fips_compatibility.py'
+      enable-runtime-test: ${{ github.event.inputs.enable_runtime_test == 'true' || github.event_name == 'schedule' }}
+    permissions:
+      contents: read
+      pull-requests: write
