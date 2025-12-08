@@ -3,20 +3,40 @@
 # ============================================================================
 # Validates test effectiveness using mutation testing with mutmut
 #
+# ⚠️  RECOMMENDED USAGE: Schedule-Only (Weekly/Monthly)
+# Mutation testing is computationally expensive and best suited for:
+# - Weekly/monthly scheduled runs on main branch
+# - Pre-release validation gates
+# - Quality metrics dashboards
+#
+# NOT recommended for:
+# - Per-PR validation (too slow, blocks development)
+# - CI pipelines with tight time constraints
+#
 # Usage from downstream repos:
+#   # RECOMMENDED: Schedule-only
+#   on:
+#     schedule:
+#       - cron: '0 2 * * 0'  # Weekly on Sunday at 2 AM
 #   jobs:
 #     mutation:
 #       uses: ByronWilliamsCPA/.github/.github/workflows/python-mutation.yml@main
 #       with:
 #         source-directory: 'src'
 #         mutation-threshold: 80
+#         fail-under-threshold: false  # Don't block on low scores
 #
 # Features:
 #   - Mutation testing with mutmut
 #   - Configurable mutation score threshold
 #   - HTML report generation
-#   - Optional PR comment posting
-#   - Recommended for weekly scheduled runs
+#   - Optional PR comment posting (if triggered by PR)
+#   - Optimized for scheduled quality audits
+#
+# Performance Considerations:
+#   - Runtime: 30-60 minutes for medium projects
+#   - Cost: High compute usage (GitHub Actions minutes)
+#   - Best practice: Run weekly, not per-commit
 # ============================================================================
 
 name: Mutation Testing (Reusable)
@@ -295,6 +315,19 @@ jobs:
         run: |
           echo "## Mutation Testing Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Warn if running on PR
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            echo "⚠️  **Performance Warning**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Mutation testing is running on a Pull Request. This is expensive and not recommended." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Recommendation:** Run mutation testing on schedule (weekly/monthly) instead." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "---" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
           echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| **Mutation Score** | ${{ steps.analyze.outputs.score }}% |" >> $GITHUB_STEP_SUMMARY
@@ -309,3 +342,5 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### About Mutation Testing" >> $GITHUB_STEP_SUMMARY
           echo "Mutation testing validates test effectiveness by introducing code changes and verifying tests catch them." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Best Practice:** Run on schedule (weekly/monthly), not per-PR, to avoid long CI times." >> $GITHUB_STEP_SUMMARY

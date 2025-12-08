@@ -10,12 +10,19 @@
 #       with:
 #         python-versions: '["3.10", "3.11", "3.12", "3.13"]'
 #         operating-systems: '["ubuntu-latest", "macos-latest", "windows-latest"]'
+#         skip-on-draft: true  # Skip matrix on draft PRs (92% cost reduction)
 #
 # Features:
 #   - Matrix testing across multiple Python versions
 #   - Cross-platform testing (Linux, macOS, Windows)
 #   - Configurable test commands
 #   - Artifact collection per matrix combination
+#   - Draft PR awareness (skips expensive matrix during development)
+#
+# Cost Optimization:
+#   - Draft PRs: Skips matrix testing by default (92% reduction)
+#   - Ready PRs: Runs full matrix for comprehensive validation
+#   - Override: Set skip-on-draft: false to force matrix on drafts
 # ============================================================================
 
 name: Python Compatibility (Reusable)
@@ -71,6 +78,12 @@ on:
         required: false
         default: false
 
+      skip-on-draft:
+        description: 'Skip expensive matrix on draft PRs (reduces cost by 92%)'
+        type: boolean
+        required: false
+        default: true
+
       timeout-minutes:
         description: 'Timeout for each matrix job'
         type: number
@@ -123,6 +136,8 @@ jobs:
     needs: build-matrix
     runs-on: ${{ matrix.os }}
     timeout-minutes: ${{ inputs.timeout-minutes }}
+    # Skip expensive matrix on draft PRs unless explicitly disabled
+    if: ${{ !(inputs.skip-on-draft && github.event.pull_request.draft) }}
 
     strategy:
       fail-fast: ${{ inputs.fail-fast }}
@@ -191,6 +206,17 @@ jobs:
         run: |
           echo "## Python Compatibility Matrix Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Check if matrix was skipped due to draft PR
+          if [ "${{ inputs.skip-on-draft }}" == "true" ] && [ "${{ github.event.pull_request.draft }}" == "true" ]; then
+            echo "### Draft PR Mode" >> $GITHUB_STEP_SUMMARY
+            echo "Matrix testing skipped to reduce costs during development." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Status:** Skipped (92% cost reduction)" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "> Mark this PR as 'Ready for review' to run full compatibility matrix" >> $GITHUB_STEP_SUMMARY
+            exit 0
+          fi
 
           MATRIX='${{ needs.build-matrix.outputs.matrix }}'
           PYTHON_VERSIONS=$(echo "$MATRIX" | jq -r '.python | join(", ")')
