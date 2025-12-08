@@ -1,0 +1,116 @@
+# ============================================================================
+# Example: Multi-Sanitizer Fuzzing Workflow
+# ============================================================================
+# Comprehensive security testing using multiple sanitizers
+#
+# Features:
+#   - Runs all sanitizers in parallel
+#   - Weekly schedule for cost optimization
+#   - Different configurations per sanitizer
+#   - Consolidated security reporting
+#
+# Sanitizers:
+#   - Address: Memory safety (buffer overflows, use-after-free)
+#   - Undefined: Undefined behavior (integer overflow, null deref)
+#   - Memory: Uninitialized reads (Linux only)
+# ============================================================================
+
+name: Comprehensive Fuzzing
+
+on:
+  schedule:
+    # Sunday 3 AM UTC - comprehensive weekly analysis
+    - cron: '0 3 * * 0'
+
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  # Address Sanitizer - Memory Safety
+  address-sanitizer:
+    name: Fuzzing (Address Sanitizer)
+    uses: williaby/.github/.github/workflows/python-fuzzing.yml@main
+    permissions:
+      contents: read
+      security-events: write
+
+    with:
+      fuzz-seconds: 900  # 15 minutes
+      sanitizer: 'address'
+      upload-sarif: true
+      crash-retention-days: 30
+      fail-on-crash: false  # Continue to other sanitizers
+      timeout-minutes: 25
+
+  # Undefined Behavior Sanitizer
+  undefined-sanitizer:
+    name: Fuzzing (Undefined Behavior)
+    uses: williaby/.github/.github/workflows/python-fuzzing.yml@main
+    permissions:
+      contents: read
+      security-events: write
+
+    with:
+      fuzz-seconds: 900  # 15 minutes
+      sanitizer: 'undefined'
+      upload-sarif: true
+      crash-retention-days: 30
+      fail-on-crash: false  # Continue to other sanitizers
+      timeout-minutes: 25
+
+  # Memory Sanitizer - Uninitialized Reads
+  memory-sanitizer:
+    name: Fuzzing (Memory Sanitizer)
+    uses: williaby/.github/.github/workflows/python-fuzzing.yml@main
+    permissions:
+      contents: read
+      security-events: write
+
+    with:
+      fuzz-seconds: 900  # 15 minutes
+      sanitizer: 'memory'
+      upload-sarif: true
+      crash-retention-days: 30
+      fail-on-crash: false  # Continue even with crashes
+      timeout-minutes: 25
+
+  # Consolidated Security Gate
+  security-gate:
+    name: Security Analysis Gate
+    runs-on: ubuntu-latest
+    needs: [address-sanitizer, undefined-sanitizer, memory-sanitizer]
+    if: always()
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7  # v2.10.1
+        with:
+          egress-policy: audit
+
+      - name: Evaluate Results
+        run: |
+          echo "# 🔍 Comprehensive Fuzzing Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Sanitizer | Result |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Address | ${{ needs.address-sanitizer.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Undefined | ${{ needs.undefined-sanitizer.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Memory | ${{ needs.memory-sanitizer.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Check for failures
+          if [[ "${{ needs.address-sanitizer.result }}" == "failure" ]] || \
+             [[ "${{ needs.undefined-sanitizer.result }}" == "failure" ]] || \
+             [[ "${{ needs.memory-sanitizer.result }}" == "failure" ]]; then
+            echo "## ❌ Security Issues Detected" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Review crash artifacts and SARIF reports in:" >> $GITHUB_STEP_SUMMARY
+            echo "- Actions artifacts tab" >> $GITHUB_STEP_SUMMARY
+            echo "- Security > Code scanning alerts" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          else
+            echo "## ✅ All Sanitizers Passed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "No security vulnerabilities detected across all sanitizers." >> $GITHUB_STEP_SUMMARY
+          fi

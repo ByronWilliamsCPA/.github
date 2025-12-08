@@ -56,6 +56,11 @@ on:
         required: false
         default: 'src'
 
+# Cancel in-progress runs for same PR/branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   id-token: write  # Required for OIDC

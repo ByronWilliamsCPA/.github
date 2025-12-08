@@ -1,0 +1,49 @@
+# ============================================================================
+# Example: Custom Fuzzing Directory Workflow
+# ============================================================================
+# Fuzzing with custom directory structure
+#
+# Use Case:
+#   - Non-standard fuzzing directory location
+#   - Separate security testing directory
+#   - Multiple fuzzing target sets
+#
+# Directory Layout:
+#   tests/
+#   └── security/
+#       └── fuzz/
+#           ├── fuzz_api.py
+#           ├── fuzz_parser.py
+#           └── fuzz_crypto.py
+# ============================================================================
+
+name: Security Fuzzing (Custom Directory)
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'  # Weekly Monday 3 AM UTC
+
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  fuzzing:
+    name: Security-Specific Fuzzing
+    uses: williaby/.github/.github/workflows/python-fuzzing.yml@main
+    permissions:
+      contents: read
+      security-events: write
+
+    with:
+      # Custom fuzzing directory
+      fuzz-target-directory: 'tests/security/fuzz'
+
+      # Standard configuration
+      fuzz-seconds: 1200
+      sanitizer: 'address'
+      upload-sarif: true
+      crash-retention-days: 30
+      python-version: '3.12'
+      fail-on-crash: true
+      timeout-minutes: 30

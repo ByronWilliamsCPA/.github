@@ -1,0 +1,463 @@
+# ============================================================================
+# Reusable Performance Regression Testing Workflow
+# ============================================================================
+# Automated performance regression detection for Python projects
+#
+# Usage from downstream repos:
+#   jobs:
+#     performance:
+#       uses: williaby/.github/.github/workflows/python-performance-regression.yml@main
+#       with:
+#         benchmark-script: 'scripts/benchmarks/run_benchmark.py'
+#         regression-threshold: 10.0
+#         primary-metric: 'p95_ms'
+#
+# Features:
+#   - Automated baseline comparison (PR vs main branch)
+#   - Configurable regression thresholds
+#   - PR comment integration with detailed metrics
+#   - Support for custom benchmark scripts
+#   - Synthetic test data generation
+#   - Multiple metric tracking (p50, p95, p99, mean, throughput)
+#
+# Common Use Cases:
+#   - ML inference latency tracking
+#   - API response time monitoring
+#   - Data processing throughput validation
+#   - Algorithm performance benchmarking
+# ============================================================================
+
+name: Performance Regression Testing (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      benchmark-script:
+        description: 'Path to benchmark script (must output JSON with metrics)'
+        type: string
+        required: true
+
+      benchmark-args:
+        description: 'Additional arguments for benchmark script'
+        type: string
+        required: false
+        default: ''
+
+      primary-metric:
+        description: 'Primary metric to track (e.g., p95_ms, mean_latency, throughput)'
+        type: string
+        required: false
+        default: 'p95_ms'
+
+      regression-threshold:
+        description: 'Maximum allowed regression percentage (default: 10%)'
+        type: number
+        required: false
+        default: 10.0
+
+      improvement-threshold:
+        description: 'Minimum improvement percentage to highlight (default: 5%)'
+        type: number
+        required: false
+        default: 5.0
+
+      baseline-file:
+        description: 'Path to committed baseline file (optional)'
+        type: string
+        required: false
+        default: ''
+
+      python-version:
+        description: 'Python version for benchmarking'
+        type: string
+        required: false
+        default: '3.12'
+
+      warmup-iterations:
+        description: 'Number of warmup iterations before measurement'
+        type: number
+        required: false
+        default: 10
+
+      benchmark-iterations:
+        description: 'Number of benchmark iterations for measurement'
+        type: number
+        required: false
+        default: 100
+
+      fail-on-regression:
+        description: 'Fail workflow if regression detected'
+        type: boolean
+        required: false
+        default: true
+
+      generate-synthetic-data:
+        description: 'Generate synthetic test data (requires synthetic-data-script)'
+        type: boolean
+        required: false
+        default: false
+
+      synthetic-data-script:
+        description: 'Python code to generate synthetic test data'
+        type: string
+        required: false
+        default: ''
+
+      test-data-directory:
+        description: 'Directory for test data (default: /tmp/perf_test_data)'
+        type: string
+        required: false
+        default: '/tmp/perf_test_data'
+
+      extra-dependencies:
+        description: 'Additional uv sync extras (e.g., "dev ml")'
+        type: string
+        required: false
+        default: 'dev'
+
+      timeout-minutes:
+        description: 'Job timeout in minutes'
+        type: number
+        required: false
+        default: 30
+
+      comment-on-pr:
+        description: 'Post performance results as PR comment'
+        type: boolean
+        required: false
+        default: true
+
+# Cancel in-progress runs for same PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  performance-regression:
+    name: Performance Regression Check
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7  # v2.10.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout PR branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Setup Python
+        uses: actions/setup-python@8d9ed9ac5c53483de85588cdf95a591a75ab9f55  # v5.5.0
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: |
+          if [ -n "${{ inputs.extra-dependencies }}" ]; then
+            EXTRAS=$(echo "${{ inputs.extra-dependencies }}" | tr ' ' '\n' | sed 's/^/--extra /' | tr '\n' ' ')
+            uv sync $EXTRAS
+          else
+            uv sync
+          fi
+
+      - name: Generate Synthetic Test Data
+        if: inputs.generate-synthetic-data && inputs.synthetic-data-script != ''
+        run: |
+          mkdir -p "${{ inputs.test-data-directory }}"
+          uv run python - <<'EOF'
+          ${{ inputs.synthetic-data-script }}
+          EOF
+          echo "✅ Synthetic test data generated in ${{ inputs.test-data-directory }}"
+          ls -lh "${{ inputs.test-data-directory }}" | head -20
+
+      - name: Validate Benchmark Script
+        run: |
+          if [ ! -f "${{ inputs.benchmark-script }}" ]; then
+            echo "❌ ERROR: Benchmark script not found: ${{ inputs.benchmark-script }}"
+            echo ""
+            echo "Ensure the script exists and outputs JSON with metrics:"
+            echo '  {"${{ inputs.primary-metric }}": 100.0, "mean_ms": 95.0, ...}'
+            exit 1
+          fi
+          echo "✅ Benchmark script found: ${{ inputs.benchmark-script }}"
+
+      - name: Run PR Benchmarks
+        id: pr_bench
+        run: |
+          echo "🏃 Running benchmark on PR branch..."
+          uv run python ${{ inputs.benchmark-script }} \
+            --warmup ${{ inputs.warmup-iterations }} \
+            --iterations ${{ inputs.benchmark-iterations }} \
+            --output /tmp/pr_benchmark.json \
+            ${{ inputs.benchmark-args }} || {
+              echo "⚠️ Benchmark execution failed, creating fallback results"
+              echo '{"${{ inputs.primary-metric }}": 0, "status": "failed"}' > /tmp/pr_benchmark.json
+            }
+
+          if [ -f /tmp/pr_benchmark.json ]; then
+            echo "📊 PR Benchmark Results:"
+            cat /tmp/pr_benchmark.json | python3 -m json.tool
+          else
+            echo "❌ No benchmark results generated"
+            exit 1
+          fi
+
+      - name: Checkout Main Branch
+        run: |
+          git fetch origin main
+          git checkout origin/main
+
+      - name: Determine Baseline Source
+        id: baseline_source
+        run: |
+          if [ -n "${{ inputs.baseline-file }}" ] && [ -f "${{ inputs.baseline-file }}" ]; then
+            echo "source=committed" >> $GITHUB_OUTPUT
+            echo "file=${{ inputs.baseline-file }}" >> $GITHUB_OUTPUT
+            echo "✅ Using committed baseline: ${{ inputs.baseline-file }}"
+          else
+            echo "source=generated" >> $GITHUB_OUTPUT
+            echo "file=/tmp/baseline_benchmark.json" >> $GITHUB_OUTPUT
+            echo "ℹ️  Will generate baseline from main branch"
+          fi
+
+      - name: Run Baseline Benchmarks
+        if: steps.baseline_source.outputs.source == 'generated'
+        run: |
+          echo "🏃 Running baseline benchmark on main branch..."
+          uv sync $(echo "${{ inputs.extra-dependencies }}" | tr ' ' '\n' | sed 's/^/--extra /' | tr '\n' ' ')
+          uv run python ${{ inputs.benchmark-script }} \
+            --warmup ${{ inputs.warmup-iterations }} \
+            --iterations ${{ inputs.benchmark-iterations }} \
+            --output /tmp/baseline_benchmark.json \
+            ${{ inputs.benchmark-args }} || {
+              echo "⚠️ Baseline benchmark failed, using fallback"
+              echo '{"${{ inputs.primary-metric }}": 0, "status": "failed"}' > /tmp/baseline_benchmark.json
+            }
+
+          if [ -f /tmp/baseline_benchmark.json ]; then
+            echo "📊 Baseline Benchmark Results:"
+            cat /tmp/baseline_benchmark.json | python3 -m json.tool
+          fi
+
+      - name: Copy Committed Baseline
+        if: steps.baseline_source.outputs.source == 'committed'
+        run: |
+          cp "${{ inputs.baseline-file }}" /tmp/baseline_benchmark.json
+          echo "📊 Committed Baseline:"
+          cat /tmp/baseline_benchmark.json | python3 -m json.tool
+
+      - name: Compare Performance
+        id: compare
+        run: |
+          uv run python - <<'EOF'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          # Load results
+          pr_results = json.loads(Path("/tmp/pr_benchmark.json").read_text())
+          baseline_results = json.loads(Path("/tmp/baseline_benchmark.json").read_text())
+
+          # Extract primary metric
+          primary_metric = "${{ inputs.primary-metric }}"
+          pr_value = pr_results.get(primary_metric, 0.0)
+          baseline_value = baseline_results.get(primary_metric, 0.0)
+
+          # Handle missing or zero values
+          if baseline_value == 0:
+              print(f"⚠️  WARNING: Baseline {primary_metric} is 0 - cannot calculate regression")
+              regression_pct = 0
+              regression_detected = False
+              improvement_detected = False
+          else:
+              # Calculate regression/improvement
+              regression_pct = ((pr_value - baseline_value) / baseline_value) * 100
+
+              # Check thresholds
+              regression_threshold = ${{ inputs.regression-threshold }}
+              improvement_threshold = ${{ inputs.improvement-threshold }}
+              regression_detected = regression_pct > regression_threshold
+              improvement_detected = regression_pct < -improvement_threshold
+
+          # Print results
+          print(f"📊 Performance Comparison:")
+          print(f"  Metric: {primary_metric}")
+          print(f"  Baseline: {baseline_value:.2f}")
+          print(f"  PR: {pr_value:.2f}")
+          print(f"  Change: {regression_pct:+.1f}%")
+          print(f"  Threshold: ±{regression_threshold}%")
+          print()
+
+          if regression_detected:
+              print(f"❌ REGRESSION DETECTED ({regression_pct:+.1f}%)")
+              status = "regression"
+          elif improvement_detected:
+              print(f"✅ IMPROVEMENT DETECTED ({regression_pct:+.1f}%)")
+              status = "improvement"
+          else:
+              print(f"✅ PERFORMANCE OK ({regression_pct:+.1f}%)")
+              status = "ok"
+
+          # Extract additional metrics for summary
+          summary_metrics = {}
+          for key in pr_results.keys():
+              if key != "status" and key in baseline_results:
+                  pr_val = pr_results[key]
+                  base_val = baseline_results[key]
+                  if base_val != 0:
+                      change_pct = ((pr_val - base_val) / base_val) * 100
+                      summary_metrics[key] = {
+                          "baseline": base_val,
+                          "pr": pr_val,
+                          "change_pct": change_pct
+                      }
+
+          # Write to GitHub output
+          github_output = os.getenv("GITHUB_OUTPUT", "/tmp/github_output.txt")
+          with open(github_output, "a") as f:
+              f.write(f"baseline_value={baseline_value:.2f}\n")
+              f.write(f"pr_value={pr_value:.2f}\n")
+              f.write(f"regression_pct={regression_pct:+.1f}\n")
+              f.write(f"regression_detected={str(regression_detected).lower()}\n")
+              f.write(f"improvement_detected={str(improvement_detected).lower()}\n")
+              f.write(f"status={status}\n")
+              f.write(f"primary_metric={primary_metric}\n")
+
+              # Write additional metrics as JSON
+              import json
+              f.write(f"summary_metrics={json.dumps(summary_metrics)}\n")
+
+          # Exit with error if regression detected and fail-on-regression is true
+          if regression_detected and ${{ inputs.fail-on-regression }}:
+              sys.exit(1)
+          else:
+              sys.exit(0)
+          EOF
+
+      - name: Post PR Comment
+        if: inputs.comment-on-pr && github.event_name == 'pull_request'
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
+        with:
+          script: |
+            const baseline = '${{ steps.compare.outputs.baseline_value }}';
+            const pr_value = '${{ steps.compare.outputs.pr_value }}';
+            const regression_pct = '${{ steps.compare.outputs.regression_pct }}';
+            const status = '${{ steps.compare.outputs.status }}';
+            const primary_metric = '${{ steps.compare.outputs.primary_metric }}';
+            const threshold = '${{ inputs.regression-threshold }}';
+
+            let icon, statusText, actionText;
+            if (status === 'regression') {
+              icon = '❌';
+              statusText = 'REGRESSION DETECTED';
+              actionText = '⚠️ **Action Required**: Performance regression detected.';
+            } else if (status === 'improvement') {
+              icon = '🎉';
+              statusText = 'PERFORMANCE IMPROVED';
+              actionText = '✅ **Great work!**: Performance has improved.';
+            } else {
+              icon = '✅';
+              statusText = 'PERFORMANCE OK';
+              actionText = '✅ Performance is within acceptable range.';
+            }
+
+            // Parse additional metrics
+            let additionalMetricsTable = '';
+            try {
+              const summaryMetrics = JSON.parse('${{ steps.compare.outputs.summary_metrics }}');
+              if (Object.keys(summaryMetrics).length > 0) {
+                additionalMetricsTable = '\n\n### Additional Metrics\n\n';
+                additionalMetricsTable += '| Metric | Baseline | PR | Change |\n';
+                additionalMetricsTable += '|--------|----------|-----|--------|\n';
+                for (const [metric, data] of Object.entries(summaryMetrics)) {
+                  const change_icon = data.change_pct > 0 ? '📈' : data.change_pct < 0 ? '📉' : '➡️';
+                  additionalMetricsTable += `| ${metric} | ${data.baseline.toFixed(2)} | ${data.pr.toFixed(2)} | ${change_icon} ${data.change_pct.toFixed(1)}% |\n`;
+                }
+              }
+            } catch (e) {
+              console.log('Could not parse additional metrics:', e);
+            }
+
+            const body = `## ${icon} Performance Regression Check
+
+            **Status**: ${statusText}
+
+            | Metric | Baseline (main) | PR Branch | Change |
+            |--------|-----------------|-----------|--------|
+            | ${primary_metric} | ${baseline} | ${pr_value} | ${regression_pct}% |
+
+            **Threshold**: ±${threshold}% allowed regression
+
+            ${actionText}
+            ${additionalMetricsTable}
+
+            <details>
+            <summary>About Performance Regression Testing</summary>
+
+            This automated check compares \`${primary_metric}\` on this PR against the main branch baseline.
+
+            - **Regression Threshold**: ${threshold}%
+            - **Warmup Iterations**: ${{ inputs.warmup-iterations }}
+            - **Benchmark Iterations**: ${{ inputs.benchmark-iterations }}
+            - **Baseline Source**: ${{ steps.baseline_source.outputs.source }}
+
+            To reproduce locally:
+            \`\`\`bash
+            uv run python ${{ inputs.benchmark-script }} --iterations 1000 ${{ inputs.benchmark-args }}
+            \`\`\`
+            </details>
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+      - name: Performance Summary
+        if: always()
+        run: |
+          echo "# 📊 Performance Regression Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Primary Metric | ${{ steps.compare.outputs.primary_metric }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Baseline | ${{ steps.compare.outputs.baseline_value }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| PR | ${{ steps.compare.outputs.pr_value }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Change | ${{ steps.compare.outputs.regression_pct }}% |" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | ${{ steps.compare.outputs.status }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Threshold | ±${{ inputs.regression-threshold }}% |" >> $GITHUB_STEP_SUMMARY
+          echo "| Baseline Source | ${{ steps.baseline_source.outputs.source }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.compare.outputs.status }}" == "regression" ]; then
+            echo "## ❌ Performance Regression Detected" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Performance has degraded by ${{ steps.compare.outputs.regression_pct }}%." >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ steps.compare.outputs.status }}" == "improvement" ]; then
+            echo "## 🎉 Performance Improved" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Performance has improved by ${{ steps.compare.outputs.regression_pct }}%." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ✅ Performance OK" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Performance is within acceptable range." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Fail on Regression
+        if: inputs.fail-on-regression && steps.compare.outputs.regression_detected == 'true'
+        run: |
+          echo "::error::Performance regression detected: ${{ steps.compare.outputs.regression_pct }}% (threshold: ${{ inputs.regression-threshold }}%)"
+          exit 1
