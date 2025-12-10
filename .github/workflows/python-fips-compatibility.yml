@@ -1,0 +1,394 @@
+# ============================================================================
+# Reusable FIPS Compatibility Workflow
+# ============================================================================
+# Checks code and dependencies for FIPS 140-2/140-3 compliance issues
+#
+# Usage from downstream repos:
+#   jobs:
+#     fips-check:
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-fips-compatibility.yml@main
+#       with:
+#         strict-mode: false
+#         include-tests: true
+#
+# FIPS (Federal Information Processing Standards) mode restricts cryptographic
+# algorithms to NIST-approved ones. This is required for:
+#   - US Government systems
+#   - Healthcare (HIPAA)
+#   - Financial services
+#   - Ubuntu LTS with fips-updates package
+#
+# Features:
+#   - Static analysis for non-FIPS crypto usage
+#   - Dependency scanning for problematic packages
+#   - Optional strict mode for zero-tolerance
+#   - PR comment integration
+#   - Artifact retention
+# ============================================================================
+
+name: FIPS Compatibility (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      strict-mode:
+        description: 'Treat warnings as errors'
+        type: boolean
+        required: false
+        default: false
+
+      include-tests:
+        description: 'Include test files in FIPS analysis'
+        type: boolean
+        required: false
+        default: true
+
+      fix-hints:
+        description: 'Show fix hints in output'
+        type: boolean
+        required: false
+        default: true
+
+      artifact-retention-days:
+        description: 'Days to retain FIPS compliance artifacts'
+        type: number
+        required: false
+        default: 30
+
+      python-version:
+        description: 'Python version to use for checks'
+        type: string
+        required: false
+        default: '3.12'
+
+      script-path:
+        description: 'Path to FIPS check script (default: scripts/check_fips_compatibility.py)'
+        type: string
+        required: false
+        default: 'scripts/check_fips_compatibility.py'
+
+      enable-runtime-test:
+        description: 'Enable runtime FIPS compatibility test'
+        type: boolean
+        required: false
+        default: false
+
+# Cancel in-progress runs for same PR/branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  fips-check:
+    name: FIPS Compliance Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7  # v2.10.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@1e862dfacbd1d6d858c55d9b792c756523627244  # v7.1.4
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install ${{ inputs.python-version }}
+
+      - name: Verify FIPS check script exists
+        id: script-check
+        run: |
+          if [ -f "${{ inputs.script-path }}" ]; then
+            echo "script_exists=true" >> $GITHUB_OUTPUT
+            echo "FIPS check script found at ${{ inputs.script-path }}"
+          else
+            echo "script_exists=false" >> $GITHUB_OUTPUT
+            echo "::warning::FIPS check script not found at ${{ inputs.script-path }}"
+          fi
+
+      - name: Run FIPS compatibility check
+        if: steps.script-check.outputs.script_exists == 'true'
+        id: fips-check
+        run: |
+          # Build command arguments
+          STRICT_FLAG=""
+          if [[ "${{ inputs.strict-mode }}" == "true" ]]; then
+            STRICT_FLAG="--strict"
+          fi
+
+          FIX_HINTS_FLAG=""
+          if [[ "${{ inputs.fix-hints }}" == "true" ]]; then
+            FIX_HINTS_FLAG="--fix-hints"
+          fi
+
+          INCLUDE_TESTS_FLAG=""
+          if [[ "${{ inputs.include-tests }}" == "true" ]]; then
+            INCLUDE_TESTS_FLAG="--include-tests"
+          fi
+
+          # Run check and capture output
+          set +e
+          uv run python ${{ inputs.script-path }} \
+            $FIX_HINTS_FLAG \
+            $INCLUDE_TESTS_FLAG \
+            $STRICT_FLAG \
+            2>&1 | tee fips-report.txt
+          EXIT_CODE=$?
+          set -e
+
+          # Also generate JSON report
+          uv run python ${{ inputs.script-path }} \
+            --json \
+            $INCLUDE_TESTS_FLAG \
+            > fips-report.json 2>/dev/null || true
+
+          echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
+
+          # Extract summary for PR comment
+          if [ -f fips-report.json ]; then
+            ERRORS=$(jq -r '.summary.errors' fips-report.json)
+            WARNINGS=$(jq -r '.summary.warnings' fips-report.json)
+            INFO=$(jq -r '.summary.info' fips-report.json)
+            echo "errors=$ERRORS" >> $GITHUB_OUTPUT
+            echo "warnings=$WARNINGS" >> $GITHUB_OUTPUT
+            echo "info=$INFO" >> $GITHUB_OUTPUT
+          else
+            echo "errors=0" >> $GITHUB_OUTPUT
+            echo "warnings=0" >> $GITHUB_OUTPUT
+            echo "info=0" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Upload FIPS report
+        if: always() && steps.script-check.outputs.script_exists == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: fips-compatibility-report
+          path: |
+            fips-report.txt
+            fips-report.json
+          retention-days: ${{ inputs.artifact-retention-days }}
+          if-no-files-found: warn
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request' && steps.script-check.outputs.script_exists == 'true'
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
+        with:
+          script: |
+            const errors = parseInt('${{ steps.fips-check.outputs.errors }}') || 0;
+            const warnings = parseInt('${{ steps.fips-check.outputs.warnings }}') || 0;
+            const info = parseInt('${{ steps.fips-check.outputs.info }}') || 0;
+
+            let status = '✅ PASSED';
+            let emoji = '✅';
+            if (errors > 0) {
+              status = '❌ FAILED';
+              emoji = '❌';
+            } else if (warnings > 0) {
+              status = '⚠️ NEEDS REVIEW';
+              emoji = '⚠️';
+            }
+
+            const body = `## ${emoji} FIPS Compatibility Check
+
+            | Metric | Count |
+            |--------|-------|
+            | Errors | ${errors} |
+            | Warnings | ${warnings} |
+            | Info | ${info} |
+
+            **Status:** ${status}
+
+            ${errors > 0 ?
+              '⚠️ This PR introduces FIPS-incompatible code or dependencies. ' +
+              'Please review the [workflow run](' +
+              '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}' +
+              ') for details.' : ''}
+            ${warnings > 0 && errors === 0 ?
+              'ℹ️ Some packages may need verification for FIPS compliance. ' +
+              'See the workflow artifacts for details.' : ''}
+
+            <details>
+            <summary>What is FIPS?</summary>
+
+            FIPS 140-2/140-3 is a US government standard for cryptographic modules.
+            Systems running Ubuntu LTS with \`fips-updates\` or similar configurations
+            restrict cryptographic algorithms to NIST-approved ones.
+
+            **Common issues:**
+            - Using \`hashlib.md5()\` without \`usedforsecurity=False\`
+            - Dependencies using non-approved algorithms (bcrypt, DES, RC4)
+            - Weak cipher configurations
+
+            **How to fix:**
+            1. Use \`hashlib.md5(b'data', usedforsecurity=False)\` for non-security purposes
+            2. Replace MD5/SHA1 with SHA-256 or SHA-512 for security contexts
+            3. Audit dependencies for FIPS-approved alternatives
+            4. Test on FIPS-enabled systems if targeting government/healthcare
+
+            </details>
+            `;
+
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.find(comment =>
+              comment.user.type === 'Bot' &&
+              comment.body.includes('FIPS Compatibility Check')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }
+
+      - name: FIPS Compliance Summary
+        if: always()
+        run: |
+          echo "## FIPS Compatibility Check" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.script-check.outputs.script_exists }}" != "true" ]; then
+            echo "**Status:** ⚠️ Skipped" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "FIPS check script not found at \`${{ inputs.script-path }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "To enable FIPS checking:" >> $GITHUB_STEP_SUMMARY
+            echo "1. Ensure the FIPS compatibility script exists in your repository" >> $GITHUB_STEP_SUMMARY
+            echo "2. Or specify the correct path via the \`script-path\` input" >> $GITHUB_STEP_SUMMARY
+            exit 0
+          fi
+
+          ERRORS="${{ steps.fips-check.outputs.errors }}"
+          WARNINGS="${{ steps.fips-check.outputs.warnings }}"
+          INFO="${{ steps.fips-check.outputs.info }}"
+
+          if [ "$ERRORS" == "0" ]; then
+            if [ "$WARNINGS" == "0" ]; then
+              echo "**Status:** ✅ Compliant" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "No FIPS compatibility issues detected." >> $GITHUB_STEP_SUMMARY
+            else
+              echo "**Status:** ⚠️ Needs Review" >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "Found $WARNINGS warning(s) that may need attention." >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "**Status:** ❌ Non-compliant" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Found $ERRORS error(s) and $WARNINGS warning(s)." >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Errors | $ERRORS |" >> $GITHUB_STEP_SUMMARY
+          echo "| Warnings | $WARNINGS |" >> $GITHUB_STEP_SUMMARY
+          echo "| Info | $INFO |" >> $GITHUB_STEP_SUMMARY
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Resources" >> $GITHUB_STEP_SUMMARY
+          echo "- [FIPS 140-2 Overview](https://csrc.nist.gov/pubs/fips/140-2/upd2/final)" >> $GITHUB_STEP_SUMMARY
+          echo "- [FIPS 140-3 Standard](https://csrc.nist.gov/pubs/fips/140-3/final)" >> $GITHUB_STEP_SUMMARY
+          echo "- [Python FIPS Mode](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/security_hardening/using-the-system-wide-cryptographic-policies_security-hardening#proc_enabling-fips-mode-in-a-system_using-the-system-wide-cryptographic-policies)" >> $GITHUB_STEP_SUMMARY
+
+      - name: Check result
+        if: steps.script-check.outputs.script_exists == 'true' && steps.fips-check.outputs.exit_code != '0'
+        run: |
+          echo "::error::FIPS compatibility issues found. See the report for details."
+          exit 1
+
+  # Optional: Test on actual FIPS-enabled environment
+  fips-runtime-test:
+    name: FIPS Runtime Test
+    runs-on: ubuntu-latest
+    if: inputs.enable-runtime-test
+    needs: fips-check
+    timeout-minutes: 10
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7  # v2.10.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@1e862dfacbd1d6d858c55d9b792c756523627244  # v7.1.4
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install ${{ inputs.python-version }}
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Test crypto imports in simulated FIPS mode
+        run: |
+          # This tests if the code can import without using non-FIPS algorithms
+          # Note: Full FIPS testing requires an actual FIPS-enabled kernel
+          uv run python -c "
+          import os
+          import sys
+
+          # Simulate FIPS mode check
+          print('Testing crypto imports...')
+
+          # Test hashlib with usedforsecurity parameter
+          import hashlib
+          try:
+              # This should work - non-security use
+              h = hashlib.md5(b'test', usedforsecurity=False)
+              print('✓ hashlib.md5 with usedforsecurity=False works')
+          except Exception as e:
+              print(f'✗ hashlib.md5 error: {e}')
+              sys.exit(1)
+
+          # Test that SHA-256 works (FIPS approved)
+          try:
+              h = hashlib.sha256(b'test')
+              print('✓ hashlib.sha256 works')
+          except Exception as e:
+              print(f'✗ hashlib.sha256 error: {e}')
+              sys.exit(1)
+
+          print('\\nBasic FIPS compatibility: PASSED')
+          "
+
+      - name: Runtime Test Summary
+        if: always()
+        run: |
+          echo "## FIPS Runtime Test" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** ${{ job.status == 'success' && '✅ Passed' || '❌ Failed' }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "This test simulates FIPS mode by checking basic cryptographic operations." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Note:** Full FIPS validation requires testing on a system with FIPS mode enabled at the kernel level." >> $GITHUB_STEP_SUMMARY

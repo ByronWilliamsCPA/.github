@@ -75,7 +75,7 @@ jobs:
           fi
 
       - name: REUSE Compliance Check
-        uses: fsfe/reuse-action@3ae3c6bdf1257571f839c91c6d5890047234f0d3  # v4.0.0
+        uses: fsfe/reuse-action@6ac5c823270d369f01e3c491c708f706f2bdc355  # v6.0.0
         id: reuse
         continue-on-error: ${{ !inputs.fail-on-missing }}
 

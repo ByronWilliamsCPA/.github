@@ -1,0 +1,15 @@
+{
+  "name": "Python FIPS Compatibility Workflow",
+  "description": "Validates FIPS 140-2/140-3 compliance for Python projects with cryptographic operations",
+  "iconName": "shield-lock",
+  "categories": [
+    "Python",
+    "Security",
+    "Compliance"
+  ],
+  "filePatterns": [
+    "pyproject.toml$",
+    "requirements.*\\.txt$",
+    ".*\\.py$"
+  ]
+}
