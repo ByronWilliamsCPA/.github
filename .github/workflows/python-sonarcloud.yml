@@ -1,0 +1,351 @@
+# ============================================================================
+# Reusable SonarCloud Analysis Workflow
+# ============================================================================
+# Continuous code quality and security analysis for Python projects
+#
+# Usage from downstream repos:
+#   jobs:
+#     sonarcloud:
+#       uses: williaby/.github/.github/workflows/python-sonarcloud.yml@main
+#       secrets:
+#         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+#       with:
+#         sonar-organization: 'your-org'
+#         sonar-project-key: 'your-org_your-project'
+#
+# Features:
+#   - Code quality metrics (bugs, code smells, technical debt)
+#   - Security vulnerability detection (OWASP Top 10)
+#   - Test coverage tracking and reporting
+#   - Quality gate enforcement with configurable thresholds
+#   - Pull request decoration with inline comments
+#   - Coverage artifact retention
+#
+# Requirements:
+#   1. SonarCloud account at https://sonarcloud.io
+#   2. Project configured in SonarCloud
+#   3. SONAR_TOKEN secret configured in repository
+#
+# SonarCloud Setup:
+#   1. Visit https://sonarcloud.io and sign in with GitHub
+#   2. Import your repository
+#   3. Generate token at https://sonarcloud.io/account/security
+#   4. Add SONAR_TOKEN to repository secrets
+# ============================================================================
+
+name: SonarCloud Analysis (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      sonar-organization:
+        description: 'SonarCloud organization name'
+        type: string
+        required: true
+
+      sonar-project-key:
+        description: 'SonarCloud project key (format: org_repo-name)'
+        type: string
+        required: true
+
+      python-version:
+        description: 'Python version for analysis'
+        type: string
+        required: false
+        default: '3.12'
+
+      source-directory:
+        description: 'Source code directory to analyze (default: src)'
+        type: string
+        required: false
+        default: 'src'
+
+      coverage-paths:
+        description: 'Coverage report paths (comma-separated)'
+        type: string
+        required: false
+        default: 'coverage.xml'
+
+      coverage-exclusions:
+        description: 'Paths to exclude from coverage (comma-separated)'
+        type: string
+        required: false
+        default: '**/tests/**,**/validation/**,**/benchmarks/**,**/scripts/**'
+
+      test-exclusions:
+        description: 'Paths to exclude from analysis (comma-separated)'
+        type: string
+        required: false
+        default: ''
+
+      extra-dependencies:
+        description: 'Additional uv sync extras (e.g., "dev test")'
+        type: string
+        required: false
+        default: 'dev'
+
+      pytest-args:
+        description: 'Additional pytest arguments'
+        type: string
+        required: false
+        default: ''
+
+      fail-on-quality-gate:
+        description: 'Fail workflow if quality gate fails'
+        type: boolean
+        required: false
+        default: false
+
+      skip-if-no-token:
+        description: 'Skip analysis gracefully if SONAR_TOKEN not configured'
+        type: boolean
+        required: false
+        default: true
+
+      timeout-minutes:
+        description: 'Job timeout in minutes'
+        type: number
+        required: false
+        default: 15
+
+      sonar-scanner-version:
+        description: 'SonarScanner CLI version (leave empty for latest)'
+        type: string
+        required: false
+        default: ''
+
+      additional-sonar-args:
+        description: 'Additional SonarQube scanner arguments'
+        type: string
+        required: false
+        default: ''
+
+      coverage-artifact-retention:
+        description: 'Days to retain coverage artifacts'
+        type: number
+        required: false
+        default: 7
+
+    secrets:
+      SONAR_TOKEN:
+        description: 'SonarCloud authentication token'
+        required: false
+
+# Cancel in-progress runs for same PR/branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  # Check if SONAR_TOKEN is configured
+  check-configuration:
+    name: Check SonarCloud Configuration
+    runs-on: ubuntu-latest
+    outputs:
+      has-token: ${{ steps.check.outputs.has-token }}
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7  # v2.10.1
+        with:
+          egress-policy: audit
+
+      - name: Check for SONAR_TOKEN
+        id: check
+        env:
+          HAS_TOKEN: ${{ secrets.SONAR_TOKEN != '' }}
+        run: |
+          if [ "$HAS_TOKEN" = "true" ]; then
+            echo "has-token=true" >> $GITHUB_OUTPUT
+            echo "::notice::SONAR_TOKEN is configured. SonarCloud analysis will run."
+          else
+            echo "has-token=false" >> $GITHUB_OUTPUT
+
+            if [ "${{ inputs.skip-if-no-token }}" = "true" ]; then
+              echo "::warning::SONAR_TOKEN is not configured. Skipping SonarCloud analysis."
+              echo ""
+              echo "To enable SonarCloud:"
+              echo "1. Create a project at https://sonarcloud.io"
+              echo "2. Generate a token at https://sonarcloud.io/account/security"
+              echo "3. Add SONAR_TOKEN as a repository secret"
+            else
+              echo "::error::SONAR_TOKEN is required but not configured."
+              echo "Set skip-if-no-token: false to require the token."
+              exit 1
+            fi
+          fi
+
+  sonarcloud-analysis:
+    name: SonarCloud Code Analysis
+    runs-on: ubuntu-latest
+    needs: check-configuration
+    if: needs.check-configuration.outputs.has-token == 'true'
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7  # v2.10.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          fetch-depth: 0  # Disable shallow clone for better analysis
+
+      - name: Setup Python
+        uses: actions/setup-python@8d9ed9ac5c53483de85588cdf95a591a75ab9f55  # v5.5.0
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: |
+          if [ -n "${{ inputs.extra-dependencies }}" ]; then
+            EXTRAS=$(echo "${{ inputs.extra-dependencies }}" | tr ' ' '\n' | sed 's/^/--extra /' | tr '\n' ' ')
+            uv sync $EXTRAS
+          else
+            uv sync
+          fi
+
+      - name: Run tests with coverage
+        id: coverage
+        run: |
+          echo "🧪 Running tests with coverage..."
+
+          # Determine coverage source path
+          if [ -d "${{ inputs.source-directory }}" ]; then
+            COV_SRC="${{ inputs.source-directory }}"
+          else
+            echo "::warning::Source directory '${{ inputs.source-directory }}' not found. Using project root."
+            COV_SRC="."
+          fi
+
+          # Run pytest with coverage
+          uv run pytest \
+            --cov="$COV_SRC" \
+            --cov-report=xml:coverage.xml \
+            --cov-report=term \
+            --cov-branch \
+            -v \
+            ${{ inputs.pytest-args }} || {
+              echo "test_failed=true" >> $GITHUB_OUTPUT
+              echo "::warning::Tests failed. Coverage may be incomplete."
+            }
+        continue-on-error: true
+
+      - name: Verify coverage report
+        run: |
+          if [ ! -f coverage.xml ]; then
+            echo "::warning::Coverage report not found. Tests may have failed completely."
+            echo "SonarCloud will analyze code quality without coverage metrics."
+            echo "# ⚠️ Coverage Report Missing" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Tests failed to generate coverage data. SonarCloud analysis will continue" >> $GITHUB_STEP_SUMMARY
+            echo "without coverage metrics, focusing on code quality and security." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ Coverage report generated successfully"
+            ls -lh coverage.xml
+
+            # Extract coverage percentage if available
+            if command -v xmllint &> /dev/null; then
+              COVERAGE_PCT=$(xmllint --xpath "string(//coverage/@line-rate)" coverage.xml 2>/dev/null || echo "N/A")
+              if [ "$COVERAGE_PCT" != "N/A" ]; then
+                COVERAGE_DISPLAY=$(echo "$COVERAGE_PCT * 100" | bc 2>/dev/null || echo "N/A")
+                echo "📊 Coverage: ${COVERAGE_DISPLAY}%"
+              fi
+            fi
+          fi
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@b5bd00b9b0fc1e6b296f84e7e6965f09cfebbdf6  # v3.1.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.organization=${{ inputs.sonar-organization }}
+            -Dsonar.projectKey=${{ inputs.sonar-project-key }}
+            -Dsonar.python.version=${{ inputs.python-version }}
+            -Dsonar.sources=${{ inputs.source-directory }}
+            -Dsonar.python.coverage.reportPaths=${{ inputs.coverage-paths }}
+            -Dsonar.coverage.exclusions=${{ inputs.coverage-exclusions }}
+            ${{ inputs.test-exclusions != '' && format('-Dsonar.test.exclusions={0}', inputs.test-exclusions) || '' }}
+            ${{ inputs.additional-sonar-args }}
+
+      - name: Wait for SonarCloud Processing
+        run: |
+          echo "⏳ Waiting for SonarCloud to process results..."
+          sleep 10
+
+      - name: Check Quality Gate
+        id: quality_gate
+        uses: sonarsource/sonarqube-quality-gate-action@cf038b0e0cdecfa9e56c198bbb7d21d751d62c3b  # v1.2.0
+        timeout-minutes: 5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        continue-on-error: ${{ !inputs.fail-on-quality-gate }}
+
+      - name: Quality Gate Summary
+        if: always()
+        run: |
+          echo "# 📊 SonarCloud Analysis Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          DASHBOARD_URL="https://sonarcloud.io/dashboard?id=${{ inputs.sonar-project-key }}"
+          echo "**Dashboard:** [${{ inputs.sonar-project-key }}]($DASHBOARD_URL)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Quality gate status
+          if [ "${{ steps.quality_gate.outcome }}" = "success" ]; then
+            echo "## ✅ Quality Gate: PASSED" >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ steps.quality_gate.outcome }}" = "failure" ]; then
+            echo "## ❌ Quality Gate: FAILED" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ⚠️ Quality Gate: UNKNOWN" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Metrics analyzed
+          echo "**Metrics Analyzed:**" >> $GITHUB_STEP_SUMMARY
+          echo "- 🐛 **Bugs**: Reliability issues" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔒 **Vulnerabilities**: Security issues (OWASP Top 10)" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔥 **Security Hotspots**: Security review points" >> $GITHUB_STEP_SUMMARY
+          echo "- 💡 **Code Smells**: Maintainability issues" >> $GITHUB_STEP_SUMMARY
+          echo "- 📊 **Coverage**: Test coverage percentage" >> $GITHUB_STEP_SUMMARY
+          echo "- 📋 **Duplications**: Code duplication" >> $GITHUB_STEP_SUMMARY
+          echo "- ⏱️ **Technical Debt**: Estimated remediation time" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.coverage.outputs.test_failed }}" = "true" ]; then
+            echo "⚠️ **Note**: Tests failed during coverage generation. Coverage metrics may be incomplete." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "View detailed results at: $DASHBOARD_URL" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: sonarcloud-coverage-${{ github.run_id }}
+          path: |
+            coverage.xml
+            .coverage
+          retention-days: ${{ inputs.coverage-artifact-retention }}
+          if-no-files-found: warn
+
+      - name: Fail on Quality Gate
+        if: inputs.fail-on-quality-gate && steps.quality_gate.outcome == 'failure'
+        run: |
+          echo "::error::SonarCloud Quality Gate failed"
+          echo "View issues at: https://sonarcloud.io/dashboard?id=${{ inputs.sonar-project-key }}"
+          exit 1

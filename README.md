@@ -60,6 +60,10 @@ The `.github/workflows/` directory contains centralized, reusable GitHub Actions
 - **[Python CI](USAGE_EXAMPLES.md#python-ci)** (`python-ci.yml`) - Comprehensive CI with testing, linting, type checking across multiple Python versions
 - **[PyPI Publishing](USAGE_EXAMPLES.md#pypi-publishing)** (`python-publish-pypi.yml`) - OIDC-authenticated publishing (no secrets!)
 - **[Security Analysis](USAGE_EXAMPLES.md#security-analysis)** (`python-security-analysis.yml`) - CodeQL, Bandit, Safety, OSV Scanner
+- **[Fuzzing](docs/workflows/python-fuzzing.md)** (`python-fuzzing.yml`) - ClusterFuzzLite continuous fuzzing for security vulnerabilities
+- **[Performance Regression](docs/workflows/python-performance-regression.md)** (`python-performance-regression.yml`) - Automated performance testing with baseline comparison
+- **[SonarCloud](docs/workflows/python-sonarcloud.md)** (`python-sonarcloud.yml`) - Code quality and security analysis with SonarCloud
+- **[Qlty Coverage](docs/workflows/python-qlty-coverage.md)** (`python-qlty-coverage.yml`) - Coverage tracking with Qlty Cloud
 - **[Documentation](USAGE_EXAMPLES.md#documentation)** (`python-docs.yml`) - MkDocs build and GitHub Pages deployment
 - **[Releases](USAGE_EXAMPLES.md#releases)** (`python-release.yml`) - Signed releases with SLSA provenance and SBOM
 
@@ -94,6 +98,10 @@ jobs:
 - **[CONVERSION_ACTION_PLAN.md](CONVERSION_ACTION_PLAN.md)** - Migration guide
 - **[ACTION_SHA_REFERENCE.md](ACTION_SHA_REFERENCE.md)** - Action commit SHAs
 - **[QLTY_INTEGRATION.md](QLTY_INTEGRATION.md)** - Qlty Cloud integration guide
+- **[PYPI_WORKFLOW_ANALYSIS.md](PYPI_WORKFLOW_ANALYSIS.md)** - PyPI workflow analysis & migration
+- **[docs/workflows/](docs/workflows/)** - Workflow-specific documentation
+- **[docs/migration/](docs/migration/)** - Step-by-step migration guides
+- **[examples/](examples/)** - Ready-to-use workflow examples
 
 ---
 

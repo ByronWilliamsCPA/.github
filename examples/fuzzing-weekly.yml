@@ -1,0 +1,75 @@
+# ============================================================================
+# Example: Weekly Fuzzing Workflow
+# ============================================================================
+# Cost-optimized weekly fuzzing for continuous security testing
+#
+# Features:
+#   - Runs weekly (Monday 3 AM UTC) to minimize CI costs
+#   - Extended 20-minute fuzzing duration for deep analysis
+#   - Manual trigger available for security-critical PRs
+#   - Uploads results to GitHub Security tab (SARIF)
+#   - Retains crash artifacts for 30 days
+#
+# Cost Savings:
+#   - Weekly schedule: ~5 runs/month (~$1/month)
+#   - vs Per-PR: ~95 runs/month (~$13/month)
+#   - Savings: ~92% reduction
+# ============================================================================
+
+name: Weekly Fuzzing
+
+on:
+  schedule:
+    # Weekly Monday 3 AM UTC (optimal for low-traffic periods)
+    - cron: '0 3 * * 1'
+
+  # Manual trigger for security-critical PRs
+  workflow_dispatch:
+    inputs:
+      fuzz-duration:
+        description: 'Fuzzing duration (seconds)'
+        required: false
+        default: '1200'
+        type: choice
+        options:
+          - '600'   # 10 minutes - quick test
+          - '1200'  # 20 minutes - standard
+          - '1800'  # 30 minutes - thorough
+          - '3600'  # 1 hour - comprehensive
+
+  # Only run on main branch merges (not every PR)
+  push:
+    branches:
+      - main
+
+permissions: read-all
+
+jobs:
+  fuzzing:
+    name: ClusterFuzzLite Security Fuzzing
+    uses: williaby/.github/.github/workflows/python-fuzzing.yml@main
+    permissions:
+      contents: read
+      security-events: write  # Required for SARIF upload
+
+    with:
+      # Extended duration for weekly deep analysis
+      fuzz-seconds: ${{ github.event.inputs.fuzz-duration || 1200 }}
+
+      # Address sanitizer (memory safety)
+      sanitizer: 'address'
+
+      # Upload results to GitHub Security tab
+      upload-sarif: true
+
+      # Extended retention for weekly runs
+      crash-retention-days: 30
+
+      # Use latest stable Python
+      python-version: '3.12'
+
+      # Fail workflow if crashes detected
+      fail-on-crash: true
+
+      # Extended timeout for 20-minute fuzzing + overhead
+      timeout-minutes: 35

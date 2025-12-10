@@ -96,6 +96,11 @@ on:
         description: 'The release tag'
         value: ${{ jobs.release.outputs.tag }}
 
+# Cancel in-progress runs for same PR/branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
   issues: write

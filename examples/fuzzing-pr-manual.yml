@@ -1,0 +1,69 @@
+# ============================================================================
+# Example: Manual PR Fuzzing Workflow
+# ============================================================================
+# On-demand fuzzing for security-critical pull requests
+#
+# Features:
+#   - Manual trigger only (no automatic runs)
+#   - Shorter 10-minute duration for faster feedback
+#   - Configurable sanitizer selection
+#   - Uploads results to GitHub Security tab
+#   - Fails on crash detection to block merging
+#
+# Use Cases:
+#   - Security-sensitive code changes
+#   - New input parsing features
+#   - File format handling modifications
+#   - Critical dependency updates
+# ============================================================================
+
+name: PR Fuzzing (Manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      sanitizer:
+        description: 'Sanitizer to use'
+        required: true
+        default: 'address'
+        type: choice
+        options:
+          - 'address'    # Memory safety (default)
+          - 'undefined'  # Undefined behavior
+          - 'memory'     # Uninitialized reads (Linux only)
+
+      fuzz-duration:
+        description: 'Fuzzing duration (seconds)'
+        required: false
+        default: '600'
+        type: number
+
+permissions: read-all
+
+jobs:
+  fuzzing:
+    name: Security Fuzzing - ${{ github.event.inputs.sanitizer }}
+    uses: williaby/.github/.github/workflows/python-fuzzing.yml@main
+    permissions:
+      contents: read
+      security-events: write
+
+    with:
+      # User-selected configuration
+      fuzz-seconds: ${{ github.event.inputs.fuzz-duration }}
+      sanitizer: ${{ github.event.inputs.sanitizer }}
+
+      # Upload results to Security tab
+      upload-sarif: true
+
+      # Standard retention for PR-specific runs
+      crash-retention-days: 14
+
+      # Python version matching project
+      python-version: '3.12'
+
+      # CRITICAL: Block merge if crashes found
+      fail-on-crash: true
+
+      # Standard timeout for 10-minute fuzzing
+      timeout-minutes: 20
