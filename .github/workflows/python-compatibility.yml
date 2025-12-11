@@ -127,8 +127,8 @@ jobs:
             OS_LIST=$(echo "$OS_LIST" | jq '. + ["macos-latest"] | unique')
           fi
 
-          # Build the full matrix
-          MATRIX=$(jq -n \
+          # Build the full matrix (use -c for compact single-line JSON)
+          MATRIX=$(jq -c -n \
             --argjson python '${{ inputs.python-versions }}' \
             --argjson os "$OS_LIST" \
             '{python: $python, os: $os}')
