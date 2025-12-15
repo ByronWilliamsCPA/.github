@@ -1,6 +1,9 @@
 # Centralized Community Health Files
 
+[![CI Status](https://github.com/williaby/.github/actions/workflows/python-ci.yml/badge.svg?branch=main)](https://github.com/williaby/.github/actions/workflows/python-ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](https://www.contributor-covenant.org/version/2/1/code_of_conduct/)
+[![GitHub last commit](https://img.shields.io/github/last-commit/williaby/.github/main)](https://github.com/williaby/.github/commits/main)
 
 This repository contains shared community-health files that apply
 organization-wide across all public repositories under the `williaby` GitHub
@@ -123,4 +126,4 @@ overridden by a repo-specific copy).
 3. If you maintain a repository that needs specialized adjustments, copy the
     relevant file into your repo’s root or `.github/` folder and tailor it accordingly.
 
-_Last updated: November 16, 2025_  
+_Last updated: December 15, 2025_  
