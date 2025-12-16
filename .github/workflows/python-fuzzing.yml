@@ -195,9 +195,46 @@ jobs:
 
       - name: Prune Corpus
         if: inputs.enable-corpus-prune && steps.build.outcome == 'success'
-        uses: google/clusterfuzzlite/actions/prune@v1
-        with:
-          language: python
+        run: |
+          echo "🧹 Pruning corpus to minimize test cases..."
+          # ClusterFuzzLite doesn't have a standalone prune action
+          # Implement basic corpus minimization using libFuzzer's -merge feature
+          if [ -d "out/corpus" ]; then
+            CORPUS_COUNT=$(find out/corpus -type f | wc -l)
+            echo "📊 Current corpus size: $CORPUS_COUNT files"
+
+            # Create minimized corpus directory
+            mkdir -p out/corpus-minimized
+
+            # Use libFuzzer merge to deduplicate and minimize
+            # This removes redundant test cases that don't increase coverage
+            for fuzzer in out/fuzzers/*; do
+              if [ -x "$fuzzer" ]; then
+                FUZZER_NAME=$(basename "$fuzzer")
+                CORPUS_DIR="out/corpus/$FUZZER_NAME"
+                if [ -d "$CORPUS_DIR" ]; then
+                  echo "  Pruning corpus for $FUZZER_NAME..."
+                  mkdir -p "out/corpus-minimized/$FUZZER_NAME"
+                  "$fuzzer" -merge=1 "out/corpus-minimized/$FUZZER_NAME" "$CORPUS_DIR" 2>/dev/null || true
+                fi
+              fi
+            done
+
+            MINIMIZED_COUNT=$(find out/corpus-minimized -type f 2>/dev/null | wc -l)
+            echo "📊 Minimized corpus size: $MINIMIZED_COUNT files"
+
+            if [ "$MINIMIZED_COUNT" -gt 0 ]; then
+              # Replace original corpus with minimized version
+              rm -rf out/corpus
+              mv out/corpus-minimized out/corpus
+              echo "✅ Corpus pruned successfully"
+            else
+              echo "⚠️  Corpus minimization produced no output, keeping original"
+              rm -rf out/corpus-minimized
+            fi
+          else
+            echo "ℹ️  No corpus directory found, skipping prune"
+          fi
 
       - name: Check for Crashes
         if: always() && steps.build.outcome == 'success' && !inputs.dry-run
