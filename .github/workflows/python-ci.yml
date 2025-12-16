@@ -17,6 +17,7 @@
 #
 # Features:
 #   - Standard quality checks (tests, linting, type checking)
+#   - Dead code detection with Vulture (configurable confidence)
 #   - LLM governance and assumption tag verification
 #   - Optional SonarCloud integration
 #   - Optional Codecov integration
@@ -104,6 +105,21 @@ on:
         required: false
         type: boolean
         default: false
+      enable-dead-code-check:
+        description: 'Enable dead code detection with Vulture'
+        required: false
+        type: boolean
+        default: true
+      dead-code-confidence:
+        description: 'Minimum confidence for dead code detection (60-100)'
+        required: false
+        type: number
+        default: 80
+      fail-on-dead-code:
+        description: 'Fail CI if dead code is detected'
+        required: false
+        type: boolean
+        default: false
     secrets:
       SONAR_TOKEN:
         description: 'SonarCloud token'
@@ -178,6 +194,54 @@ jobs:
           uv run basedpyright ${{ inputs.source-directory }}/ || {
             echo "::warning::Type checking found issues"
           }
+          echo "::endgroup::"
+
+      - name: Dead code detection with Vulture
+        if: inputs.enable-dead-code-check
+        run: |
+          echo "::group::Vulture Dead Code Detection"
+
+          # Install vulture if not in dev dependencies
+          uv pip install vulture 2>/dev/null || true
+
+          # Run vulture with configurable confidence threshold
+          echo "Scanning for dead code (min confidence: ${{ inputs.dead-code-confidence }}%)..."
+
+          # Capture output for reporting
+          VULTURE_OUTPUT=$(uv run vulture ${{ inputs.source-directory }}/ --min-confidence ${{ inputs.dead-code-confidence }} 2>&1) || true
+
+          if [ -n "$VULTURE_OUTPUT" ]; then
+            echo "$VULTURE_OUTPUT"
+
+            # Count issues
+            DEAD_CODE_COUNT=$(echo "$VULTURE_OUTPUT" | grep -c ":" || echo "0")
+
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Dead Code Detection (Vulture)" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Found $DEAD_CODE_COUNT potential dead code issue(s)** (confidence ≥${{ inputs.dead-code-confidence }}%)" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "$VULTURE_OUTPUT" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "> **Note:** Review these findings. Some may be false positives (e.g., pytest fixtures, CLI entry points)." >> $GITHUB_STEP_SUMMARY
+            echo "> Use a `.vulture_whitelist.py` file to suppress known false positives." >> $GITHUB_STEP_SUMMARY
+
+            if [ "${{ inputs.fail-on-dead-code }}" == "true" ]; then
+              echo "::error::Dead code detected. Set 'fail-on-dead-code: false' to make this a warning."
+              exit 1
+            else
+              echo "::warning::Potential dead code detected. Review vulture output above."
+            fi
+          else
+            echo "No dead code detected at ${{ inputs.dead-code-confidence }}% confidence threshold."
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Dead Code Detection (Vulture)" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "✅ No dead code detected (confidence ≥${{ inputs.dead-code-confidence }}%)" >> $GITHUB_STEP_SUMMARY
+          fi
+
           echo "::endgroup::"
 
       - name: Run unit tests with coverage

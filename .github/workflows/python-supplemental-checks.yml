@@ -1,0 +1,528 @@
+# ============================================================================
+# Reusable Supplemental Checks Workflow
+# ============================================================================
+# Optional PR/documentation checks that complement the main CI workflow.
+#
+# Usage from downstream repos:
+#   jobs:
+#     supplemental:
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-supplemental-checks.yml@main
+#       with:
+#         enable-link-check: true
+#         enable-changelog-check: true
+#         enable-cruft-check: true
+#
+# Features:
+#   - Documentation link checking (lychee)
+#   - Changelog enforcement (changelog-enforcer)
+#   - Cruft/template synchronization (cruft check)
+#   - Dependabot/Renovate auto-merge for minor/patch updates
+#
+# All checks are optional and disabled by default to allow projects to
+# opt-in to only the checks they need.
+# ============================================================================
+
+name: Supplemental Checks (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      # Link checking configuration
+      enable-link-check:
+        description: 'Enable documentation link checking'
+        type: boolean
+        required: false
+        default: false
+      link-check-paths:
+        description: 'Paths to check for broken links (space-separated)'
+        type: string
+        required: false
+        default: './docs/**/*.md ./README.md ./CONTRIBUTING.md'
+      link-check-fail:
+        description: 'Fail workflow on broken links'
+        type: boolean
+        required: false
+        default: false
+      link-check-exclude-patterns:
+        description: 'Regex patterns to exclude from link checking (comma-separated)'
+        type: string
+        required: false
+        default: '^https://github.com/.*/(issues|pulls|compare)/.*$,^https://linear.app/.*$'
+
+      # Changelog enforcement configuration
+      enable-changelog-check:
+        description: 'Enable changelog enforcement'
+        type: boolean
+        required: false
+        default: false
+      changelog-path:
+        description: 'Path to CHANGELOG file'
+        type: string
+        required: false
+        default: 'CHANGELOG.md'
+      changelog-skip-labels:
+        description: 'PR labels that skip changelog requirement (comma-separated)'
+        type: string
+        required: false
+        default: 'skip-changelog,dependencies,documentation'
+
+      # Cruft/template sync configuration
+      enable-cruft-check:
+        description: 'Enable cruft template synchronization check'
+        type: boolean
+        required: false
+        default: false
+      cruft-fail-on-diff:
+        description: 'Fail if project is out of sync with template'
+        type: boolean
+        required: false
+        default: true
+      python-version:
+        description: 'Python version for cruft check'
+        type: string
+        required: false
+        default: '3.12'
+
+      # Auto-merge configuration
+      enable-automerge:
+        description: 'Enable auto-merge for Dependabot/Renovate PRs'
+        type: boolean
+        required: false
+        default: false
+      automerge-allowed-actors:
+        description: 'Bot usernames allowed for auto-merge (comma-separated)'
+        type: string
+        required: false
+        default: 'dependabot[bot],renovate[bot]'
+      automerge-allowed-update-types:
+        description: 'Update types to auto-merge (comma-separated: patch,minor,major)'
+        type: string
+        required: false
+        default: 'patch,minor'
+      automerge-merge-method:
+        description: 'Merge method for auto-merge (merge, squash, rebase)'
+        type: string
+        required: false
+        default: 'squash'
+
+# Cancel in-progress runs for same PR/branch
+concurrency:
+  group: ${{ github.workflow }}-supplemental-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  # ==========================================================================
+  # Documentation Link Check
+  # ==========================================================================
+  link-check:
+    name: Documentation Links
+    if: inputs.enable-link-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7  # v2.10.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Build exclude args
+        id: exclude-args
+        run: |
+          # Convert comma-separated patterns to --exclude args
+          EXCLUDE_ARGS=""
+          IFS=',' read -ra PATTERNS <<< "${{ inputs.link-check-exclude-patterns }}"
+          for pattern in "${PATTERNS[@]}"; do
+            pattern=$(echo "$pattern" | xargs)  # Trim whitespace
+            if [ -n "$pattern" ]; then
+              EXCLUDE_ARGS="$EXCLUDE_ARGS --exclude '$pattern'"
+            fi
+          done
+          echo "args=$EXCLUDE_ARGS" >> $GITHUB_OUTPUT
+
+      - name: Check documentation links
+        uses: lycheeverse/lychee-action@f81112d0d2814ded911bd23e3beaa9dda9093915  # v2.1.0
+        with:
+          args: >-
+            --verbose
+            --no-progress
+            --accept 200,204,206,301,302,403,429
+            --exclude-mail
+            ${{ steps.exclude-args.outputs.args }}
+            ${{ inputs.link-check-paths }}
+          fail: ${{ inputs.link-check-fail }}
+          jobSummary: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Link Check Summary
+        if: always()
+        run: |
+          echo "## Documentation Link Check" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "All documentation links are valid." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Some links may be broken. Review the lychee output above." >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ==========================================================================
+  # Changelog Enforcement
+  # ==========================================================================
+  changelog-check:
+    name: Changelog Check
+    if: inputs.enable-changelog-check && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7  # v2.10.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Check for CHANGELOG update
+        uses: dangoslen/changelog-enforcer@204e7d3ef26579f4cd0fd759c57032656fdf23c7  # v3.6.1
+        with:
+          changeLogPath: ${{ inputs.changelog-path }}
+          skipLabels: ${{ inputs.changelog-skip-labels }}
+          missingUpdateErrorMessage: |
+            Please update ${{ inputs.changelog-path }} with a description of your changes.
+            Add one of these labels to skip: ${{ inputs.changelog-skip-labels }}
+
+      - name: Changelog Summary
+        if: always()
+        run: |
+          echo "## Changelog Enforcement" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "Changelog has been updated or check was skipped." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Please update \`${{ inputs.changelog-path }}\` with your changes." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "To skip this check, add one of these labels:" >> $GITHUB_STEP_SUMMARY
+            echo "\`${{ inputs.changelog-skip-labels }}\`" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ==========================================================================
+  # Cruft Template Synchronization
+  # ==========================================================================
+  cruft-check:
+    name: Template Sync (Cruft)
+    if: inputs.enable-cruft-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7  # v2.10.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          fetch-depth: 2
+
+      - name: Set up Python
+        uses: actions/setup-python@8d9ed9ac5c53483de85588cdf95a591a75ab9f55  # v5.5.0
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Install cruft
+        run: pip install cruft
+
+      - name: Check for .cruft.json
+        id: cruft-exists
+        run: |
+          if [ -f ".cruft.json" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Found .cruft.json - this project uses cruft templating"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "No .cruft.json found - skipping cruft check"
+          fi
+
+      - name: Check for manual .cruft.json edits
+        if: steps.cruft-exists.outputs.exists == 'true' && (github.event_name == 'push' || github.event_name == 'pull_request')
+        run: |
+          if git diff HEAD^ HEAD --name-only 2>/dev/null | grep -q '\.cruft\.json'; then
+            changed_files=$(git diff HEAD^ HEAD --name-only | wc -l)
+            cruft_only=$(git diff HEAD^ HEAD --name-only | grep -c '\.cruft\.json' || true)
+
+            if [ "$changed_files" -eq 1 ] && [ "$cruft_only" -eq 1 ]; then
+              echo "::error::Only .cruft.json was modified - this suggests manual editing"
+              echo ""
+              echo "To fix:"
+              echo "  1. Revert: git checkout HEAD^ -- .cruft.json"
+              echo "  2. Run: cruft update"
+              echo "  3. Review and commit changes"
+              exit 1
+            fi
+          fi
+
+      - name: Verify cruft status
+        id: cruft-status
+        if: steps.cruft-exists.outputs.exists == 'true'
+        run: |
+          echo "Checking if project is in sync with template..."
+          if cruft check; then
+            echo "in_sync=true" >> $GITHUB_OUTPUT
+            echo "Project is up to date with template"
+          else
+            echo "in_sync=false" >> $GITHUB_OUTPUT
+            echo "::warning::Project is out of sync with template"
+
+            # Show diff for debugging
+            echo ""
+            echo "Template changes that need to be applied:"
+            cruft diff || true
+          fi
+
+      - name: Cruft Summary
+        if: always() && steps.cruft-exists.outputs.exists == 'true'
+        run: |
+          echo "## Template Synchronization (Cruft)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.cruft-status.outputs.in_sync }}" == "true" ]; then
+            echo "Project is in sync with the template." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Project is out of sync with the template.**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "To update:" >> $GITHUB_STEP_SUMMARY
+            echo '```bash' >> $GITHUB_STEP_SUMMARY
+            echo "cruft diff   # Preview changes" >> $GITHUB_STEP_SUMMARY
+            echo "cruft update # Apply changes" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Fail if out of sync
+        if: steps.cruft-exists.outputs.exists == 'true' && steps.cruft-status.outputs.in_sync == 'false' && inputs.cruft-fail-on-diff
+        run: |
+          echo "::error::Project is out of sync with template. Run 'cruft update' to sync."
+          exit 1
+
+  # ==========================================================================
+  # Auto-Merge for Dependency Updates
+  # ==========================================================================
+  automerge:
+    name: Auto-Merge Dependencies
+    if: inputs.enable-automerge && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7  # v2.10.1
+        with:
+          egress-policy: audit
+
+      - name: Check if PR is from allowed bot
+        id: check-actor
+        env:
+          PR_ACTOR: ${{ github.actor }}
+          ALLOWED_ACTORS: ${{ inputs.automerge-allowed-actors }}
+        run: |
+          echo "PR opened by: $PR_ACTOR"
+
+          # Check if actor is in allowed list
+          IFS=',' read -ra ACTORS <<< "$ALLOWED_ACTORS"
+          ALLOWED="false"
+          for actor in "${ACTORS[@]}"; do
+            actor=$(echo "$actor" | xargs)  # Trim whitespace
+            if [ "$PR_ACTOR" == "$actor" ]; then
+              ALLOWED="true"
+              break
+            fi
+          done
+
+          echo "allowed=$ALLOWED" >> $GITHUB_OUTPUT
+          if [ "$ALLOWED" == "true" ]; then
+            echo "Actor $PR_ACTOR is allowed for auto-merge"
+          else
+            echo "Actor $PR_ACTOR is not in the allowed list: $ALLOWED_ACTORS"
+          fi
+
+      - name: Get PR metadata
+        if: steps.check-actor.outputs.allowed == 'true'
+        id: pr-metadata
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const title = pr.title.toLowerCase();
+
+            // Detect update type from PR title
+            // Dependabot format: "Bump X from A to B"
+            // Renovate format: "Update X to vB" or "chore(deps): update X"
+            let updateType = 'unknown';
+
+            // Check for major update indicators
+            if (title.includes('major') ||
+                /from \d+\.\d+\.\d+ to (\d+)\./.test(title) && RegExp.$1 !== title.match(/from (\d+)\./)?.[1]) {
+              updateType = 'major';
+            }
+            // Check for minor update indicators
+            else if (title.includes('minor') ||
+                     /from \d+\.(\d+)\.\d+ to \d+\.(\d+)\./.test(title)) {
+              const fromMinor = title.match(/from \d+\.(\d+)\./)?.[1];
+              const toMinor = title.match(/to \d+\.(\d+)\./)?.[1];
+              if (fromMinor && toMinor && fromMinor !== toMinor) {
+                updateType = 'minor';
+              } else {
+                updateType = 'patch';
+              }
+            }
+            // Default to patch for security updates and small bumps
+            else if (title.includes('patch') || title.includes('security') || title.includes('bump')) {
+              updateType = 'patch';
+            }
+
+            console.log(`Detected update type: ${updateType}`);
+            core.setOutput('update-type', updateType);
+
+            // Check labels for more accurate detection
+            const labels = pr.labels.map(l => l.name.toLowerCase());
+            if (labels.includes('dependencies') || labels.includes('dependency')) {
+              core.setOutput('is-dependency', 'true');
+            } else {
+              core.setOutput('is-dependency', 'false');
+            }
+
+      - name: Check if update type is allowed
+        if: steps.check-actor.outputs.allowed == 'true'
+        id: check-update-type
+        env:
+          UPDATE_TYPE: ${{ steps.pr-metadata.outputs.update-type }}
+          ALLOWED_TYPES: ${{ inputs.automerge-allowed-update-types }}
+        run: |
+          echo "Update type: $UPDATE_TYPE"
+          echo "Allowed types: $ALLOWED_TYPES"
+
+          # Check if update type is allowed
+          IFS=',' read -ra TYPES <<< "$ALLOWED_TYPES"
+          ALLOWED="false"
+          for type in "${TYPES[@]}"; do
+            type=$(echo "$type" | xargs)
+            if [ "$UPDATE_TYPE" == "$type" ]; then
+              ALLOWED="true"
+              break
+            fi
+          done
+
+          echo "merge-allowed=$ALLOWED" >> $GITHUB_OUTPUT
+          if [ "$ALLOWED" == "true" ]; then
+            echo "Update type $UPDATE_TYPE is allowed for auto-merge"
+          else
+            echo "Update type $UPDATE_TYPE is not in allowed list: $ALLOWED_TYPES"
+          fi
+
+      - name: Enable auto-merge
+        if: steps.check-actor.outputs.allowed == 'true' && steps.check-update-type.outputs.merge-allowed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          MERGE_METHOD: ${{ inputs.automerge-merge-method }}
+        run: |
+          echo "Enabling auto-merge for PR #$PR_NUMBER with $MERGE_METHOD method"
+          gh pr merge "$PR_NUMBER" --auto --$MERGE_METHOD
+
+      - name: Auto-merge Summary
+        if: always()
+        run: |
+          echo "## Auto-Merge Status" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.check-actor.outputs.allowed }}" != "true" ]; then
+            echo "**Skipped**: PR author \`${{ github.actor }}\` is not in the allowed bot list." >> $GITHUB_STEP_SUMMARY
+          elif [ "${{ steps.check-update-type.outputs.merge-allowed }}" != "true" ]; then
+            echo "**Skipped**: Update type \`${{ steps.pr-metadata.outputs.update-type }}\` is not allowed for auto-merge." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Allowed update types: \`${{ inputs.automerge-allowed-update-types }}\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Enabled**: Auto-merge enabled with \`${{ inputs.automerge-merge-method }}\` method." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "The PR will be merged automatically once all required checks pass." >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ==========================================================================
+  # Summary Job
+  # ==========================================================================
+  supplemental-summary:
+    name: Supplemental Summary
+    runs-on: ubuntu-latest
+    needs: [link-check, changelog-check, cruft-check, automerge]
+    if: always()
+
+    steps:
+      - name: Generate summary
+        run: |
+          echo "## Supplemental Checks Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+
+          # Link check
+          if [ "${{ inputs.enable-link-check }}" == "true" ]; then
+            if [ "${{ needs.link-check.result }}" == "success" ]; then
+              echo "| Link Check | Passed |" >> $GITHUB_STEP_SUMMARY
+            elif [ "${{ needs.link-check.result }}" == "skipped" ]; then
+              echo "| Link Check | Skipped |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| Link Check | ${{ needs.link-check.result }} |" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "| Link Check | Disabled |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Changelog check
+          if [ "${{ inputs.enable-changelog-check }}" == "true" ]; then
+            if [ "${{ needs.changelog-check.result }}" == "success" ]; then
+              echo "| Changelog | Updated |" >> $GITHUB_STEP_SUMMARY
+            elif [ "${{ needs.changelog-check.result }}" == "skipped" ]; then
+              echo "| Changelog | Skipped |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| Changelog | ${{ needs.changelog-check.result }} |" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "| Changelog | Disabled |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Cruft check
+          if [ "${{ inputs.enable-cruft-check }}" == "true" ]; then
+            if [ "${{ needs.cruft-check.result }}" == "success" ]; then
+              echo "| Template Sync | In Sync |" >> $GITHUB_STEP_SUMMARY
+            elif [ "${{ needs.cruft-check.result }}" == "skipped" ]; then
+              echo "| Template Sync | Skipped |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| Template Sync | ${{ needs.cruft-check.result }} |" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "| Template Sync | Disabled |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Auto-merge
+          if [ "${{ inputs.enable-automerge }}" == "true" ]; then
+            if [ "${{ needs.automerge.result }}" == "success" ]; then
+              echo "| Auto-Merge | Enabled |" >> $GITHUB_STEP_SUMMARY
+            elif [ "${{ needs.automerge.result }}" == "skipped" ]; then
+              echo "| Auto-Merge | Skipped |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| Auto-Merge | ${{ needs.automerge.result }} |" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "| Auto-Merge | Disabled |" >> $GITHUB_STEP_SUMMARY
+          fi
