@@ -140,6 +140,35 @@ permissions:
 
 jobs:
   # ============================================================================
+  # Job 0: Check Secret Availability (Required for conditional jobs)
+  # ============================================================================
+  # NOTE: In reusable workflows, secrets cannot be directly referenced in job-level
+  # `if:` conditions. This job detects secret availability and exposes it as an output.
+  check-secrets:
+    name: Check Secret Availability
+    runs-on: ubuntu-latest
+    outputs:
+      has-sonar-token: ${{ steps.check.outputs.has-sonar-token }}
+      has-codecov-token: ${{ steps.check.outputs.has-codecov-token }}
+    steps:
+      - name: Check for available secrets
+        id: check
+        run: |
+          # Check SONAR_TOKEN availability
+          if [ -n "${{ secrets.SONAR_TOKEN }}" ]; then
+            echo "has-sonar-token=true" >> $GITHUB_OUTPUT
+          else
+            echo "has-sonar-token=false" >> $GITHUB_OUTPUT
+          fi
+
+          # Check CODECOV_TOKEN availability
+          if [ -n "${{ secrets.CODECOV_TOKEN }}" ]; then
+            echo "has-codecov-token=true" >> $GITHUB_OUTPUT
+          else
+            echo "has-codecov-token=false" >> $GITHUB_OUTPUT
+          fi
+
+  # ============================================================================
   # Job 1: Standard Quality Checks
   # ============================================================================
   quality-checks:
@@ -473,8 +502,8 @@ jobs:
   sonarcloud-quality-gate:
     name: SonarCloud Quality Gate
     runs-on: ubuntu-latest
-    needs: [quality-checks]
-    if: inputs.enable-sonarcloud && secrets.SONAR_TOKEN != ''
+    needs: [check-secrets, quality-checks]
+    if: inputs.enable-sonarcloud && needs.check-secrets.outputs.has-sonar-token == 'true'
     timeout-minutes: 15
 
     steps:
