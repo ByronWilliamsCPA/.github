@@ -15,6 +15,7 @@
 # Features:
 #   - Matrix testing across multiple Python versions
 #   - Cross-platform testing (Linux, macOS, Windows)
+#   - System dependency installation (apt, brew, choco)
 #   - Configurable test commands
 #   - Artifact collection per matrix combination
 #   - Draft PR awareness (skips expensive matrix during development)
@@ -23,6 +24,17 @@
 #   - Draft PRs: Skips matrix testing by default (92% reduction)
 #   - Ready PRs: Runs full matrix for comprehensive validation
 #   - Override: Set skip-on-draft: false to force matrix on drafts
+#
+# System Dependencies Example (for packages like python-magic):
+#   jobs:
+#     compatibility:
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-compatibility.yml@main
+#       with:
+#         system-deps-macos: 'libmagic'
+#         system-deps-ubuntu: 'libmagic-dev'
+#         system-deps-windows: 'file'
+#         include-macos: true
+#         include-windows: true
 # ============================================================================
 
 name: Python Compatibility (Reusable)
@@ -89,6 +101,24 @@ on:
         type: number
         required: false
         default: 30
+
+      system-deps-ubuntu:
+        description: 'APT packages to install on Ubuntu (space-separated, e.g., "libmagic-dev libffi-dev")'
+        type: string
+        required: false
+        default: ''
+
+      system-deps-macos:
+        description: 'Homebrew packages to install on macOS (space-separated, e.g., "libmagic")'
+        type: string
+        required: false
+        default: ''
+
+      system-deps-windows:
+        description: 'Chocolatey packages to install on Windows (space-separated)'
+        type: string
+        required: false
+        default: ''
 
     outputs:
       matrix-result:
@@ -166,6 +196,26 @@ jobs:
         uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2
         with:
           enable-cache: true
+
+      - name: Install system dependencies (Ubuntu)
+        if: runner.os == 'Linux' && inputs.system-deps-ubuntu != ''
+        run: |
+          echo "📦 Installing system dependencies: ${{ inputs.system-deps-ubuntu }}"
+          sudo apt-get update
+          sudo apt-get install -y ${{ inputs.system-deps-ubuntu }}
+
+      - name: Install system dependencies (macOS)
+        if: runner.os == 'macOS' && inputs.system-deps-macos != ''
+        run: |
+          echo "📦 Installing system dependencies: ${{ inputs.system-deps-macos }}"
+          brew install ${{ inputs.system-deps-macos }}
+
+      - name: Install system dependencies (Windows)
+        if: runner.os == 'Windows' && inputs.system-deps-windows != ''
+        run: |
+          echo "📦 Installing system dependencies: ${{ inputs.system-deps-windows }}"
+          choco install ${{ inputs.system-deps-windows }} -y
+        shell: pwsh
 
       - name: Install dependencies
         run: uv sync --all-extras

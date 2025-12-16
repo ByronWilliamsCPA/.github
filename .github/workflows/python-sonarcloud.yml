@@ -79,10 +79,10 @@ on:
         default: ''
 
       extra-dependencies:
-        description: 'Additional uv sync extras (e.g., "dev test")'
+        description: 'Additional uv sync extras (e.g., "dev test"). Use "all" for --all-extras.'
         type: string
         required: false
-        default: 'dev'
+        default: 'all'
 
       pytest-args:
         description: 'Additional pytest arguments'
@@ -209,7 +209,9 @@ jobs:
 
       - name: Install dependencies
         run: |
-          if [ -n "${{ inputs.extra-dependencies }}" ]; then
+          if [ "${{ inputs.extra-dependencies }}" == "all" ]; then
+            uv sync --all-extras
+          elif [ -n "${{ inputs.extra-dependencies }}" ]; then
             EXTRAS=$(echo "${{ inputs.extra-dependencies }}" | tr ' ' '\n' | sed 's/^/--extra /' | tr '\n' ' ')
             uv sync $EXTRAS
           else
