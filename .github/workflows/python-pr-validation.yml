@@ -1,24 +1,49 @@
 # ============================================================================
-# Reusable PR Validation Workflow
+# ⚠️  DEPRECATED - Reusable PR Validation Workflow
 # ============================================================================
-# Comprehensive pull request validation ensuring code quality before merge
 #
-# Usage from downstream repos:
+# THIS WORKFLOW IS DEPRECATED AND WILL BE REMOVED IN A FUTURE RELEASE.
+#
+# Migration Guide:
+#   Replace usage of this workflow with `python-ci.yml` which provides:
+#   - All code quality checks (formatting, linting, type checking)
+#   - Dead code detection with Vulture
+#   - Test execution with coverage
+#   - Security scanning (Bandit, Safety)
+#   - LLM governance checks
+#   - Optional SonarCloud/Codecov integration
+#   - Tiered matrix testing
+#
+# Before (deprecated):
 #   jobs:
 #     pr-validation:
 #       uses: ByronWilliamsCPA/.github/.github/workflows/python-pr-validation.yml@main
+#
+# After (recommended):
+#   jobs:
+#     ci:
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@main
 #       with:
 #         python-version: '3.12'
-#         require-tests: true
+#         coverage-threshold: 80
+#         enable-dead-code-check: true
 #
-# Features:
-#   - PR title and description validation
-#   - Conventional commit checking
-#   - Code formatting verification
-#   - Linting and type checking
-#   - Test execution
-#   - Breaking change detection
-#   - Size labeling
+# For PR size labeling, use the standalone action:
+#   - name: PR Size Labels
+#     uses: codelytv/pr-size-labeler@v1
+#
+# ============================================================================
+# ORIGINAL DESCRIPTION (for reference):
+# Comprehensive pull request validation ensuring code quality before merge
+#
+# Features (now in python-ci.yml):
+#   - PR title and description validation  → Removed (use semantic-release)
+#   - Conventional commit checking          → Removed (use semantic-release)
+#   - Code formatting verification          → python-ci.yml
+#   - Linting and type checking             → python-ci.yml
+#   - Test execution                        → python-ci.yml
+#   - Breaking change detection             → Removed (naive implementation)
+#   - Size labeling                         → Use standalone action
 # ============================================================================
 
 name: PR Validation (Reusable)
@@ -92,6 +117,37 @@ permissions:
   checks: write
 
 jobs:
+  # Deprecation notice job - runs first to warn users
+  deprecation-notice:
+    name: ⚠️ Deprecation Warning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deprecation Warning
+        run: |
+          echo "::warning::This workflow (python-pr-validation.yml) is DEPRECATED."
+          echo "::warning::Please migrate to python-ci.yml which includes all quality checks plus Vulture dead code detection."
+          echo ""
+          echo "============================================================"
+          echo "⚠️  DEPRECATION NOTICE"
+          echo "============================================================"
+          echo ""
+          echo "python-pr-validation.yml is deprecated and will be removed."
+          echo ""
+          echo "Migration steps:"
+          echo "  1. Replace your workflow call with python-ci.yml"
+          echo "  2. Remove any separate PR validation workflow files"
+          echo ""
+          echo "Example migration:"
+          echo "  Before:"
+          echo "    uses: ByronWilliamsCPA/.github/.github/workflows/python-pr-validation.yml@main"
+          echo ""
+          echo "  After:"
+          echo "    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@main"
+          echo "    with:"
+          echo "      enable-dead-code-check: true"
+          echo ""
+          echo "============================================================"
+
   # PR metadata validation
   pr-metadata:
     name: PR Metadata Validation

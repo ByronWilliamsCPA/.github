@@ -1,0 +1,358 @@
+# ============================================================================
+# Reusable Docker Build & Push Workflow
+# ============================================================================
+# Multi-platform Docker image builds with GHCR publishing.
+#
+# Usage from downstream repos:
+#   # For PR builds (build + optional push):
+#   jobs:
+#     docker:
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-docker.yml@main
+#       with:
+#         push: true
+#         platforms: 'linux/amd64,linux/arm64'
+#
+#   # For release builds:
+#   jobs:
+#     docker:
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-docker.yml@main
+#       with:
+#         push: true
+#         tag-latest: true
+#         tag-semver: true
+#
+# Features:
+#   - Multi-platform builds (amd64, arm64)
+#   - GHCR (GitHub Container Registry) publishing
+#   - Semantic versioning tags
+#   - PR preview builds
+#   - Build caching with GitHub Actions cache
+#   - Security scanning with Trivy (optional)
+#   - SBOM generation (optional)
+#   - Fork-safe (no push for external PRs)
+# ============================================================================
+
+name: Docker Build (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      # Build configuration
+      dockerfile:
+        description: 'Path to Dockerfile'
+        type: string
+        required: false
+        default: 'Dockerfile'
+      context:
+        description: 'Docker build context'
+        type: string
+        required: false
+        default: '.'
+      platforms:
+        description: 'Target platforms (comma-separated)'
+        type: string
+        required: false
+        default: 'linux/amd64,linux/arm64'
+      build-args:
+        description: 'Build arguments (newline-separated KEY=VALUE)'
+        type: string
+        required: false
+        default: ''
+
+      # Registry configuration
+      registry:
+        description: 'Container registry'
+        type: string
+        required: false
+        default: 'ghcr.io'
+      image-name:
+        description: 'Image name (default: github.repository)'
+        type: string
+        required: false
+        default: ''
+
+      # Push configuration
+      push:
+        description: 'Push image to registry'
+        type: boolean
+        required: false
+        default: false
+      push-on-fork:
+        description: 'Allow push from fork PRs (security risk!)'
+        type: boolean
+        required: false
+        default: false
+
+      # Tagging configuration
+      tag-latest:
+        description: 'Tag as latest (for releases/main branch)'
+        type: boolean
+        required: false
+        default: false
+      tag-semver:
+        description: 'Generate semver tags from release/tag'
+        type: boolean
+        required: false
+        default: false
+      tag-sha:
+        description: 'Tag with commit SHA'
+        type: boolean
+        required: false
+        default: true
+      tag-pr:
+        description: 'Tag with PR number (for PR builds)'
+        type: boolean
+        required: false
+        default: true
+      additional-tags:
+        description: 'Additional tags (newline-separated)'
+        type: string
+        required: false
+        default: ''
+
+      # Security scanning
+      enable-trivy-scan:
+        description: 'Enable Trivy vulnerability scanning'
+        type: boolean
+        required: false
+        default: true
+      trivy-severity:
+        description: 'Trivy severity threshold (CRITICAL,HIGH,MEDIUM,LOW)'
+        type: string
+        required: false
+        default: 'CRITICAL,HIGH'
+      trivy-fail-on-vuln:
+        description: 'Fail build if vulnerabilities found'
+        type: boolean
+        required: false
+        default: false
+
+      # SBOM generation
+      enable-sbom:
+        description: 'Generate Software Bill of Materials'
+        type: boolean
+        required: false
+        default: false
+
+      # PR comment
+      enable-pr-comment:
+        description: 'Add sticky comment to PR with build info'
+        type: boolean
+        required: false
+        default: true
+
+    outputs:
+      image-tags:
+        description: 'Generated image tags'
+        value: ${{ jobs.build.outputs.tags }}
+      image-digest:
+        description: 'Image digest'
+        value: ${{ jobs.build.outputs.digest }}
+
+# Cancel in-progress runs for same PR/branch
+concurrency:
+  group: ${{ github.workflow }}-docker-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+  pull-requests: write
+  security-events: write
+
+jobs:
+  build:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    outputs:
+      tags: ${{ steps.meta.outputs.tags }}
+      digest: ${{ steps.build-push.outputs.digest }}
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7  # v2.10.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@49b3bc8e6bdd4a60e6116a5414239cba5943d3cf  # v3.2.0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@c47758b77c9736f4b2ef4073d4d51994fabfe349  # v3.7.1
+
+      - name: Determine image name
+        id: image-name
+        env:
+          INPUT_IMAGE_NAME: ${{ inputs.image-name }}
+          INPUT_REGISTRY: ${{ inputs.registry }}
+          REPO_NAME: ${{ github.repository }}
+        run: |
+          if [ -n "$INPUT_IMAGE_NAME" ]; then
+            echo "name=${INPUT_REGISTRY}/${INPUT_IMAGE_NAME}" >> $GITHUB_OUTPUT
+          else
+            echo "name=${INPUT_REGISTRY}/${REPO_NAME}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check if fork PR
+        id: check-fork
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            if [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
+              echo "is_fork=true" >> $GITHUB_OUTPUT
+              echo "This is a fork PR"
+            else
+              echo "is_fork=false" >> $GITHUB_OUTPUT
+              echo "This is an internal PR"
+            fi
+          else
+            echo "is_fork=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Determine if push is allowed
+        id: push-check
+        run: |
+          SHOULD_PUSH="false"
+
+          if [ "${{ inputs.push }}" == "true" ]; then
+            if [ "${{ steps.check-fork.outputs.is_fork }}" == "true" ]; then
+              if [ "${{ inputs.push-on-fork }}" == "true" ]; then
+                SHOULD_PUSH="true"
+                echo "::warning::Pushing from fork PR (push-on-fork enabled)"
+              else
+                echo "Skipping push for fork PR (security measure)"
+              fi
+            else
+              SHOULD_PUSH="true"
+            fi
+          fi
+
+          echo "push=$SHOULD_PUSH" >> $GITHUB_OUTPUT
+
+      - name: Login to Container Registry
+        if: steps.push-check.outputs.push == 'true'
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567  # v3.3.0
+        with:
+          registry: ${{ inputs.registry }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate Docker metadata
+        id: meta
+        uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81  # v5.5.1
+        with:
+          images: ${{ steps.image-name.outputs.name }}
+          tags: |
+            # PR tags
+            type=raw,value=pr-${{ github.event.number }},enable=${{ github.event_name == 'pull_request' && inputs.tag-pr }}
+            type=raw,value=pr-${{ github.event.number }}-${{ github.sha }},enable=${{ github.event_name == 'pull_request' && inputs.tag-pr }}
+            # SHA tag
+            type=sha,enable=${{ inputs.tag-sha }}
+            # Semver tags (for releases)
+            type=semver,pattern={{version}},enable=${{ inputs.tag-semver }}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ inputs.tag-semver }}
+            type=semver,pattern={{major}},enable=${{ inputs.tag-semver && !startsWith(github.ref, 'refs/tags/v0.') }}
+            # Latest tag
+            type=raw,value=latest,enable=${{ inputs.tag-latest && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}
+            # Additional custom tags
+            ${{ inputs.additional-tags }}
+
+      - name: Build and push Docker image
+        id: build-push
+        uses: docker/build-push-action@4f58ea79222b3b9dc2c8bbdd6debcef730109a75  # v6.9.0
+        with:
+          context: ${{ inputs.context }}
+          file: ${{ inputs.dockerfile }}
+          platforms: ${{ inputs.platforms }}
+          push: ${{ steps.push-check.outputs.push }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: ${{ inputs.build-args }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          sbom: ${{ inputs.enable-sbom }}
+          provenance: ${{ inputs.enable-sbom }}
+
+      - name: Run Trivy vulnerability scanner
+        if: inputs.enable-trivy-scan
+        uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0  # v0.29.0
+        with:
+          image-ref: ${{ steps.image-name.outputs.name }}:${{ github.sha }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: ${{ inputs.trivy-severity }}
+          exit-code: ${{ inputs.trivy-fail-on-vuln && '1' || '0' }}
+
+      - name: Upload Trivy scan results
+        if: inputs.enable-trivy-scan && always()
+        uses: github/codeql-action/upload-sarif@48ab28a6f5dbc2a99bf1e0131198dd8f1df78169  # v3.28.0
+        with:
+          sarif_file: 'trivy-results.sarif'
+        continue-on-error: true
+
+      - name: Add PR comment
+        if: github.event_name == 'pull_request' && inputs.enable-pr-comment && steps.push-check.outputs.push == 'true'
+        uses: marocchino/sticky-pull-request-comment@331f8f5b4215f0445d3c07b4967662a32a2d3e31  # v2.9.0
+        with:
+          header: docker-build
+          message: |
+            ## Docker Build Complete
+
+            **PR**: #${{ github.event.number }} | **Commit**: `${{ github.sha }}`
+
+            **Image Tags:**
+            ```
+            ${{ steps.meta.outputs.tags }}
+            ```
+
+            **Pull Command:**
+            ```bash
+            docker pull ${{ steps.image-name.outputs.name }}:pr-${{ github.event.number }}
+            ```
+
+            ${{ inputs.enable-trivy-scan && '**Security Scan:** Trivy vulnerability scan completed. Check the Security tab for results.' || '' }}
+
+      - name: Build Summary
+        if: always()
+        env:
+          PUSH_STATUS: ${{ steps.push-check.outputs.push }}
+          PLATFORMS: ${{ inputs.platforms }}
+          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
+          IMAGE_DIGEST: ${{ steps.build-push.outputs.digest }}
+          IS_FORK: ${{ steps.check-fork.outputs.is_fork }}
+        run: |
+          echo "## Docker Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$PUSH_STATUS" == "true" ]; then
+            echo "**Status:** Pushed to registry" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Status:** Built (not pushed)" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Platforms:** $PLATFORMS" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -n "$IMAGE_TAGS" ]; then
+            echo "**Tags:**" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "$IMAGE_TAGS" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ -n "$IMAGE_DIGEST" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Digest:** \`$IMAGE_DIGEST\`" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "$IS_FORK" == "true" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "> **Note:** This is a fork PR. Image was built but not pushed for security." >> $GITHUB_STEP_SUMMARY
+          fi
