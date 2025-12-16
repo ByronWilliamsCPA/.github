@@ -54,6 +54,16 @@ on:
         type: boolean
         default: false
 
+    # Optional secrets - callers may pass these even if unused by this workflow
+    # This prevents startup_failure when callers pass extra secrets
+    secrets:
+      INFISICAL_CLIENT_ID:
+        description: 'Infisical client ID (optional, for future use)'
+        required: false
+      INFISICAL_CLIENT_SECRET:
+        description: 'Infisical client secret (optional, for future use)'
+        required: false
+
 permissions: read-all
 
 jobs:
