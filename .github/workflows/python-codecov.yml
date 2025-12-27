@@ -138,6 +138,7 @@ jobs:
           flags: ${{ inputs.flags }}
           name: ${{ inputs.name }}
           token: ${{ secrets.CODECOV_TOKEN }}
+          slug: ${{ github.repository }}
           fail_ci_if_error: ${{ inputs.fail-ci-if-error }}
           verbose: ${{ inputs.verbose }}
           # For workflow_run triggers, specify the commit

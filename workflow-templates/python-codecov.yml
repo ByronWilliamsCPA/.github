@@ -94,9 +94,10 @@ jobs:
         if: hashFiles('coverage-3.10/coverage.xml') != ''
         uses: codecov/codecov-action@f1b7348826d750ac29741abc9d1623d8da5dcd4f # v4.3.1
         with:
+          token: ${{  secrets.CODECOV_TOKEN  }}
+          slug: ${{  github.repository  }}
           file: coverage-3.10/coverage.xml
           fail_ci_if_error: false
-          token: ${{  secrets.CODECOV_TOKEN  }}
           flags: python-3.10
           name: Python Project Coverage (Python 3.10)
           verbose: true
@@ -107,9 +108,10 @@ jobs:
         if: hashFiles('coverage-3.11/coverage.xml') != ''
         uses: codecov/codecov-action@f1b7348826d750ac29741abc9d1623d8da5dcd4f # v4.3.1
         with:
+          token: ${{  secrets.CODECOV_TOKEN  }}
+          slug: ${{  github.repository  }}
           file: coverage-3.11/coverage.xml
           fail_ci_if_error: false
-          token: ${{  secrets.CODECOV_TOKEN  }}
           flags: python-3.11
           name: Python Project Coverage (Python 3.11)
           verbose: true
@@ -120,9 +122,10 @@ jobs:
         if: hashFiles('coverage-3.12/coverage.xml') != ''
         uses: codecov/codecov-action@f1b7348826d750ac29741abc9d1623d8da5dcd4f # v4.3.1
         with:
+          token: ${{  secrets.CODECOV_TOKEN  }}
+          slug: ${{  github.repository  }}
           file: coverage-3.12/coverage.xml
           fail_ci_if_error: false
-          token: ${{  secrets.CODECOV_TOKEN  }}
           flags: python-3.12
           name: Python Project Coverage (Python 3.12)
           verbose: true
@@ -133,9 +136,10 @@ jobs:
         if: hashFiles('coverage-3.13/coverage.xml') != ''
         uses: codecov/codecov-action@f1b7348826d750ac29741abc9d1623d8da5dcd4f # v4.3.1
         with:
+          token: ${{  secrets.CODECOV_TOKEN  }}
+          slug: ${{  github.repository  }}
           file: coverage-3.13/coverage.xml
           fail_ci_if_error: false
-          token: ${{  secrets.CODECOV_TOKEN  }}
           flags: python-3.13
           name: Python Project Coverage (Python 3.13)
           verbose: true
@@ -146,9 +150,10 @@ jobs:
         if: hashFiles('coverage-3.14/coverage.xml') != ''
         uses: codecov/codecov-action@f1b7348826d750ac29741abc9d1623d8da5dcd4f # v4.3.1
         with:
+          token: ${{  secrets.CODECOV_TOKEN  }}
+          slug: ${{  github.repository  }}
           file: coverage-3.14/coverage.xml
           fail_ci_if_error: false
-          token: ${{  secrets.CODECOV_TOKEN  }}
           flags: python-3.14
           name: Python Project Coverage (Python 3.14)
           verbose: true

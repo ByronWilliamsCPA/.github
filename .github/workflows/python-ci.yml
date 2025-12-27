@@ -355,12 +355,12 @@ jobs:
         if: inputs.enable-codecov
         uses: codecov/codecov-action@0f8570b1a125f4937846a11fcfa3bcd548bd8c97  # v4.6.0
         with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: ${{ github.repository }}
           file: ./coverage.xml
           flags: python-${{ inputs.python-version }}
           name: combined-coverage
           fail_ci_if_error: false
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   # ============================================================================
   # Job 2: LLM Governance Checks
