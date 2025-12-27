@@ -279,8 +279,29 @@ jobs:
           sbom: ${{ inputs.enable-sbom }}
           provenance: ${{ inputs.enable-sbom }}
 
-      - name: Run Trivy vulnerability scanner
-        if: inputs.enable-trivy-scan
+      # Export local image for Trivy scanning when not pushed to registry
+      - name: Export local image for scanning
+        if: inputs.enable-trivy-scan && steps.push-check.outputs.push != 'true'
+        run: |
+          # Get the first tag from metadata (local reference)
+          LOCAL_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
+          echo "LOCAL_IMAGE_TAG=${LOCAL_TAG}" >> $GITHUB_ENV
+          echo "Exporting local image: ${LOCAL_TAG}"
+          # Export image to tarball for Trivy to scan
+          docker save "${LOCAL_TAG}" -o /tmp/image.tar
+
+      - name: Run Trivy vulnerability scanner (local image)
+        if: inputs.enable-trivy-scan && steps.push-check.outputs.push != 'true'
+        uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0  # v0.29.0
+        with:
+          input: '/tmp/image.tar'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: ${{ inputs.trivy-severity }}
+          exit-code: ${{ inputs.trivy-fail-on-vuln && '1' || '0' }}
+
+      - name: Run Trivy vulnerability scanner (registry image)
+        if: inputs.enable-trivy-scan && steps.push-check.outputs.push == 'true'
         uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0  # v0.29.0
         with:
           image-ref: ${{ steps.image-name.outputs.name }}:${{ github.sha }}
