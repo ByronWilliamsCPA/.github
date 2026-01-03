@@ -119,7 +119,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7  # v2.10.1
+        uses: step-security/harden-runner@cb605e52c26070c328afc4562f0b4ada7618a84e  # v2.10.4
         with:
           egress-policy: audit
 
@@ -129,7 +129,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install uv
-        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2
+        uses: astral-sh/setup-uv@887a942a15af3a7626099df99e897a18d9e5ab3a  # v5.1.0
         with:
           enable-cache: true
 
@@ -170,7 +170,7 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7  # v2.10.1
+        uses: step-security/harden-runner@cb605e52c26070c328afc4562f0b4ada7618a84e  # v2.10.4
         with:
           egress-policy: audit
 
@@ -181,12 +181,12 @@ jobs:
           token: ${{ github.token }}
 
       - name: Set up Python
-        uses: actions/setup-python@8d9ed9ac5c53483de85588cdf95a591a75ab9f55  # v5.5.0
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b  # v5.3.0
         with:
           python-version: ${{ inputs.python-version }}
 
       - name: Install uv
-        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2
+        uses: astral-sh/setup-uv@887a942a15af3a7626099df99e897a18d9e5ab3a  # v5.1.0
         with:
           enable-cache: true
 
@@ -219,7 +219,7 @@ jobs:
       - name: Python Semantic Release
         if: ${{ inputs.semantic-release }}
         id: semantic-release
-        uses: python-semantic-release/python-semantic-release@86e0ab1159fc51ecdc0cc2fb059530b285aab21f  # v9.21.1
+        uses: python-semantic-release/python-semantic-release@afca4e7c5db37d04f25a5777da02127f3740b1f8  # v9.16.1
         with:
           github_token: ${{ github.token }}
           git_committer_name: "github-actions[bot]"
@@ -255,7 +255,7 @@ jobs:
 
       - name: Create GitHub Release (Manual)
         if: ${{ !inputs.semantic-release }}
-        uses: softprops/action-gh-release@5be0e66d93ac7ed76da52eca8bb058f665c3a5fe  # v2.4.2
+        uses: softprops/action-gh-release@c95fe1489396fe8a9eb87c0abf8aa5b2ef267fda  # v2.2.1
         with:
           tag_name: ${{ steps.manual-release.outputs.tag }}
           generate_release_notes: true
@@ -269,7 +269,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
 
       - name: Upload distribution artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08  # v4.6.0
         with:
           name: release-dist
           path: dist/
@@ -308,7 +308,7 @@ jobs:
       url: https://pypi.org/project/${{ inputs.pypi-package-name }}/
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7  # v2.10.1
+        uses: step-security/harden-runner@cb605e52c26070c328afc4562f0b4ada7618a84e  # v2.10.4
         with:
           egress-policy: audit
 
@@ -319,7 +319,7 @@ jobs:
           path: dist/
 
       - name: Install uv
-        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2
+        uses: astral-sh/setup-uv@887a942a15af3a7626099df99e897a18d9e5ab3a  # v5.1.0
 
       - name: Publish to PyPI
         # Uses trusted publishing (OIDC) - configure at pypi.org/manage/account/publishing/

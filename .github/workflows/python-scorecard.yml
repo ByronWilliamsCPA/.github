@@ -61,7 +61,7 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7  # v2.10.1
+        uses: step-security/harden-runner@cb605e52c26070c328afc4562f0b4ada7618a84e  # v2.10.4
         with:
           egress-policy: audit
 
@@ -80,13 +80,13 @@ jobs:
 
       - name: Upload Scorecard SARIF to Security tab
         if: ${{ inputs.upload-sarif }}
-        uses: github/codeql-action/upload-sarif@48ab28a6f5dbc2a99bf1e0131198dd8f1df78169  # v3.27.5
+        uses: github/codeql-action/upload-sarif@8ff85221d12737ec1137e6a892722e5130f32d05  # v3.28.8
         with:
           sarif_file: scorecard-results.sarif
           category: scorecard
 
       - name: Upload Scorecard artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08  # v4.6.0
         with:
           name: scorecard-results
           path: scorecard-results.sarif

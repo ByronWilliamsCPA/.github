@@ -101,7 +101,7 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7  # v2.10.1
+        uses: step-security/harden-runner@cb605e52c26070c328afc4562f0b4ada7618a84e  # v2.10.4
         with:
           egress-policy: audit
 
@@ -131,7 +131,7 @@ jobs:
           find coverage/ -name "${{ inputs.coverage-files }}" -type f | head -20
 
       - name: Upload to Codecov
-        uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238  # v4.6.0
+        uses: codecov/codecov-action@af2c6347526edfe5ff45ad690affad475d77ddb4  # v5.3.1
         with:
           directory: coverage/
           files: ${{ inputs.coverage-files }}

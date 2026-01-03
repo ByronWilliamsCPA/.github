@@ -51,7 +51,7 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7  # v2.10.1
+        uses: step-security/harden-runner@cb605e52c26070c328afc4562f0b4ada7618a84e  # v2.10.4
         with:
           egress-policy: audit
 
@@ -75,7 +75,7 @@ jobs:
           fi
 
       - name: REUSE Compliance Check
-        uses: fsfe/reuse-action@6ac5c823270d369f01e3c491c708f706f2bdc355  # v6.0.0
+        uses: fsfe/reuse-action@b16eeb6ae5e3ea364758429ace8ca92e956ecd67  # v5.0.0
         id: reuse
         continue-on-error: ${{ !inputs.fail-on-missing }}
 
@@ -88,7 +88,7 @@ jobs:
 
       - name: Upload SPDX artifact
         if: ${{ inputs.generate-spdx }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        uses: actions/upload-artifact@65c4c4a1ddee5b72f698fdd19549f0f0fb45cf08  # v4.6.0
         with:
           name: reuse-spdx-report
           path: reuse-spdx.spdx
