@@ -129,7 +129,7 @@ jobs:
           fetch-depth: 0
 
       - name: Install uv
-        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2  # v5.1.0
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2
         with:
           enable-cache: true
 
@@ -181,12 +181,12 @@ jobs:
           token: ${{ github.token }}
 
       - name: Set up Python
-        uses: actions/setup-python@8d9ed9ac5c53483de85588cdf95a591a75ab9f55  # v5.5.0  # v5.3.0
+        uses: actions/setup-python@8d9ed9ac5c53483de85588cdf95a591a75ab9f55  # v5.5.0
         with:
           python-version: ${{ inputs.python-version }}
 
       - name: Install uv
-        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2  # v5.1.0
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2
         with:
           enable-cache: true
 
@@ -255,7 +255,7 @@ jobs:
 
       - name: Create GitHub Release (Manual)
         if: ${{ !inputs.semantic-release }}
-        uses: softprops/action-gh-release@c95fe1489396fe8a9eb87c0abf8aa5b2ef267fda  # v2.2.1
+        uses: softprops/action-gh-release@5be0e66d93ac7ed76da52eca8bb058f665c3a5fe  # v2.4.2
         with:
           tag_name: ${{ steps.manual-release.outputs.tag }}
           generate_release_notes: true
@@ -269,7 +269,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
 
       - name: Upload distribution artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2  # v4.6.0
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
           name: release-dist
           path: dist/
@@ -319,7 +319,7 @@ jobs:
           path: dist/
 
       - name: Install uv
-        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2  # v5.1.0
+        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2
 
       - name: Publish to PyPI
         # Uses trusted publishing (OIDC) - configure at pypi.org/manage/account/publishing/
