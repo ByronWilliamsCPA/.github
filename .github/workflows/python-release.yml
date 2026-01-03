@@ -219,7 +219,7 @@ jobs:
       - name: Python Semantic Release
         if: ${{ inputs.semantic-release }}
         id: semantic-release
-        uses: python-semantic-release/python-semantic-release@afca4e7c5db37d04f25a5777da02127f3740b1f8  # v9.16.1
+        uses: python-semantic-release/python-semantic-release@86e0ab1159fc51ecdc0cc2fb059530b285aab21f  # v9.21.1
         with:
           github_token: ${{ github.token }}
           git_committer_name: "github-actions[bot]"
