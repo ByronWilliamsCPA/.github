@@ -115,7 +115,7 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7  # v2.10.1
+        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76  # v2.14.0
         with:
           egress-policy: audit
 
@@ -153,7 +153,7 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7  # v2.10.1
+        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76  # v2.14.0
         with:
           egress-policy: audit
 
@@ -208,7 +208,7 @@ jobs:
 
       - name: Upload to Qlty
         if: steps.verify.outputs.primary_exists == 'true'
-        uses: qltysh/qlty-action/coverage@5ae0d52aa70ca423aa85f3cea4db51f6a8b46e90  # v2.0.0
+        uses: qltysh/qlty-action/coverage@80d7816d35d38d39d237be283ba10d05a7057438  # v2.0.0
         with:
           token: ${{ secrets.QLTY_COVERAGE_TOKEN }}
           files: ${{ inputs.coverage-file-path }}${{ inputs.additional-files != '' && format(',{0}', inputs.additional-files) || '' }}

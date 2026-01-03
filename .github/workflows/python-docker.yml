@@ -172,7 +172,7 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7  # v2.10.1
+        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76  # v2.14.0
         with:
           egress-policy: audit
 
@@ -182,10 +182,10 @@ jobs:
           fetch-depth: 0
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@49b3bc8e6bdd4a60e6116a5414239cba5943d3cf  # v3.2.0
+        uses: docker/setup-qemu-action@53851d14592bedcffcf25ea515637cff71ef929a  # v3.3.0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@c47758b77c9736f4b2ef4073d4d51994fabfe349  # v3.7.1
+        uses: docker/setup-buildx-action@6524bf65af31da8d45b59e8c27de4bd072b392f5  # v3.8.0
 
       - name: Determine image name
         id: image-name
@@ -245,7 +245,7 @@ jobs:
 
       - name: Generate Docker metadata
         id: meta
-        uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81  # v5.5.1
+        uses: docker/metadata-action@369eb591f429131d6889c46b94e711f089e6ca96  # v5.6.1
         with:
           images: ${{ steps.image-name.outputs.name }}
           tags: |
@@ -292,7 +292,7 @@ jobs:
 
       - name: Run Trivy vulnerability scanner (local image)
         if: inputs.enable-trivy-scan && steps.push-check.outputs.push != 'true'
-        uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0  # v0.29.0
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8  # v0.33.1
         with:
           input: '/tmp/image.tar'
           format: 'sarif'
@@ -302,7 +302,7 @@ jobs:
 
       - name: Run Trivy vulnerability scanner (registry image)
         if: inputs.enable-trivy-scan && steps.push-check.outputs.push == 'true'
-        uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0  # v0.29.0
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8  # v0.33.1
         with:
           image-ref: ${{ steps.image-name.outputs.name }}:${{ github.sha }}
           format: 'sarif'
@@ -312,7 +312,7 @@ jobs:
 
       - name: Upload Trivy scan results
         if: inputs.enable-trivy-scan && always()
-        uses: github/codeql-action/upload-sarif@48ab28a6f5dbc2a99bf1e0131198dd8f1df78169  # v3.28.0
+        uses: github/codeql-action/upload-sarif@8ff85221d12737ec1137e6a892722e5130f32d05  # v3.28.8
         with:
           sarif_file: 'trivy-results.sarif'
         continue-on-error: true

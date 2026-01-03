@@ -36,3 +36,4 @@ venv/
 *.tmp
 .tmp-*
 tmp/
+tmp_cleanup/
