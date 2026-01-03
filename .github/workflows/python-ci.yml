@@ -357,7 +357,7 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: ${{ github.repository }}
-          file: ./coverage.xml
+          files: ./coverage.xml
           flags: python-${{ inputs.python-version }}
           name: combined-coverage
           fail_ci_if_error: false
