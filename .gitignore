@@ -37,3 +37,4 @@ venv/
 .tmp-*
 tmp/
 tmp_cleanup/
+actionlint
