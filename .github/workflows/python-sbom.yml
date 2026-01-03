@@ -64,7 +64,9 @@ on:
         description: 'Infisical client secret (optional, for future use)'
         required: false
 
-permissions: read-all
+permissions:
+  contents: read
+  security-events: write
 
 jobs:
   # ============================================================================
