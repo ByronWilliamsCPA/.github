@@ -111,6 +111,25 @@ on:
         required: false
         default: 80
 
+      # Legacy inputs for backward compatibility (ignored but accepted)
+      validate-requirements:
+        description: 'DEPRECATED: This input is ignored. Use python-ci.yml instead.'
+        type: boolean
+        required: false
+        default: false
+
+      validate-lockfile:
+        description: 'DEPRECATED: This input is ignored. Use python-ci.yml instead.'
+        type: boolean
+        required: false
+        default: false
+
+      check-security:
+        description: 'DEPRECATED: This input is ignored. Use python-ci.yml instead.'
+        type: boolean
+        required: false
+        default: false
+
 permissions:
   contents: read
   pull-requests: write
