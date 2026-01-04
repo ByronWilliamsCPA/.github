@@ -159,9 +159,17 @@ jobs:
           format: sarif
           output: trivy-runtime-results.sarif
 
+      # Checkout required for SARIF upload - action needs git context for commit SHA
+      - name: Checkout repository (for SARIF upload context)
+        if: always()
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          sparse-checkout: .  # Minimal checkout, just need .git directory
+
       - name: Upload Trivy results to GitHub Security tab
         if: always()
         uses: github/codeql-action/upload-sarif@8ff85221d12737ec1137e6a892722e5130f32d05  # v3.28.8
+        continue-on-error: true  # Don't fail if Code Scanning not enabled on repo
         with:
           sarif_file: trivy-runtime-results.sarif
           category: trivy-runtime-deps
