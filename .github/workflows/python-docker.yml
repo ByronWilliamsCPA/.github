@@ -141,6 +141,21 @@ on:
         required: false
         default: true
 
+      # DHI Registry
+      enable-dhi-login:
+        description: 'Enable login to Docker Hardened Images (dhi.io) registry'
+        type: boolean
+        required: false
+        default: true
+
+    secrets:
+      DHI_USERNAME:
+        description: 'Docker Hardened Images registry username'
+        required: false
+      DHI_PAT:
+        description: 'Docker Hardened Images registry personal access token'
+        required: false
+
     outputs:
       image-tags:
         description: 'Generated image tags'
@@ -180,6 +195,15 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
         with:
           fetch-depth: 0
+
+      - name: Login to DHI Registry
+        if: inputs.enable-dhi-login
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567  # v3.3.0
+        with:
+          registry: dhi.io
+          username: ${{ secrets.DHI_USERNAME }}
+          password: ${{ secrets.DHI_PAT }}
+        continue-on-error: true
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@53851d14592bedcffcf25ea515637cff71ef929a  # v3.3.0
