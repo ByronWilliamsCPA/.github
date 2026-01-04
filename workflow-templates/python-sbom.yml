@@ -24,7 +24,9 @@ on:
     # Run weekly on Monday at 00:00 UTC
     - cron: '0 0 * * 1'
 
-permissions: read-all
+permissions:
+  contents: read
+  security-events: write
 
 jobs:
   sbom:
@@ -35,8 +37,7 @@ jobs:
       fail-on-vulnerabilities: true
       severity-threshold: 'CRITICAL,HIGH'
       artifact-retention-days: 90
+      # Only flag GPL for application dependencies, not OS packages
+      # The SBOM workflow scans the Python venv, so this only affects pip packages
       forbidden-licenses: '["GPL-2.0-only", "GPL-2.0-or-later", "GPL-3.0-only", "GPL-3.0-or-later", "AGPL-3.0-only", "AGPL-3.0-or-later"]'
-      fail-on-forbidden-licenses: false
-    permissions:
-      contents: read
-      security-events: write
+      fail-on-forbidden-licenses: false  # Warn only, don't fail
