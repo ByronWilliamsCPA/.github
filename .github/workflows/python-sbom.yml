@@ -63,6 +63,12 @@ on:
       INFISICAL_CLIENT_SECRET:
         description: 'Infisical client secret (optional, for future use)'
         required: false
+      DHI_USERNAME:
+        description: 'Docker Hardened Images registry username (optional, for future use)'
+        required: false
+      DHI_PAT:
+        description: 'Docker Hardened Images registry personal access token (optional, for future use)'
+        required: false
 
 permissions:
   contents: read
