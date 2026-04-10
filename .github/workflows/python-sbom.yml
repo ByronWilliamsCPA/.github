@@ -102,7 +102,7 @@ jobs:
           python-version: ${{ inputs.python-version }}
 
       - name: Install UV
-        uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86  # v5.4.2
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57  # v8.0.0
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
@@ -138,7 +138,7 @@ jobs:
           find "$GITHUB_WORKSPACE" -maxdepth 1 -name "sbom-*.json" -ls
 
       - name: Upload SBOM artifacts
-        uses: actions/upload-artifact@6f51ac03b9356f520e9adb1b1b7802705f340c2b  # v4.5.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: sboms
           path: ${{ github.workspace }}/sbom-runtime.json
@@ -171,7 +171,7 @@ jobs:
             .git
 
       - name: Download SBOM artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
           name: sboms
 
@@ -209,7 +209,7 @@ jobs:
 
       - name: Upload Trivy results to GitHub Security tab
         if: always()
-        uses: github/codeql-action/upload-sarif@5c8a8a642e79153f5d047b10ec1cba1d1cc65699  # v3.35.1
+        uses: github/codeql-action/upload-sarif@c10b8064de6f491fea524254123dbe5e09572f13  # v4.35.1
         continue-on-error: true  # Don't fail if Code Scanning not enabled on repo
         with:
           sarif_file: trivy-runtime-results.sarif
@@ -230,7 +230,7 @@ jobs:
           egress-policy: audit
 
       - name: Download SBOM artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with:
           name: sboms
 
