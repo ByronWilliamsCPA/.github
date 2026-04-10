@@ -120,19 +120,28 @@ jobs:
         run: |
           cyclonedx-py environment \
             --output-format JSON \
-            --outfile sbom-runtime.json \
+            --outfile "$GITHUB_WORKSPACE/sbom-runtime.json" \
             .venv/bin/python3
-          if [ ! -f sbom-runtime.json ]; then
-            echo "::error::cyclonedx-py exited 0 but sbom-runtime.json was not created"
+          if [ ! -s "$GITHUB_WORKSPACE/sbom-runtime.json" ]; then
+            echo "::error::sbom-runtime.json is missing or empty in $GITHUB_WORKSPACE"
+            echo "Workspace contents:"
+            ls -la "$GITHUB_WORKSPACE"
             exit 1
           fi
-          echo "SBOM generated: $(wc -c < sbom-runtime.json) bytes"
+          echo "SBOM generated: $(wc -c < "$GITHUB_WORKSPACE/sbom-runtime.json") bytes"
+
+      - name: Verify SBOM files before upload
+        run: |
+          echo "Working directory : $(pwd)"
+          echo "GITHUB_WORKSPACE  : $GITHUB_WORKSPACE"
+          echo "sbom-*.json files :"
+          find "$GITHUB_WORKSPACE" -maxdepth 1 -name "sbom-*.json" -ls
 
       - name: Upload SBOM artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
           name: sboms
-          path: sbom-*.json
+          path: ${{ github.workspace }}/sbom-*.json
           retention-days: ${{ inputs.artifact-retention-days }}
           if-no-files-found: error
 
