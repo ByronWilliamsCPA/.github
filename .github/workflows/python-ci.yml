@@ -524,7 +524,7 @@ jobs:
           echo "::endgroup::"
 
       - name: Block PR if critical tags found
-        if: ${{ fromJSON(steps.check-tags.outputs.critical_tags) > 0 }}
+        if: ${{ steps.check-tags.outputs.critical_tags > 0 }}
         run: |
           echo "::error::PR blocked: Found ${{ steps.check-tags.outputs.critical_tags }} unverified #CRITICAL production risk tags"
           echo ""
