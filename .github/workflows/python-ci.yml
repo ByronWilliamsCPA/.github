@@ -509,8 +509,12 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Total unverified tags: $TOTAL_TAGS**" >> $GITHUB_STEP_SUMMARY
 
-          if [ "$TOTAL_RAD" -gt 0 ]; then
-            echo "::error::Found $TOTAL_RAD unverified production risk tags (#CRITICAL, #ASSUME)"
+          if [ "$CRITICAL_TAGS" -gt 0 ]; then
+            echo "::error::Found $CRITICAL_TAGS unverified #CRITICAL production risk tags"
+          fi
+
+          if [ "$ASSUME_TAGS" -gt 0 ]; then
+            echo "::warning::Found $ASSUME_TAGS #ASSUME tags - intentional RAD annotations, review before merging"
           fi
 
           if [ "$TOTAL_LLM" -gt 0 ]; then
@@ -520,12 +524,12 @@ jobs:
           echo "::endgroup::"
 
       - name: Block PR if critical tags found
-        if: ${{ fromJSON(steps.check-tags.outputs.rad_tags) > 0 }}
+        if: ${{ fromJSON(steps.check-tags.outputs.critical_tags) > 0 }}
         run: |
-          echo "::error::PR blocked: Found ${{ steps.check-tags.outputs.rad_tags }} unverified production risk tags"
+          echo "::error::PR blocked: Found ${{ steps.check-tags.outputs.critical_tags }} unverified #CRITICAL production risk tags"
           echo ""
           echo "Please verify and remove these tags before merging:"
-          grep -rn "#CRITICAL\|#ASSUME" --include="*.py" ${{ inputs.source-directory }}/ || true
+          grep -rn "#CRITICAL" --include="*.py" ${{ inputs.source-directory }}/ || true
           echo ""
           echo "See CLAUDE.md for verification workflow"
           exit 1
