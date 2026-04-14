@@ -87,6 +87,7 @@ jobs:
       security_files: ${{ steps.filter.outputs.security }}
     permissions:
       contents: read
+      pull-requests: read
 
     steps:
       - name: Harden Runner
@@ -202,6 +203,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+      pull-requests: read
 
     steps:
       - name: Harden Runner
@@ -262,6 +264,7 @@ jobs:
     needs: detect-changes
     permissions:
       contents: read
+      pull-requests: read
 
     steps:
       - name: Harden Runner
