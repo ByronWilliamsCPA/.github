@@ -1,0 +1,17 @@
+name: Test Unpinned Actions
+
+on:
+  push:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (pinned)
+        uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  # v4.1.0
+
+      - name: Cache (unpinned - uses tag, not SHA)
+        uses: actions/cache@v3
+
+      - name: Setup Node (unpinned - uses branch)
+        uses: actions/setup-node@main
