@@ -4,7 +4,7 @@ Reusable GitHub Actions workflow for continuous code quality and security analys
 
 ## Overview
 
-SonarCloud provides comprehensive static analysis for:
+SonarCloud provides static analysis for:
 
 - **Code Quality**: Bugs, code smells, technical debt
 - **Security**: Vulnerabilities, security hotspots (OWASP Top 10)

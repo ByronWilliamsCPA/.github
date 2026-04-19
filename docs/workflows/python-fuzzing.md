@@ -516,7 +516,7 @@ Typical fuzzing performance (20-minute run):
 ## Related Workflows
 
 - **[Python Security Analysis](python-security-analysis.md)** - Static security scanning
-- **[Python CI](python-ci.md)** - Comprehensive testing
+- **[Python CI](python-ci.md)** - Full test coverage
 - **[Python Release](python-release.md)** - Secure releases with SBOM
 
 ---

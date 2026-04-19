@@ -7,7 +7,7 @@
 
 This repository contains shared community-health files that apply
 organization-wide across all public repositories under the `williaby` GitHub
-account. They ensure consistency, streamline onboarding,
+account. They ensure consistency, simplify onboarding,
 and support best practices.
 
 ## Included Files
