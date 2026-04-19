@@ -1,7 +1,7 @@
 # Support
 
 Thank you for using projects maintained by our organization. Support is
-provided on a voluntary basis by a solo contributor with zero budget—your
+provided on a voluntary basis by a solo contributor with zero budget; your
 contributions of knowledge, bug reports, and fixes are highly appreciated.
 
 ## Support Channels
