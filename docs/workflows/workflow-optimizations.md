@@ -6,7 +6,7 @@
 
 ## Overview
 
-This document describes cost and performance optimizations implemented across reusable workflows to reduce GitHub Actions minutes consumption while maintaining comprehensive quality coverage.
+This document describes cost and performance optimizations implemented across reusable workflows to reduce GitHub Actions minutes consumption while maintaining quality coverage.
 
 ## Summary of Optimizations
 
@@ -267,7 +267,7 @@ jobs:
 |----------|---------------|---------------|----------------|
 | Per-PR (10 PRs/week) | 300-600 min | Marginal | ❌ Not recommended |
 | Weekly schedule | 30-60 min | High | ✅ Recommended |
-| Pre-release only | 30-60 min/release | Very High | ✅ Recommended |
+| Pre-release only | 30-60 min/release | High | ✅ Recommended |
 
 ### Warning Messages
 
@@ -424,7 +424,7 @@ python-version: '3.12'
 # Also running compatibility matrix with full versions
 ```
 
-### 2. Leverage Draft PR Mode
+### 2. Use Draft PR Mode
 
 ✅ **Do:**
 

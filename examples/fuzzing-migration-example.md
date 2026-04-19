@@ -293,7 +293,7 @@ git commit -m "revert: restore project-specific fuzzing workflow"
 - **Automatic Updates:** Action SHA updates propagate automatically
 - **Enhanced Features:** Corpus pruning, better error messages, auto-detection
 - **Consistency:** Same pattern across all projects
-- **Better Docs:** Comprehensive documentation and examples
+- **Better Docs:** Full documentation and examples
 - **Cost Tracking:** Centralized cost optimization recommendations
 
 ## Support

@@ -26,7 +26,7 @@ paths and end-of-life schedules, see our [Upgrade Guide][upgrade-guide].
 
 ## Security Practices  
 
-We strive for proactive, comprehensive security across our codebases and infrastructure.
+We strive for proactive security across our codebases and infrastructure.
 Our standard practices include:  
 
 - **Static Analysis** with CodeQL, Semgrep, Ruff, and Bandit  

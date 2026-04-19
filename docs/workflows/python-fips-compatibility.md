@@ -13,7 +13,7 @@ This reusable workflow validates FIPS 140-2/140-3 compliance for Python projects
 
 - **Static Analysis**: Detects non-FIPS cryptographic algorithms in code
 - **Dependency Scanning**: Identifies problematic packages
-- **Fix Hints**: Provides actionable suggestions for remediation
+- **Fix Hints**: Provides suggestions for remediation
 - **PR Integration**: Automatic comments on pull requests
 - **Runtime Testing**: Optional simulated FIPS environment testing
 - **Flexible Configuration**: Customizable severity levels and paths

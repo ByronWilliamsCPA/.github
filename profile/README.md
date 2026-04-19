@@ -9,7 +9,7 @@ This organization is maintained by Byron Williams, a solo practitioner focused o
 
 ## 🚀 Our Projects
 
-Browse our repositories to find projects spanning various technologies and domains. Each project is built with care, following best practices for code quality, security, and maintainability.
+Browse our repositories to find projects spanning Python, shell scripting, and GitHub Actions. Each project is built with care, following best practices for code quality, security, and maintainability.
 
 ## 🤝 Contributing
 

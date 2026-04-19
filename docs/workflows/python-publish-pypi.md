@@ -15,7 +15,7 @@ Reusable workflow for publishing Python packages to PyPI or TestPyPI using OIDC 
 - ✅ **Dual Publishing** - Support for PyPI and TestPyPI
 - ✅ **Package Verification** - Twine checks before publishing
 - ✅ **Security Hardening** - Step Security Harden Runner
-- ✅ **Comprehensive Summaries** - Detailed GitHub step summaries
+- ✅ **Detailed Summaries** - Detailed GitHub step summaries
 
 ## Usage
 
