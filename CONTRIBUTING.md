@@ -59,7 +59,7 @@ help improve our code, documentation, and community processes.
 
 - **Language conventions**  
   - **Python:** follow [PEP 8](https://peps.python.org/pep-0008/) and
-    Google‐style docstrings  
+    Google-style docstrings  
   - **JavaScript/TypeScript:** follow
     [Airbnb style](https://github.com/airbnb/javascript)
 - **Linters & formatters**  

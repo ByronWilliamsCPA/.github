@@ -16,12 +16,12 @@ next steps via the Security tab.
 ## Supported Versions  
 
 The following table shows which major releases we support. For full upgrade
-paths and end-of-life schedules, see our [Upgrade Guide][upgrade‐guide].
+paths and end-of-life schedules, see our [Upgrade Guide][upgrade-guide].
 
 | Version  | Status       |
 |----------|--------------|
 | v3.x     | Supported    |
-| v2.x     | Security‐only support |
+| v2.x     | Security-only support |
 | v1.x     | End of life  |
 
 ## Security Practices  
@@ -64,4 +64,4 @@ multiple sources within our organization’s previous drafts.
 
 _Last updated: November 16, 2025_  
 
-[upgrade‐guide]: https://github.com/williaby/.github/blob/main/UPGRADE_GUIDE.md  
+[upgrade-guide]: https://github.com/williaby/.github/blob/main/UPGRADE_GUIDE.md  

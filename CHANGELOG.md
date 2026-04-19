@@ -6,16 +6,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### Security
-- Fix script injection vulnerability in `python-codecov.yml`: move `inputs.coverage-files` to env var before shell use (SonarCloud S7630)
-- Pin `slsa-framework/slsa-github-generator` to full commit SHA in `python-slsa.yml` (SonarCloud S7637)
-
 ### Added
 - `scripts/update-pinned-actions.sh`: developer tool to scan workflow files for outdated pinned action SHAs and propose or apply updates within the same major version
 - `CHANGELOG.md`: required OpenSSF baseline file
 
 ### Changed
 - Replace em-dash with semicolon in `SUPPORT.md`
+
+### Security
+- Fix script injection vulnerability in `python-codecov.yml`: move `inputs.coverage-files` to env var before shell use (SonarCloud S7630)
+- Pin `slsa-framework/slsa-github-generator` to full commit SHA in `python-slsa.yml` (SonarCloud S7637)
 
 ## [2026-04-13]
 
@@ -49,3 +49,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Initial reusable workflow library for Python projects
 - Workflows: CI, PR validation, coverage upload, SLSA provenance, SBOM, security analysis, SonarCloud, ScoreCard, release, publish to PyPI
 - Shared community health files: SECURITY.md, CONTRIBUTING.md, SUPPORT.md, issue templates
+
+[Unreleased]: https://github.com/williaby/.github/compare/2026-04-13...HEAD
+[2026-04-13]: https://github.com/williaby/.github/compare/2026-04-10...2026-04-13
+[2026-04-10]: https://github.com/williaby/.github/compare/2026-04-05...2026-04-10
+[2026-04-05]: https://github.com/williaby/.github/compare/2025-11-23...2026-04-05
+[2025-11-23]: https://github.com/williaby/.github/releases/tag/2025-11-23
