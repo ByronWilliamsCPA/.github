@@ -2,7 +2,7 @@
 # transfer-repos.sh - Transfer repositories to organization
 # Preserves all history, issues, PRs, stars, and releases
 
-set -e
+set -euo pipefail
 
 # Colors for output
 RED='\033[0;31m'

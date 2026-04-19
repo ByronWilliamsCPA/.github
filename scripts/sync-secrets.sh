@@ -2,7 +2,7 @@
 # sync-secrets.sh - Add secrets to all Python repos
 # For personal GitHub accounts without organization-level secrets
 
-set -e
+set -euo pipefail
 
 # Colors for output
 RED='\033[0;31m'
