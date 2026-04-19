@@ -187,18 +187,18 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76  # v2.14.0
+        uses: step-security/harden-runner@6c3c2f2c1c457b00c10c4848d6f5491db3b629df  # v2.18.0
         with:
           egress-policy: audit
 
       - name: Checkout repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
         with:
           fetch-depth: 0
 
       - name: Login to DHI Registry
         if: inputs.enable-dhi-login
-        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567  # v3.3.0
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3.7.0
         with:
           registry: dhi.io
           username: ${{ secrets.DHI_USERNAME }}
@@ -206,10 +206,10 @@ jobs:
         continue-on-error: true
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@53851d14592bedcffcf25ea515637cff71ef929a  # v3.3.0
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130  # v3.7.0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@6524bf65af31da8d45b59e8c27de4bd072b392f5  # v3.8.0
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3.12.0
 
       - name: Determine image name
         id: image-name
@@ -261,7 +261,7 @@ jobs:
 
       - name: Login to Container Registry
         if: steps.push-check.outputs.push == 'true'
-        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567  # v3.3.0
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3.7.0
         with:
           registry: ${{ inputs.registry }}
           username: ${{ github.actor }}
@@ -269,7 +269,7 @@ jobs:
 
       - name: Generate Docker metadata
         id: meta
-        uses: docker/metadata-action@369eb591f429131d6889c46b94e711f089e6ca96  # v5.6.1
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051  # v5.10.0
         with:
           images: ${{ steps.image-name.outputs.name }}
           tags: |
@@ -289,7 +289,7 @@ jobs:
 
       - name: Build and push Docker image
         id: build-push
-        uses: docker/build-push-action@4f58ea79222b3b9dc2c8bbdd6debcef730109a75  # v6.9.0
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6.19.2
         with:
           context: ${{ inputs.context }}
           file: ${{ inputs.dockerfile }}
@@ -316,7 +316,7 @@ jobs:
 
       - name: Run Trivy vulnerability scanner (local image)
         if: inputs.enable-trivy-scan && steps.push-check.outputs.push != 'true'
-        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8  # v0.33.1
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1  # v0.35.0
         with:
           input: '/tmp/image.tar'
           format: 'sarif'
@@ -326,7 +326,7 @@ jobs:
 
       - name: Run Trivy vulnerability scanner (registry image)
         if: inputs.enable-trivy-scan && steps.push-check.outputs.push == 'true'
-        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8  # v0.33.1
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1  # v0.35.0
         with:
           image-ref: ${{ steps.image-name.outputs.name }}:${{ github.sha }}
           format: 'sarif'
@@ -336,14 +336,14 @@ jobs:
 
       - name: Upload Trivy scan results
         if: inputs.enable-trivy-scan && always()
-        uses: github/codeql-action/upload-sarif@8ff85221d12737ec1137e6a892722e5130f32d05  # v3.28.8
+        uses: github/codeql-action/upload-sarif@ce64ddcb0d8d890d2df4a9d1c04ff297367dea2a  # v3.35.2
         with:
           sarif_file: 'trivy-results.sarif'
         continue-on-error: true
 
       - name: Add PR comment
         if: github.event_name == 'pull_request' && inputs.enable-pr-comment && steps.push-check.outputs.push == 'true'
-        uses: marocchino/sticky-pull-request-comment@331f8f5b4215f0445d3c07b4967662a32a2d3e31  # v2.9.0
+        uses: marocchino/sticky-pull-request-comment@773744901bac0e8cbb5a0dc842800d45e9b2b405  # v2.9.4
         with:
           header: docker-build
           message: |

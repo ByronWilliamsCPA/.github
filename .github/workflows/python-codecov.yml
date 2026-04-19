@@ -107,7 +107,7 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@20cf305ff2072d973412fa9b1e3a4f227bda3c76  # v2.14.0
+        uses: step-security/harden-runner@6c3c2f2c1c457b00c10c4848d6f5491db3b629df  # v2.18.0
         with:
           egress-policy: audit
 
@@ -117,14 +117,14 @@ jobs:
 
       - name: Download coverage artifact (same workflow)
         if: ${{ inputs.workflow-run-id == '' }}
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
         with:
           name: ${{ inputs.artifact-name }}
           path: coverage/
 
       - name: Download coverage artifact (workflow_run)
         if: ${{ inputs.workflow-run-id != '' }}
-        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16  # v4.1.8
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
         with:
           name: ${{ inputs.artifact-name }}
           github-token: ${{ github.token }}
@@ -139,7 +139,7 @@ jobs:
           find coverage/ -name "$COVERAGE_FILES" -type f | head -20
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@af2c6347526edfe5ff45ad690affad475d77ddb4  # v5.3.1
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe  # v5.5.4
         with:
           directory: coverage/
           files: ${{ inputs.coverage-files }}
@@ -154,7 +154,7 @@ jobs:
 
       - name: Upload test analytics to Codecov
         if: ${{ inputs.junit-files != '' }}
-        uses: codecov/codecov-action@af2c6347526edfe5ff45ad690affad475d77ddb4  # v5.3.1
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe  # v5.5.4
         with:
           directory: coverage/
           files: ${{ inputs.junit-files }}
