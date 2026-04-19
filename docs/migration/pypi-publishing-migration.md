@@ -126,6 +126,7 @@ jobs:
 ### Step 3: Test with TestPyPI
 
 1. **Trigger manual workflow**:
+
    ```bash
    gh workflow run publish-pypi.yml --field use_testpypi=true
    ```
@@ -133,6 +134,7 @@ jobs:
 2. **Verify publication** at `https://test.pypi.org/project/your-package-name/`
 
 3. **Test installation**:
+
    ```bash
    pip install --index-url https://test.pypi.org/simple/ your-package-name
    ```
@@ -140,6 +142,7 @@ jobs:
 ### Step 4: Verify Production Release
 
 1. Create a release tag:
+
    ```bash
    git tag -a v1.0.0 -m "Release v1.0.0"
    git push origin v1.0.0
@@ -222,7 +225,8 @@ safety check
 ```
 
 **Example output**:
-```
+
+```text
 📦 Checking dependencies for vulnerabilities...
 ✓ No known security vulnerabilities found
 ```

@@ -48,11 +48,13 @@ The `image_detection` repository's PyPI publishing workflow can be **immediately
 The reusable workflow adds **zero-configuration security scanning**:
 
 #### Safety - Dependency Scanning
+
 - Checks all dependencies for known CVEs
 - Scans against multiple vulnerability databases
 - Warns before publishing vulnerable packages
 
 #### Bandit - Code Security Scanning
+
 - Detects hardcoded secrets/passwords
 - Identifies SQL injection risks
 - Finds unsafe deserialization
@@ -86,6 +88,7 @@ with:
    - Update `package-name: 'image-preprocessing-detector'`
 
 3. **Test with TestPyPI** (5 min)
+
    ```bash
    gh workflow run publish-pypi.yml --field use_testpypi=true
    ```
@@ -165,12 +168,14 @@ See workflow-agnostic guide:
 If issues occur during migration:
 
 ### Option 1: Git Revert
+
 ```bash
 git revert HEAD
 git push origin main
 ```
 
 ### Option 2: Restore Old File
+
 ```bash
 git checkout HEAD~1 -- .github/workflows/publish-pypi.yml
 git commit -m "chore: rollback to standalone workflow"

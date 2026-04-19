@@ -71,7 +71,8 @@ jobs:
 | `coverage-artifact-retention` | number | 7 | Days to retain artifacts |
 
 **Default Coverage Exclusions:**
-```
+
+```text
 **/tests/**,**/validation/**,**/benchmarks/**,**/scripts/**
 ```
 
@@ -242,7 +243,7 @@ SonarCloud automatically decorates pull requests with:
 
 ### Example PR Comment
 
-```
+```text
 SonarCloud Quality Gate: Passed ✅
 
 3 new issues:

@@ -38,3 +38,6 @@ venv/
 tmp/
 tmp_cleanup/
 actionlint
+
+# Git worktrees
+.worktrees/

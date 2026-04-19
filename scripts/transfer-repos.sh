@@ -2,7 +2,7 @@
 # transfer-repos.sh - Transfer repositories to organization
 # Preserves all history, issues, PRs, stars, and releases
 
-set -e
+set -euo pipefail
 
 # Colors for output
 RED='\033[0;31m'
@@ -101,7 +101,7 @@ for repo in "${REPO_ARRAY[@]}"; do
         read -rp "Transfer $repo? (y/N): " CONFIRM
         if [[ ! $CONFIRM =~ ^[Yy]$ ]]; then
             echo -e "  ${YELLOW}⏭️  Skipped${NC}"
-            ((SKIPPED++))
+            SKIPPED=$((SKIPPED + 1))
             continue
         fi
     fi
@@ -114,15 +114,15 @@ for repo in "${REPO_ARRAY[@]}"; do
         sleep 1
         if gh api "repos/$ORG_NAME/$repo" &>/dev/null; then
             echo -e "${GREEN}✅${NC}"
-            ((SUCCESS++))
+            SUCCESS=$((SUCCESS + 1))
         else
             echo -e "${RED}❌ (transfer initiated but verification failed)${NC}"
-            ((FAILED++))
+            FAILED=$((FAILED + 1))
             FAILED_REPOS+=("$repo")
         fi
     else
         echo -e "${RED}❌${NC}"
-        ((FAILED++))
+        FAILED=$((FAILED + 1))
         FAILED_REPOS+=("$repo")
     fi
 done

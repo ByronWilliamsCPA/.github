@@ -323,6 +323,7 @@ jobs:
 Qlty integrates with existing tools and aggregates results:
 
 ### Python Tools
+
 - ✅ **Ruff** - Linting (already in CI workflow)
 - ✅ **MyPy** - Type checking (already in CI workflow)
 - ✅ **Bandit** - Security (already in security workflow)
@@ -330,6 +331,7 @@ Qlty integrates with existing tools and aggregates results:
 - ✅ **Coverage** - Test coverage (already tracked)
 
 ### Qlty Adds
+
 - ✅ **Trend Analysis** - Quality metrics over time
 - ✅ **Cross-Repo Comparison** - Compare repos in organization
 - ✅ **Quality Gates** - Enforce minimum standards
@@ -341,17 +343,20 @@ Qlty integrates with existing tools and aggregates results:
 ## 🔒 Security Considerations
 
 ### Token Security
+
 - Store `QLTY_TOKEN` as organization secret
 - Never commit tokens to code
 - Rotate tokens regularly (quarterly recommended)
 
 ### Permissions
+
 Qlty GitHub App needs:
 - **Read**: Repository contents, workflows
 - **Write**: Checks (for status updates), PRs (for comments)
 - **No** write access to code
 
 ### Data Privacy
+
 - Qlty analyzes code quality metrics only
 - No source code is stored (only metadata)
 - Results are private to your organization
@@ -362,18 +367,21 @@ Qlty GitHub App needs:
 ## 📈 Qlty Dashboard Features
 
 ### Organization Dashboard
+
 - **Quality Score** - Overall org code quality
 - **Trend Analysis** - Quality over time
 - **Repository Comparison** - Compare projects
 - **Hot Spots** - Files needing attention
 
 ### Pull Request Integration
+
 - **PR Comments** - Quality feedback on PRs
 - **Quality Gates** - Block merges on violations
 - **Diff Analysis** - Only check changed code
 - **Inline Annotations** - Issues marked in code
 
 ### Team Features
+
 - **Quality Goals** - Set org-wide targets
 - **Reports** - Weekly/monthly summaries
 - **Notifications** - Slack/email alerts
@@ -523,16 +531,19 @@ jobs:
 ## 🎯 Benefits of Qlty Integration
 
 ### For Individual Developers
+
 - ✅ **Instant Feedback** - Quality issues in VS Code
 - ✅ **Pre-commit Checks** - Catch issues before PR
 - ✅ **Learning Tool** - Best practices suggestions
 
 ### For Teams
+
 - ✅ **Consistency** - Same standards across all repos
 - ✅ **Visibility** - See quality trends
 - ✅ **Collaboration** - Shared quality goals
 
 ### For Organization
+
 - ✅ **Governance** - Enforce quality policies
 - ✅ **Metrics** - Track quality org-wide
 - ✅ **Efficiency** - Reduce code review time
@@ -542,15 +553,19 @@ jobs:
 ## 🛠️ Troubleshooting
 
 ### "Qlty token invalid"
+
 **Fix**: Regenerate token at https://qlty.cloud/settings/tokens
 
 ### "Permission denied"
+
 **Fix**: Ensure Qlty GitHub App is installed with correct permissions
 
 ### "No quality data"
+
 **Fix**: Run `qlty check --upload` locally first to initialize
 
 ### "Tool not found"
+
 **Fix**: Ensure tools (ruff, mypy) are in `pyproject.toml` dependencies
 
 ---

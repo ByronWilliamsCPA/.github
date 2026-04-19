@@ -2,7 +2,7 @@
 # sync-secrets.sh - Add secrets to all Python repos
 # For personal GitHub accounts without organization-level secrets
 
-set -e
+set -euo pipefail
 
 # Colors for output
 RED='\033[0;31m'
@@ -104,10 +104,10 @@ for repo in "${REPO_ARRAY[@]}"; do
         --repo "$FULL_REPO" \
         --body "$SECRET_VALUE" 2>/dev/null; then
         echo -e "${GREEN}✅${NC}"
-        ((SUCCESS++))
+        SUCCESS=$((SUCCESS + 1))
     else
         echo -e "${RED}❌${NC}"
-        ((FAILED++))
+        FAILED=$((FAILED + 1))
         FAILED_REPOS+=("$repo")
     fi
 done

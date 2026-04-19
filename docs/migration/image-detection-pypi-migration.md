@@ -5,11 +5,13 @@ This document outlines the specific migration path for the `image_detection` rep
 ## Current State Analysis
 
 ### Existing Workflow
+
 **File**: `/home/byron/dev/image_detection/.github/workflows/publish-pypi.yml`
 **Lines**: 177 lines
 **Package**: `image-preprocessing-detector`
 
 ### Key Characteristics
+
 - ✅ OIDC Trusted Publishing already configured
 - ✅ TestPyPI support via `workflow_dispatch`
 - ✅ Build verification with `twine check`
@@ -101,6 +103,7 @@ jobs:
 **Option B: Side-by-Side Testing**
 
 1. Rename existing workflow:
+
    ```bash
    cd /home/byron/dev/image_detection
    git mv .github/workflows/publish-pypi.yml .github/workflows/publish-pypi-old.yml
@@ -109,11 +112,13 @@ jobs:
 2. Create new workflow (as shown in Option A)
 
 3. Test with TestPyPI:
+
    ```bash
    gh workflow run publish-pypi.yml --field use_testpypi=true
    ```
 
 4. If successful, delete old workflow:
+
    ```bash
    git rm .github/workflows/publish-pypi-old.yml
    ```
@@ -137,6 +142,7 @@ gh run list --workflow=publish-pypi.yml --limit 1
 **Verify publication**:
 1. Check TestPyPI: https://test.pypi.org/project/image-preprocessing-detector/
 2. Test installation:
+
    ```bash
    pip install --index-url https://test.pypi.org/simple/ image-preprocessing-detector
    ```
@@ -174,7 +180,8 @@ The reusable workflow adds **automatic security scanning**:
 Checks all dependencies in `uv.lock` for known vulnerabilities:
 
 **Example findings it might catch**:
-```
+
+```text
 ╒════════════════════════════╤═══════════════════════════════════════════════╕
 │ Package                    │ Vulnerability                                 │
 ╞════════════════════════════╪═══════════════════════════════════════════════╡
@@ -188,7 +195,8 @@ Checks all dependencies in `uv.lock` for known vulnerabilities:
 Scans Python code in `src/` for security issues:
 
 **Example findings it might catch**:
-```
+
+```text
 >> Issue: [B301:blacklist] Pickle and modules that wrap it can be unsafe
    Severity: Medium   Confidence: High
    Location: src/image_detection/cache.py:45
@@ -265,7 +273,7 @@ Disable one via workflow file or GitHub Actions settings.
 
 ### Build Job Output
 
-```
+```text
 🔒 Running pre-publish security checks...
 📦 Checking dependencies for vulnerabilities...
 ✓ No known security vulnerabilities found
@@ -283,7 +291,7 @@ Checking dist/image_preprocessing_detector-0.2.0.tar.gz: PASSED
 
 ### Publish Job Output
 
-```
+```text
 📦 Packages to publish to PyPI:
 -rw-r--r-- 1 runner docker 1234567 Jan 16 12:00 image_preprocessing_detector-0.2.0-py3-none-any.whl
 -rw-r--r-- 1 runner docker  234567 Jan 16 12:00 image_preprocessing_detector-0.2.0.tar.gz

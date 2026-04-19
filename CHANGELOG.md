@@ -6,20 +6,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### Security
-- Fix script injection vulnerability in `python-codecov.yml`: move `inputs.coverage-files` to env var before shell use (SonarCloud S7630)
-- Pin `slsa-framework/slsa-github-generator` to full commit SHA in `python-slsa.yml` (SonarCloud S7637)
-
 ### Added
+
 - `scripts/update-pinned-actions.sh`: developer tool to scan workflow files for outdated pinned action SHAs and propose or apply updates within the same major version
 - `CHANGELOG.md`: required OpenSSF baseline file
 
 ### Changed
+
 - Replace em-dash with semicolon in `SUPPORT.md`
+
+### Security
+
+- Fix script injection vulnerability in `python-codecov.yml`: move `inputs.coverage-files` to env var before shell use (SonarCloud S7630)
+- Pin `slsa-framework/slsa-github-generator` to full commit SHA in `python-slsa.yml` (SonarCloud S7637)
 
 ## [2026-04-13]
 
 ### Fixed
+
 - LLM governance: replace `fromJSON` with direct numeric comparison for `critical_tags`
 - LLM governance: only block PRs on `#CRITICAL` tags; demote `#ASSUME` to warning
 - Security: add `pull-requests: read` permission to detect-changes job
@@ -28,9 +32,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [2026-04-10]
 
 ### Changed
+
 - Update action pins ahead of Node.js 20 deprecation deadlines
 
 ### Fixed
+
 - SBOM: use exact filename for `upload-artifact` path
 - SBOM: resolve `upload-artifact` path via `github.workspace` context
 - SBOM: downgrade `upload-artifact` to v4.5.0 to fix glob resolver
@@ -40,12 +46,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [2026-04-05]
 
 ### Added
+
 - Trivy `.trivyignore` file support in container security workflow
 - Harbor registry setup documentation
 
 ## [2025-11-23]
 
 ### Added
+
 - Initial reusable workflow library for Python projects
 - Workflows: CI, PR validation, coverage upload, SLSA provenance, SBOM, security analysis, SonarCloud, ScoreCard, release, publish to PyPI
 - Shared community health files: SECURITY.md, CONTRIBUTING.md, SUPPORT.md, issue templates
+
+[Unreleased]: https://github.com/ByronWilliamsCPA/.github/compare/2026-04-13...HEAD
+[2026-04-13]: https://github.com/ByronWilliamsCPA/.github/compare/2026-04-10...2026-04-13
+[2026-04-10]: https://github.com/ByronWilliamsCPA/.github/compare/2026-04-05...2026-04-10
+[2026-04-05]: https://github.com/ByronWilliamsCPA/.github/compare/2025-11-23...2026-04-05
+[2025-11-23]: https://github.com/ByronWilliamsCPA/.github/releases/tag/2025-11-23

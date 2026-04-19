@@ -6,7 +6,7 @@ This guide covers setting up a self-hosted Harbor registry as a proxy cache for 
 
 ## Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    Harbor Registry                          │
 │                  (registry.yourdomain.com)                  │
@@ -271,6 +271,7 @@ docker-compose down
 ### Image Pull Fails
 
 1. Check endpoint connectivity:
+
    ```bash
    # Test from Harbor server
    curl -I https://dhi.io/v2/
@@ -281,6 +282,7 @@ docker-compose down
    - Click **Test Connection** on each endpoint
 
 3. Check Harbor logs:
+
    ```bash
    cd /opt/harbor
    docker-compose logs -f core
@@ -289,6 +291,7 @@ docker-compose down
 ### Portainer Connection Issues
 
 1. Ensure Harbor is accessible from Portainer host:
+
    ```bash
    curl -k https://registry.yourdomain.com/v2/
    ```
