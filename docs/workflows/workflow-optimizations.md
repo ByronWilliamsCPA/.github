@@ -146,9 +146,11 @@ jobs:
 
 1. **Draft Detection**: Workflow checks `github.event.pull_request.draft`
 2. **Conditional Execution**: Matrix job has condition:
+
    ```yaml
    if: ${{ !(inputs.skip-on-draft && github.event.pull_request.draft) }}
    ```
+
 3. **Summary Message**: Displays friendly message when skipped
 
 ### Developer Workflow
@@ -271,7 +273,7 @@ jobs:
 
 When triggered on PR, the workflow displays:
 
-```
+```text
 ⚠️  Performance Warning
 
 Mutation testing is running on a Pull Request. This is expensive and not recommended.
@@ -286,6 +288,7 @@ Recommendation: Run mutation testing on schedule (weekly/monthly) instead.
 ### Step 1: Update python-ci.yml Calls
 
 **Before:**
+
 ```yaml
 jobs:
   ci:
@@ -295,6 +298,7 @@ jobs:
 ```
 
 **After:**
+
 ```yaml
 jobs:
   ci:
@@ -307,6 +311,7 @@ jobs:
 ### Step 2: Enable Draft PR Awareness
 
 **Before:**
+
 ```yaml
 jobs:
   compatibility:
@@ -314,6 +319,7 @@ jobs:
 ```
 
 **After:**
+
 ```yaml
 jobs:
   compatibility:
@@ -325,6 +331,7 @@ jobs:
 ### Step 3: Move Mutation Testing to Schedule
 
 **Before:**
+
 ```yaml
 on: [pull_request, push]
 
@@ -334,6 +341,7 @@ jobs:
 ```
 
 **After:**
+
 ```yaml
 on:
   schedule:
@@ -351,7 +359,8 @@ jobs:
 ### Example 1: Small Library (10 PRs/week)
 
 **Before Optimizations:**
-```
+
+```text
 PR CI (python-ci.yml):     10 PRs × 40 min = 400 min
 Compatibility matrix:      10 PRs × 30 min = 300 min
 Mutation testing:          10 PRs × 45 min = 450 min
@@ -360,7 +369,8 @@ Total:                     1,150 min/week
 ```
 
 **After Optimizations:**
-```
+
+```text
 PR CI (tiered):            10 PRs × 20 min = 200 min
 Compatibility (drafts):    3 ready × 30 min = 90 min
 Mutation (scheduled):      1 run × 45 min = 45 min
@@ -372,7 +382,8 @@ Savings:                   815 min/week (71%)
 ### Example 2: Active Project (50 PRs/week)
 
 **Before Optimizations:**
-```
+
+```text
 PR CI:                     50 PRs × 40 min = 2,000 min
 Compatibility:             50 PRs × 30 min = 1,500 min
 Mutation:                  50 PRs × 45 min = 2,250 min
@@ -381,7 +392,8 @@ Total:                     5,750 min/week
 ```
 
 **After Optimizations:**
-```
+
+```text
 PR CI (tiered):            50 PRs × 20 min = 1,000 min
 Compatibility (drafts):    15 ready × 30 min = 450 min
 Mutation (scheduled):      1 run × 45 min = 45 min
@@ -397,6 +409,7 @@ Savings:                   4,255 min/week (74%)
 ### 1. Use Tiered Testing for All Projects
 
 ✅ **Do:**
+
 ```yaml
 enable-matrix-testing: true
 python-versions-pr: '["3.12"]'  # Latest only for speed
@@ -404,6 +417,7 @@ python-versions-comprehensive: '["3.10", "3.11", "3.12", "3.13"]'
 ```
 
 ❌ **Don't:**
+
 ```yaml
 # Testing all versions on every PR
 python-version: '3.12'
@@ -413,6 +427,7 @@ python-version: '3.12'
 ### 2. Leverage Draft PR Mode
 
 ✅ **Do:**
+
 ```yaml
 # Create draft PRs by default
 gh pr create --draft
@@ -422,6 +437,7 @@ gh pr ready
 ```
 
 ❌ **Don't:**
+
 ```yaml
 # Creating ready PRs for WIP changes
 gh pr create  # Triggers full matrix unnecessarily
@@ -430,6 +446,7 @@ gh pr create  # Triggers full matrix unnecessarily
 ### 3. Schedule Mutation Testing
 
 ✅ **Do:**
+
 ```yaml
 on:
   schedule:
@@ -437,6 +454,7 @@ on:
 ```
 
 ❌ **Don't:**
+
 ```yaml
 on:
   pull_request:  # Too expensive for PRs
@@ -445,6 +463,7 @@ on:
 ### 4. Customize Version Matrices
 
 ✅ **Do:**
+
 ```yaml
 # Drop EOL Python versions
 python-versions-pr: '["3.13"]'
@@ -452,6 +471,7 @@ python-versions-comprehensive: '["3.11", "3.12", "3.13"]'
 ```
 
 ❌ **Don't:**
+
 ```yaml
 # Testing Python 3.7 when project requires 3.11+
 ```
@@ -465,6 +485,7 @@ python-versions-comprehensive: '["3.11", "3.12", "3.13"]'
 **Symptom:** Matrix testing job doesn't appear in workflow
 
 **Solution:**
+
 ```yaml
 # Ensure enable-matrix-testing is set
 enable-matrix-testing: true  # Add this line
@@ -477,6 +498,7 @@ enable-matrix-testing: true  # Add this line
 **Cause:** GitHub Actions doesn't always set `draft` property correctly
 
 **Solution:**
+
 ```yaml
 # Verify PR is actually marked as draft in GitHub UI
 # Or force skip with:
@@ -488,6 +510,7 @@ skip-on-draft: true
 **Symptom:** Mutation testing times out after 60 minutes
 
 **Solution:**
+
 ```yaml
 # Increase timeout
 timeout-minutes: 120

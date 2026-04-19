@@ -140,6 +140,7 @@ gh run view --log
 ### Verify Publication
 
 **TestPyPI**:
+
 ```bash
 # Check package page
 open https://test.pypi.org/project/your-package-name/
@@ -149,6 +150,7 @@ pip install --index-url https://test.pypi.org/simple/ your-package-name
 ```
 
 **Production PyPI**:
+
 ```bash
 # Check package page
 open https://pypi.org/project/your-package-name/
@@ -184,7 +186,8 @@ Checks dependencies against known vulnerability databases:
 - Python Package Index (PyPI) advisories
 
 **Example findings**:
-```
+
+```text
 ╒══════════════════════════════════════════════════════════════════════════════╕
 │                                                                              │
 │                               /$$$$$$            /$$                         │
@@ -224,6 +227,7 @@ with:
 ## Workflow Steps
 
 ### Build Job
+
 1. **Harden Runner** - Audit egress network calls
 2. **Checkout** - Fetch repository code
 3. **Setup Python** - Install specified Python version
@@ -234,6 +238,7 @@ with:
 8. **Upload** - Store artifacts for publishing
 
 ### Publish Jobs
+
 - **publish-to-pypi** - Publishes to PyPI (if `use-testpypi: false`)
 - **publish-to-testpypi** - Publishes to TestPyPI (if `use-testpypi: true`)
 
@@ -249,7 +254,8 @@ Both jobs:
 ### OIDC Token Verification Failed
 
 **Symptoms**:
-```
+
+```text
 Error: OIDC token verification failed
 ```
 
@@ -262,7 +268,8 @@ Error: OIDC token verification failed
 ### No Files Found in dist/
 
 **Symptoms**:
-```
+
+```text
 Error: No files found in dist/
 ```
 
@@ -275,7 +282,8 @@ Error: No files found in dist/
 ### Security Check Warnings
 
 **Symptoms**:
-```
+
+```text
 ⚠️  Safety check found issues - review before publishing
 ⚠️  Bandit found issues - review before publishing
 ```
@@ -291,7 +299,8 @@ Error: No files found in dist/
 ### Package Already Exists
 
 **Symptoms**:
-```
+
+```text
 Error: File already exists
 ```
 

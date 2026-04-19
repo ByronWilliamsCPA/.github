@@ -253,6 +253,7 @@ Tasks:
 ### Week 1: Phase 1 Quick Wins
 
 #### Day 1: Concurrency Groups (40 min)
+
 - [ ] python-ci.yml
 - [ ] python-compatibility.yml
 - [ ] python-security-analysis.yml
@@ -263,11 +264,13 @@ Tasks:
 - [ ] python-docs.yml
 
 #### Day 2: Draft PR Awareness (1.5 hrs)
+
 - [ ] python-compatibility.yml - Add skip-on-draft input
 - [ ] python-mutation.yml - Add skip-on-draft input
 - [ ] python-security-analysis.yml - Add run-codeql-on-draft input
 
 #### Day 3: Cost Documentation (1 hr)
+
 - [ ] python-ci.yml - Add cost header
 - [ ] python-compatibility.yml - Add cost header (EXPENSIVE)
 - [ ] python-security-analysis.yml - Add cost header
@@ -277,6 +280,7 @@ Tasks:
 - [ ] python-docs.yml - Add cost header
 
 #### Day 4: Testing & Validation (30 min)
+
 - [ ] Test concurrency cancellation
 - [ ] Verify draft PR skip logic
 - [ ] Review cost documentation accuracy

@@ -149,11 +149,13 @@ jobs:
 ### Fuzzing Optimization
 
 **Before:** Per-PR fuzzing
+
 ```yaml
 on: [pull_request]  # ~95 runs/month = $13/month
 ```
 
 **After:** Weekly schedule
+
 ```yaml
 on:
   schedule:
@@ -166,6 +168,7 @@ on:
 ### Performance Testing Optimization
 
 **Targeted Path Triggers:**
+
 ```yaml
 on:
   pull_request:
@@ -179,6 +182,7 @@ Only run when performance-critical code changes.
 ### Quality Analysis Optimization
 
 **Branch-Specific:**
+
 ```yaml
 on:
   push:

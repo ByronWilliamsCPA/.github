@@ -157,12 +157,14 @@ Available in the workflow run summary:
 ### Issue: MD5 Usage
 
 **Problem:**
+
 ```python
 import hashlib
 hash = hashlib.md5(data)  # ❌ Fails in FIPS mode
 ```
 
 **Fix:**
+
 ```python
 import hashlib
 # For non-security purposes (checksums, cache keys)
@@ -175,12 +177,14 @@ hash = hashlib.sha256(data)  # ✅
 ### Issue: Weak Ciphers
 
 **Problem:**
+
 ```python
 from cryptography.hazmat.primitives.ciphers import algorithms
 cipher = algorithms.DES(key)  # ❌ DES not FIPS-approved
 ```
 
 **Fix:**
+
 ```python
 from cryptography.hazmat.primitives.ciphers import algorithms
 cipher = algorithms.AES(key)  # ✅ AES is FIPS-approved
@@ -189,12 +193,14 @@ cipher = algorithms.AES(key)  # ✅ AES is FIPS-approved
 ### Issue: Non-FIPS Dependencies
 
 **Problem:**
-```
+
+```text
 bcrypt==4.1.2  # ❌ Uses Blowfish (not FIPS-approved)
 ```
 
 **Fix:**
-```
+
+```text
 argon2-cffi==23.1.0  # ✅ Argon2 can work in FIPS mode
 # Or use passlib with bcrypt_sha256 for FIPS compliance
 ```
@@ -358,6 +364,7 @@ on:
 **Issue:** Non-security MD5 usage flagged as error
 
 **Solution:** Add `usedforsecurity=False` parameter:
+
 ```python
 hashlib.md5(data, usedforsecurity=False)
 ```

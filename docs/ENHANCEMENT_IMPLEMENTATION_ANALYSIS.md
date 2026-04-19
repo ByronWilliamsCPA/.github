@@ -97,6 +97,7 @@ concurrency:
 **Workflows Requiring Draft PR Awareness**:
 
 #### Critical (Expensive Workflows)
+
 - `python-compatibility.yml` - 12-job matrix (~20 min)
 - `python-mutation.yml` - 60-minute runs
 - `python-security-analysis.yml` - CodeQL optional
@@ -255,7 +256,7 @@ jobs:
 
 **Templates to Create**:
 
-```
+```text
 .github/workflow-templates/
 ├── python-pr-fast.yml              # Fast PR validation
 ├── python-pr-fast.properties.json  # Template metadata

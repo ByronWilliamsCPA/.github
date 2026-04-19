@@ -5,6 +5,7 @@ This directory contains reusable GitHub Actions workflow templates for the Byron
 ## Available Templates
 
 ### 1. Python CI Pipeline (`python-ci.yml`)
+
 Comprehensive continuous integration workflow featuring:
 - **UV dependency management** with optimized caching
 - **Multi-version Python testing** (3.10-3.14)
@@ -23,6 +24,7 @@ Comprehensive continuous integration workflow featuring:
 ---
 
 ### 2. Codecov Upload (`python-codecov.yml`)
+
 Secure coverage reporting workflow:
 - **Workflow_run trigger** to prevent pwn request vulnerabilities
 - **Multi-version coverage** support (Python 3.10-3.14)
@@ -38,6 +40,7 @@ Secure coverage reporting workflow:
 ---
 
 ### 3. Security Analysis (`python-security-analysis.yml`)
+
 Comprehensive security scanning suite:
 - **CodeQL analysis** with security-extended queries
 - **Bandit** for Python-specific security issues
@@ -56,6 +59,7 @@ Comprehensive security scanning suite:
 ---
 
 ### 4. Documentation with MkDocs (`python-docs.yml`)
+
 Documentation build and deployment workflow:
 - **MkDocs** static site generation
 - **Docstring enforcement** with interrogate
@@ -74,6 +78,7 @@ Documentation build and deployment workflow:
 ---
 
 ### 5. Release with SLSA Provenance (`python-release.yml`)
+
 Secure release automation workflow:
 - **SLSA Level 3 provenance** attestations
 - **Sigstore/Cosign keyless signing**
@@ -91,6 +96,7 @@ Secure release automation workflow:
 ---
 
 ### 6. Publish to PyPI (`python-publish-pypi.yml`)
+
 PyPI publishing workflow with modern security:
 - **OIDC Trusted Publishing** (no API tokens needed)
 - **TestPyPI support** for testing releases
@@ -115,6 +121,7 @@ PyPI publishing workflow with modern security:
 ---
 
 ### 7. Fuzz Testing (`python-cifuzzy.yml`)
+
 Automated fuzzing with ClusterFuzzLite:
 - **Google ClusterFuzzLite** integration
 - **AddressSanitizer** for memory issue detection
@@ -131,6 +138,7 @@ Automated fuzzing with ClusterFuzzLite:
 ---
 
 ### 8. SonarCloud Analysis (`python-sonarcloud.yml`)
+
 Continuous code quality monitoring:
 - **Bug detection** and code smell identification
 - **Security vulnerability scanning**
@@ -151,12 +159,14 @@ Continuous code quality monitoring:
 ## How to Use These Templates
 
 ### Option 1: Through GitHub UI
+
 1. In your repository, click **Actions**
 2. Click **New workflow**
 3. Look for templates from your organization
 4. Select the desired template and customize if needed
 
 ### Option 2: Manual Copy
+
 1. Copy the desired `.yml` file from this directory
 2. Create `.github/workflows/` in your repository
 3. Paste the file and customize as needed
@@ -167,16 +177,19 @@ Continuous code quality monitoring:
 Most templates support these common customizations:
 
 ### Python Version
+
 ```yaml
 python-version: '3.12'  # Change to your preferred version
 ```
 
 ### Coverage Thresholds
+
 ```yaml
 pytest --cov --cov-report=xml --cov-fail-under=80  # Adjust percentage
 ```
 
 ### Branch Triggers
+
 ```yaml
 on:
   pull_request:

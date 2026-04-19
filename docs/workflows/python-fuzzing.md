@@ -315,7 +315,7 @@ Or specify custom path via `fuzz-target-directory` input.
 
 ### Example Layout
 
-```
+```text
 project/
 ├── fuzz/
 │   ├── fuzz_image_loader.py
