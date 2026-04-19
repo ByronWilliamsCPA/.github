@@ -10,8 +10,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Fix script injection vulnerability in `python-codecov.yml`: move `inputs.coverage-files` to env var before shell use (SonarCloud S7630)
 - Pin `slsa-framework/slsa-github-generator` to full commit SHA in `python-slsa.yml` (SonarCloud S7637)
 
+### Added
+- `scripts/update-pinned-actions.sh`: developer tool to scan workflow files for outdated pinned action SHAs and propose or apply updates within the same major version
+- `CHANGELOG.md`: required OpenSSF baseline file
+
 ### Changed
-- Replace em-dashes with colons in `scripts/update-pinned-actions.sh` and `SUPPORT.md`
+- Replace em-dash with semicolon in `SUPPORT.md`
 
 ## [2026-04-13]
 
