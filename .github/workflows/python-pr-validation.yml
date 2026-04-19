@@ -1,8 +1,22 @@
 # ============================================================================
-# ⚠️  DEPRECATED - Reusable PR Validation Workflow
+# DEPRECATED - Reusable PR Validation Workflow
 # ============================================================================
 #
 # THIS WORKFLOW IS DEPRECATED AND WILL BE REMOVED IN A FUTURE RELEASE.
+#
+# IMPORTANT - startup_failure root cause:
+#   Earlier versions of this workflow declared `checks: write` at the
+#   workflow-level permissions block. GitHub requires every calling job to
+#   explicitly grant any permission a reusable workflow declares, even if that
+#   permission is never exercised. Callers that did not pass `checks: write`
+#   received a startup_failure with no further diagnostic output.
+#
+#   This permission has been removed in the current version because no step in
+#   this workflow actually creates or updates check runs. If you were previously
+#   forced to add `checks: write` to your calling job as a workaround, you can
+#   remove it after updating to the current version of this workflow.
+#
+#   The safest path forward is to migrate to python-ci.yml (see below).
 #
 # Migration Guide:
 #   Replace usage of this workflow with `python-ci.yml` which provides:
@@ -37,13 +51,13 @@
 # Comprehensive pull request validation ensuring code quality before merge
 #
 # Features (now in python-ci.yml):
-#   - PR title and description validation  → Removed (use semantic-release)
-#   - Conventional commit checking          → Removed (use semantic-release)
-#   - Code formatting verification          → python-ci.yml
-#   - Linting and type checking             → python-ci.yml
-#   - Test execution                        → python-ci.yml
-#   - Breaking change detection             → Removed (naive implementation)
-#   - Size labeling                         → Use standalone action
+#   - PR title and description validation  (removed, use semantic-release)
+#   - Conventional commit checking          (removed, use semantic-release)
+#   - Code formatting verification          (python-ci.yml)
+#   - Linting and type checking             (python-ci.yml)
+#   - Test execution                        (python-ci.yml)
+#   - Breaking change detection             (removed, naive implementation)
+#   - Size labeling                         (use standalone action)
 # ============================================================================
 
 name: PR Validation (Reusable)
@@ -130,15 +144,19 @@ on:
         required: false
         default: false
 
+# Permissions granted to this workflow.
+# Note for callers: only `contents: read` and `pull-requests: write` are
+# required. `checks: write` was previously included here but is not used by
+# any step in this workflow; it has been removed to prevent startup_failure
+# in callers that did not explicitly grant that permission.
 permissions:
   contents: read
   pull-requests: write
-  checks: write
 
 jobs:
   # Deprecation notice job - runs first to warn users
   deprecation-notice:
-    name: ⚠️ Deprecation Warning
+    name: Deprecation Warning
     runs-on: ubuntu-latest
     steps:
       - name: Deprecation Warning
@@ -147,7 +165,7 @@ jobs:
           echo "::warning::Please migrate to python-ci.yml which includes all quality checks plus Vulture dead code detection."
           echo ""
           echo "============================================================"
-          echo "⚠️  DEPRECATION NOTICE"
+          echo "DEPRECATION NOTICE"
           echo "============================================================"
           echo ""
           echo "python-pr-validation.yml is deprecated and will be removed."
