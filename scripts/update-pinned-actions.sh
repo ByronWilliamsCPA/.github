@@ -46,7 +46,14 @@ usage() {
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --apply)           APPLY=true; shift ;;
-        --workflows-dir)   WORKFLOWS_DIR="$2"; shift 2 ;;
+        --workflows-dir)
+            if [[ $# -lt 2 || -z "${2:-}" ]]; then
+                echo -e "${RED}ERROR: --workflows-dir requires a directory path${NC}"
+                usage
+            fi
+            WORKFLOWS_DIR="$2"
+            shift 2
+            ;;
         -h|--help)         usage ;;
         *) echo -e "${RED}Unknown option: $1${NC}"; usage ;;
     esac
@@ -88,18 +95,13 @@ resolve_tag_sha() {
     local repo="$1"
     local tag="$2"
 
-    local ref_json
-    ref_json=$(gh api "repos/$repo/git/refs/tags/$tag" 2>/dev/null) || { echo ""; return; }
-
     local obj_type obj_sha
-    obj_type=$(echo "$ref_json" | grep -o '"type":"[^"]*"' | head -1 | cut -d'"' -f4)
-    obj_sha=$(echo "$ref_json"  | grep -o '"sha":"[^"]*"'  | head -1 | cut -d'"' -f4)
+    obj_type=$(gh api "repos/$repo/git/refs/tags/$tag" --jq '.object.type' 2>/dev/null) || { echo ""; return; }
+    obj_sha=$(gh api "repos/$repo/git/refs/tags/$tag" --jq '.object.sha' 2>/dev/null) || { echo ""; return; }
 
     if [[ "$obj_type" == "tag" ]]; then
-        # Annotated tag: dereference to get the commit SHA
-        local tag_obj
-        tag_obj=$(gh api "repos/$repo/git/tags/$obj_sha" 2>/dev/null) || { echo ""; return; }
-        obj_sha=$(echo "$tag_obj" | grep -o '"sha":"[^"]*"' | tail -1 | cut -d'"' -f4)
+        # Annotated tag: resolve tag object to its target commit SHA
+        obj_sha=$(gh api "repos/$repo/git/tags/$obj_sha" --jq '.object.sha' 2>/dev/null) || { echo ""; return; }
     fi
 
     echo "$obj_sha"
@@ -116,7 +118,7 @@ trap 'rm -f "$UNIQUE_ACTIONS_FILE" "$CHANGE_LOG"' EXIT
 grep -rh "uses:" "$WORKFLOWS_DIR"/ \
     | grep -oE '[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+(/[a-zA-Z0-9_./-]*)?@[a-f0-9]{40}[[:space:]]+#[[:space:]]+v[0-9]+(\.[0-9.]+)*' \
     | sort -u \
-    > "$UNIQUE_ACTIONS_FILE"
+    > "$UNIQUE_ACTIONS_FILE" || true
 
 TOTAL=$(wc -l < "$UNIQUE_ACTIONS_FILE" | tr -d ' ')
 echo "Found $TOTAL unique pinned action references"
@@ -133,7 +135,7 @@ while IFS= read -r entry; do
 
     # Parse fields from the entry string
     full_action="${entry%%@*}"
-    current_sha=$(echo "$entry" | grep -oE '[a-f0-9]{40}')
+    current_sha=$(echo "$entry" | grep -oE '[a-f0-9]{40}' | head -1)
     current_version=$(echo "$entry" | grep -oE 'v[0-9]+(\.[0-9]+)*$')
 
     # Derive the repo (first two path segments, strip any sub-action path)
@@ -145,7 +147,7 @@ while IFS= read -r entry; do
     # Find the latest release tag within the same major version
     latest_version=$(
         gh release list --repo "$repo" --limit 50 --json tagName \
-            --jq "[.[] | select(.tagName | test(\"^${major}[.]\"))] | first | .tagName // empty" \
+            --jq "[.[] | select(.tagName | test(\"^${major}[.]\")) | .tagName] | sort_by(split(\".\") | map(ltrimstr(\"v\") | tonumber? // 0)) | reverse | first // empty" \
             2>/dev/null || true
     )
 
@@ -235,9 +237,11 @@ declare -A FILES_CHANGED
 while IFS='|' read -r full_action current_sha current_version new_sha latest_version; do
     # Find every workflow file containing this action+sha and update it
     while IFS= read -r wf_file; do
-        sed -i \
+        tmp_wf=$(mktemp)
+        sed \
             "s|${full_action}@${current_sha}[[:space:]]*#[[:space:]]*${current_version}|${full_action}@${new_sha}  # ${latest_version}|g" \
-            "$wf_file"
+            "$wf_file" > "$tmp_wf"
+        mv "$tmp_wf" "$wf_file"
         FILES_CHANGED["$wf_file"]=1
     done < <(grep -rl "${full_action}@${current_sha}" "$WORKFLOWS_DIR"/ 2>/dev/null)
 
