@@ -64,4 +64,4 @@ multiple sources within our organization’s previous drafts.
 
 _Last updated: November 16, 2025_  
 
-[upgrade-guide]: https://github.com/williaby/.github/blob/main/UPGRADE_GUIDE.md  
+[upgrade-guide]: https://github.com/ByronWilliamsCPA/.github/blob/main/UPGRADE_GUIDE.md  

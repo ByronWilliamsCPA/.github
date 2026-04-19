@@ -201,8 +201,8 @@ bcrypt==4.1.2  # ❌ Uses Blowfish (not FIPS-approved)
 **Fix:**
 
 ```text
-argon2-cffi==23.1.0  # ✅ Argon2 can work in FIPS mode
-# Or use passlib with bcrypt_sha256 for FIPS compliance
+passlib[pbkdf2]==1.7.4  # ✅ PBKDF2-HMAC-SHA256 (NIST SP 800-132 approved)
+# Note: argon2-cffi is NOT FIPS-approved; use PBKDF2 or another NIST-approved KDF
 ```
 
 ## FIPS Check Script Requirements

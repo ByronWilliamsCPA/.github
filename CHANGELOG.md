@@ -58,8 +58,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Workflows: CI, PR validation, coverage upload, SLSA provenance, SBOM, security analysis, SonarCloud, ScoreCard, release, publish to PyPI
 - Shared community health files: SECURITY.md, CONTRIBUTING.md, SUPPORT.md, issue templates
 
-[Unreleased]: https://github.com/williaby/.github/compare/2026-04-13...HEAD
-[2026-04-13]: https://github.com/williaby/.github/compare/2026-04-10...2026-04-13
-[2026-04-10]: https://github.com/williaby/.github/compare/2026-04-05...2026-04-10
-[2026-04-05]: https://github.com/williaby/.github/compare/2025-11-23...2026-04-05
-[2025-11-23]: https://github.com/williaby/.github/releases/tag/2025-11-23
+[Unreleased]: https://github.com/ByronWilliamsCPA/.github/compare/2026-04-13...HEAD
+[2026-04-13]: https://github.com/ByronWilliamsCPA/.github/compare/2026-04-10...2026-04-13
+[2026-04-10]: https://github.com/ByronWilliamsCPA/.github/compare/2026-04-05...2026-04-10
+[2026-04-05]: https://github.com/ByronWilliamsCPA/.github/compare/2025-11-23...2026-04-05
+[2025-11-23]: https://github.com/ByronWilliamsCPA/.github/releases/tag/2025-11-23
