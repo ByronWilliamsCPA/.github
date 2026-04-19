@@ -5,11 +5,10 @@
 # Calculates total storage used by container images to estimate GHCR costs
 #
 # Usage:
-#   ./calculate-image-storage.sh [--all|--used|--local]
+#   ./calculate-image-storage.sh [--all|--local|--repo]
 #
 # Options:
 #   --all     Show all images (default)
-#   --used    Show only images currently used by running containers
 #   --local   Scan local docker daemon
 #   --repo    Scan repository docker-compose files
 #
@@ -29,6 +28,15 @@ NC='\033[0m' # No Color
 
 # Default mode
 MODE="${1:---all}"
+
+# Registry counters (populated by --repo/--all scan; initialized here so
+# the recommendation block can reference them regardless of which mode ran)
+dhi_count=0
+chainguard_count=0
+distroless_count=0
+dockerhub_count=0
+ghcr_count=0
+other_count=0
 
 # Function to convert bytes to human-readable format
 bytes_to_human() {
@@ -79,21 +87,16 @@ if [[ "$MODE" == "--all" || "$MODE" == "--local" ]]; then
         # Get all images with sizes
         echo -e "${GREEN}All Images:${NC}"
         echo "─────────────────────────────────────────────────────────────────────────"
-        printf "%-50s %15s %15s\n" "REPOSITORY:TAG" "SIZE" "VIRTUAL SIZE"
+        printf "%-50s %15s\n" "REPOSITORY:TAG" "SIZE"
         echo "─────────────────────────────────────────────────────────────────────────"
 
         total_size=0
         image_count=0
 
-        # Read docker images output
-        while IFS= read -r line; do
-            if [[ "$line" == "REPOSITORY"* ]]; then
+        while IFS=$'\t' read -r repo tag size; do
+            if [[ "$repo" == "REPOSITORY" ]]; then
                 continue  # Skip header
             fi
-
-            repo=$(echo "$line" | awk '{print $1}')
-            tag=$(echo "$line" | awk '{print $2}')
-            size=$(echo "$line" | awk '{print $7}')
 
             # Convert size to bytes for calculation
             size_bytes=0
@@ -178,7 +181,7 @@ if [[ "$MODE" == "--all" || "$MODE" == "--repo" ]]; then
                 if [[ ! "$image" =~ \$\{ ]] && [ -n "$image" ]; then
                     unique_images["$image"]=1
                 fi
-            done < <(grep -oP '^\s*image:\s*\K[^\s#]+' "$file" || true)
+            done < <(awk '/^\s*image:/ {sub(/^\s*image:\s*/, ""); sub(/#.*/, ""); gsub(/[[:space:]]/, ""); if (length > 0) print}' "$file" || true)
         done
 
         echo -e "${GREEN}Unique images referenced in compose files:${NC}"
