@@ -392,7 +392,7 @@ jobs:
 
   # Security gate
   security-gate:
-    name: Security Gate
+    name: Security Gate Validation
     runs-on: ubuntu-latest
     needs: [detect-changes, codeql, dependency-review, python-security, osv-scanner]
     if: always()

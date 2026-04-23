@@ -514,7 +514,7 @@ jobs:
 
   # Validation summary
   validation-summary:
-    name: Validation Summary
+    name: Dependency & Standards Validation
     needs: [pr-metadata, code-quality, tests, breaking-changes, size-labeling]
     runs-on: ubuntu-latest
     if: always()

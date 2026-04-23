@@ -684,32 +684,33 @@ jobs:
           echo "::endgroup::"
 
   # ============================================================================
-  # Summary Job
+  # CI Gate -- aggregates all upstream jobs; must pass for branch protection
   # ============================================================================
-  ci-summary:
-    name: CI Summary
+  ci-gate:
+    name: CI Gate
     runs-on: ubuntu-latest
-    needs: [quality-checks, llm-governance, matrix-testing]
+    needs: [quality-checks, llm-governance, sonarcloud-quality-gate, matrix-testing]
     if: always()
 
     steps:
-      - name: Generate final summary
+      - name: Check CI results
         run: |
-          echo "### CI Pipeline Complete" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "All governance layers checked:" >> $GITHUB_STEP_SUMMARY
-          echo "- Code Quality Checks: ${{ needs.quality-checks.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- LLM Governance Validation: ${{ needs.llm-governance.result }}" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ inputs.enable-sonarcloud }}" == "true" ]; then
-            echo "- SonarCloud Quality Gate: enabled" >> $GITHUB_STEP_SUMMARY
+          is_acceptable() { [[ "$1" == "success" || "$1" == "skipped" ]]; }
+
+          if ! is_acceptable "${{ needs.quality-checks.result }}"; then
+            echo "::error::CI Gate failed: quality-checks is ${{ needs.quality-checks.result }}"
+            exit 1
           fi
-          if [ "${{ inputs.enable-matrix-testing }}" == "true" ]; then
-            echo "- Matrix Testing: ${{ needs.matrix-testing.result }}" >> $GITHUB_STEP_SUMMARY
-            if [ "${{ github.event_name }}" == "pull_request" ]; then
-              echo "  - Strategy: Fast PR testing (Python ${{ inputs.python-versions-pr }})" >> $GITHUB_STEP_SUMMARY
-            else
-              echo "  - Strategy: Comprehensive testing (Python ${{ inputs.python-versions-comprehensive }})" >> $GITHUB_STEP_SUMMARY
-            fi
+          if ! is_acceptable "${{ needs.llm-governance.result }}"; then
+            echo "::error::CI Gate failed: llm-governance is ${{ needs.llm-governance.result }}"
+            exit 1
           fi
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Status: ${{ job.status }}**" >> $GITHUB_STEP_SUMMARY
+          if ! is_acceptable "${{ needs.sonarcloud-quality-gate.result }}"; then
+            echo "::error::CI Gate failed: sonarcloud-quality-gate is ${{ needs.sonarcloud-quality-gate.result }}"
+            exit 1
+          fi
+          if ! is_acceptable "${{ needs.matrix-testing.result }}"; then
+            echo "::error::CI Gate failed: matrix-testing is ${{ needs.matrix-testing.result }}"
+            exit 1
+          fi
+          echo "CI Gate passed"
