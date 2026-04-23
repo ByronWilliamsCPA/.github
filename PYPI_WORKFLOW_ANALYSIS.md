@@ -135,7 +135,7 @@ See workflow-agnostic guide:
 
 1. ✅ **Migrate image_detection immediately**
    - Benefits: Security scanning, reduced maintenance
-   - Risk: Very low (same OIDC mechanism, thoroughly tested)
+   - Risk: Low (same OIDC mechanism, thoroughly tested)
    - Time: 15 minutes
 
 2. ✅ **Test with TestPyPI first**
@@ -223,13 +223,13 @@ Track these metrics post-migration:
 
 ## Conclusion
 
-The org-level reusable PyPI publishing workflow is **production-ready** and provides significant benefits over standalone workflows:
+The org-level reusable PyPI publishing workflow is **production-ready** and provides measurable benefits over standalone workflows:
 
 ✅ **Reduced complexity** - 88% less code per repository
 ✅ **Enhanced security** - Built-in vulnerability scanning
 ✅ **Centralized maintenance** - Update once, all repos benefit
 ✅ **Same reliability** - Identical OIDC publishing mechanism
-✅ **Better visibility** - Comprehensive GitHub step summaries
+✅ **Better visibility** - Detailed GitHub step summaries
 
 **Recommendation**: Migrate `image_detection` repository immediately using the provided documentation and examples.
 

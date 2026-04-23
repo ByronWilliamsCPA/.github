@@ -23,7 +23,7 @@ This document summarizes the four new reusable workflows added to the organizati
 | **When to Use** | Input parsing, file handling | Dependency scanning, code patterns |
 | **Cost** | Higher (CPU intensive) | Lower (quick scans) |
 
-**Recommendation:** Use **both** for comprehensive security coverage.
+**Recommendation:** Use **both** for full security coverage.
 
 ```yaml
 jobs:
@@ -47,7 +47,7 @@ jobs:
 | **Cost** | Free for public repos | Free tier available |
 | **Integration** | PR decoration, quality gates | Coverage diff |
 
-**Recommendation:** Use **SonarCloud** for comprehensive quality tracking, or **Qlty** for lightweight coverage-only needs.
+**Recommendation:** Use **SonarCloud** for quality tracking, or **Qlty** for lightweight coverage-only needs.
 
 ```yaml
 # Option 1: Comprehensive (SonarCloud)
@@ -261,7 +261,7 @@ Each workflow has comprehensive documentation:
 - **Enhanced Error Handling:** Better failure messages
 - **Configurable Inputs:** Flexible for different projects
 - **Graceful Degradation:** Skip if tokens missing
-- **Comprehensive Reporting:** GitHub step summaries
+- **Detailed Reporting:** GitHub step summaries
 
 ## Support
 

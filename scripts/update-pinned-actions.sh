@@ -39,8 +39,9 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 usage() {
+    local exit_code="${1:-0}"
     sed -n '/^# Usage:/,/^# Requirements:/p' "$0" | sed 's/^# //' | sed 's/^#//'
-    exit 0
+    exit "$exit_code"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -49,13 +50,13 @@ while [[ $# -gt 0 ]]; do
         --workflows-dir)
             if [[ $# -lt 2 || -z "${2:-}" ]]; then
                 echo -e "${RED}ERROR: --workflows-dir requires a directory path${NC}"
-                usage
+                usage 1
             fi
             WORKFLOWS_DIR="$2"
             shift 2
             ;;
-        -h|--help)         usage ;;
-        *) echo -e "${RED}Unknown option: $1${NC}"; usage ;;
+        -h|--help)         usage 0 ;;
+        *) echo -e "${RED}Unknown option: $1${NC}"; usage 1 ;;
     esac
 done
 

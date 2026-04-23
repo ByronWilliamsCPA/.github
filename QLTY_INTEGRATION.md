@@ -8,7 +8,7 @@ Qlty Cloud is a centralized code quality platform that:
 - ✅ Aggregates quality metrics across all repositories
 - ✅ Provides unified quality dashboards
 - ✅ Enforces organization-wide quality standards
-- ✅ Integrates with GitHub Actions seamlessly
+- ✅ Integrates with GitHub Actions
 - ✅ Supports multiple languages and tools
 
 ## 📋 Prerequisites

@@ -6,7 +6,7 @@ This directory contains reusable GitHub Actions workflow templates for the Byron
 
 ### 1. Python CI Pipeline (`python-ci.yml`)
 
-Comprehensive continuous integration workflow featuring:
+Full continuous integration workflow featuring:
 - **UV dependency management** with optimized caching
 - **Multi-version Python testing** (3.10-3.14)
 - **MyPy type checking** with strict mode
@@ -41,7 +41,7 @@ Secure coverage reporting workflow:
 
 ### 3. Security Analysis (`python-security-analysis.yml`)
 
-Comprehensive security scanning suite:
+Full security scanning suite:
 - **CodeQL analysis** with security-extended queries
 - **Bandit** for Python-specific security issues
 - **Safety** for dependency vulnerability scanning
