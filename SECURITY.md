@@ -13,16 +13,12 @@ Instead, use GitHub’s built-in Security advisories feature:
 All reports will be kept confidential. We commit to acknowledging receipt and
 next steps via the Security tab.
 
-## Supported Versions  
+## Supported Versions
 
-The following table shows which major releases we support. For full upgrade
-paths and end-of-life schedules, see our [Upgrade Guide][upgrade-guide].
-
-| Version  | Status       |
-|----------|--------------|
-| v3.x     | Supported    |
-| v2.x     | Security-only support |
-| v1.x     | End of life  |
+This repository is a shared workflow library with continuous deployment. There
+are no numbered releases; the `main` branch is always the supported version.
+Callers that pin to a specific commit SHA will receive security fixes when they
+update their pin. All other commits may not contain the latest security patches.
 
 ## Security Practices  
 
@@ -62,6 +58,4 @@ credit will be anonymous.
 This policy is based on community best practices and has drawn on elements from
 multiple sources within our organization’s previous drafts.
 
-_Last updated: November 16, 2025_  
-
-[upgrade-guide]: https://github.com/ByronWilliamsCPA/.github/blob/main/UPGRADE_GUIDE.md  
+Last updated: November 16, 2025
