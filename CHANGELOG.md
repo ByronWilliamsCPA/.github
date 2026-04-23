@@ -12,8 +12,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `CHANGELOG.md`: required OpenSSF baseline file
 - Actionlint static analysis for GitHub Actions workflows via `.qlty/qlty.toml`
 - `.yamllint` configuration file for YAML style enforcement
-- `tests/update-pinned-actions.bats`: 34 automated tests covering dry-run, apply mode, annotated tag resolution, and sandbox PATH validation for the action-pinning script
+- `tests/update-pinned-actions.bats`: 38 automated tests covering dry-run, apply mode, annotated tag resolution, and sandbox PATH validation for the action-pinning script
 - `tests/libs/bats-core`, `tests/libs/bats-support`, `tests/libs/bats-assert` submodules for test infrastructure
+- `.github/workflows/shell-tests.yml`: CI workflow that runs bats tests on pushes and pull requests touching `scripts/`, `tests/`, or the workflow file itself
 
 ### Changed
 

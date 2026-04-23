@@ -74,7 +74,7 @@ _apply_jq_flag() {
     shift
   done
   if [[ -n "$filter" ]]; then
-    echo "$json" | jq -r "$filter" 2>/dev/null || true
+    echo "$json" | jq -r "$filter"
   else
     echo "$json"
   fi

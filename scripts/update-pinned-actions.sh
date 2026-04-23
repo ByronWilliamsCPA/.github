@@ -182,7 +182,7 @@ while IFS= read -r entry; do
     else
         printf "%-55s %-10s → %b\n" "$full_action" "$current_version" "${YELLOW}${latest_version}  (${new_sha:0:12}...)${NC}"
         printf '%s|%s|%s|%s|%s\n' \
-            "$full_action" "$current_sha" "$current_version" "$new_sha" "$latest_version" \
+            "$full_action" "$current_sha" "$current_version" "$new_sha" "${latest_version//|/}" \
             >> "$CHANGE_LOG"
         ((UPDATES++)) || true
     fi
@@ -236,11 +236,13 @@ echo ""
 declare -A FILES_CHANGED
 
 while IFS='|' read -r full_action current_sha current_version new_sha latest_version; do
+    _pat_ver="${current_version//./\\.}"
+    _rep_ver="${latest_version//\\/\\\\}"; _rep_ver="${_rep_ver//&/\\&}"
     # Find every workflow file containing this action+sha and update it
     while IFS= read -r wf_file; do
         tmp_wf=$(mktemp)
         sed \
-            "s|${full_action}@${current_sha}[[:space:]]*#[[:space:]]*${current_version}|${full_action}@${new_sha}  # ${latest_version}|g" \
+            "s|${full_action}@${current_sha}[[:space:]]*#[[:space:]]*${_pat_ver}|${full_action}@${new_sha}  # ${_rep_ver}|g" \
             "$wf_file" > "$tmp_wf"
         mv "$tmp_wf" "$wf_file"
         FILES_CHANGED["$wf_file"]=1

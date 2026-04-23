@@ -19,10 +19,12 @@ on:
     paths:
       - 'scripts/**'
       - 'tests/**'
+      - '.github/workflows/shell-tests.yml'
   pull_request:
     paths:
       - 'scripts/**'
       - 'tests/**'
+      - '.github/workflows/shell-tests.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -47,9 +49,6 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
         with:
           submodules: recursive
-
-      - name: Install jq
-        run: sudo apt-get install -y --no-install-recommends jq
 
       - name: Run bats tests
         run: ./tests/libs/bats-core/bin/bats tests/update-pinned-actions.bats
