@@ -27,9 +27,9 @@ contributions of knowledge, bug reports, and fixes are highly appreciated.
 
 ## Supported Versions
 
-Support is typically provided only for actively maintained releases.
-Consult the [Supported Versions](SECURITY.md#supported-versions) section for
-details on which versions are in scope.
+This repository is a shared workflow library with continuous deployment; the
+`main` branch is always the supported version. See [SECURITY.md](SECURITY.md)
+for the full support policy.
 
 ## Response Expectations
 
@@ -42,4 +42,4 @@ details on which versions are in scope.
 We welcome and encourage contributions to improve our support processes.
 Feel free to submit pull requests against this document or associated workflows.
 
-_Last updated: November 16, 2025_  
+Last updated: April 23, 2026
