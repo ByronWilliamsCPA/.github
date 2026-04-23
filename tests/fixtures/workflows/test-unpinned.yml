@@ -1,0 +1,20 @@
+name: Test Unpinned Actions
+# Fixture contains mixed entries: one pinned step (used to verify no false
+# positive) plus two unpinned steps (tag ref and branch ref) that the script
+# should flag.
+
+on:
+  push:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (pinned)
+        uses: actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  # v4.1.0
+
+      - name: Cache (unpinned - uses tag, not SHA)
+        uses: actions/cache@v3
+
+      - name: Setup Node (unpinned - uses branch)
+        uses: actions/setup-node@main

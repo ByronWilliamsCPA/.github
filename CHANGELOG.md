@@ -10,6 +10,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - `scripts/update-pinned-actions.sh`: developer tool to scan workflow files for outdated pinned action SHAs and propose or apply updates within the same major version
 - `CHANGELOG.md`: required OpenSSF baseline file
+- Actionlint static analysis for GitHub Actions workflows via `.qlty/qlty.toml`
+- `.yamllint` configuration file for YAML style enforcement
+- `tests/update-pinned-actions.bats`: 38 automated tests covering dry-run, apply mode, annotated tag resolution, and sandbox PATH validation for the action-pinning script
+- `tests/libs/bats-core`, `tests/libs/bats-support`, `tests/libs/bats-assert` submodules for test infrastructure
+- `.github/workflows/shell-tests.yml`: CI workflow that runs bats tests on pushes and pull requests touching `scripts/`, `tests/`, or the workflow file itself
 
 ### Changed
 
@@ -18,6 +23,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Rename `Validation Summary` to `Dependency & Standards Validation` in `python-pr-validation.yml` to match CI-016 branch protection context
 - Align `workflow-templates/python-security-analysis.yml` job display names with renamed check context
 - Replace em-dash with semicolon in `SUPPORT.md`
+- Prose cleanup across 18 documentation files to remove AI-pattern language and improve plain-language clarity
+
+### Fixed
+
+- `scripts/update-pinned-actions.sh`: `usage()` function now exits with code 1 instead of 0 on invalid usage
 
 ### Security
 

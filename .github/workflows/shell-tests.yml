@@ -1,0 +1,54 @@
+# ============================================================================
+# Shell Script Tests
+# ============================================================================
+# Runs bats tests for scripts/ whenever shell scripts or tests change.
+#
+# Requirements:
+#   - bats-core, bats-support, bats-assert submodules in tests/libs/
+#   - jq installed (used by stub helpers in tests)
+#
+# Run locally:
+#   git submodule update --init --recursive
+#   ./tests/libs/bats-core/bin/bats tests/update-pinned-actions.bats
+# ============================================================================
+
+name: Shell Tests
+
+on:
+  push:
+    paths:
+      - 'scripts/**'
+      - 'tests/**'
+      - '.github/workflows/shell-tests.yml'
+  pull_request:
+    paths:
+      - 'scripts/**'
+      - 'tests/**'
+      - '.github/workflows/shell-tests.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  bats:
+    name: Bats Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@6c3c2f2c1c457b00c10c4848d6f5491db3b629df  # v2.18.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+        with:
+          submodules: recursive
+
+      - name: Run bats tests
+        run: ./tests/libs/bats-core/bin/bats tests/update-pinned-actions.bats

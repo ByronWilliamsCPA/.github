@@ -39,8 +39,9 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 
 usage() {
+    local exit_code="${1:-0}"
     sed -n '/^# Usage:/,/^# Requirements:/p' "$0" | sed 's/^# //' | sed 's/^#//'
-    exit 0
+    exit "$exit_code"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -49,13 +50,13 @@ while [[ $# -gt 0 ]]; do
         --workflows-dir)
             if [[ $# -lt 2 || -z "${2:-}" ]]; then
                 echo -e "${RED}ERROR: --workflows-dir requires a directory path${NC}"
-                usage
+                usage 1
             fi
             WORKFLOWS_DIR="$2"
             shift 2
             ;;
-        -h|--help)         usage ;;
-        *) echo -e "${RED}Unknown option: $1${NC}"; usage ;;
+        -h|--help)         usage 0 ;;
+        *) echo -e "${RED}Unknown option: $1${NC}"; usage 1 ;;
     esac
 done
 
@@ -181,7 +182,7 @@ while IFS= read -r entry; do
     else
         printf "%-55s %-10s → %b\n" "$full_action" "$current_version" "${YELLOW}${latest_version}  (${new_sha:0:12}...)${NC}"
         printf '%s|%s|%s|%s|%s\n' \
-            "$full_action" "$current_sha" "$current_version" "$new_sha" "$latest_version" \
+            "$full_action" "$current_sha" "$current_version" "$new_sha" "${latest_version//|/}" \
             >> "$CHANGE_LOG"
         ((UPDATES++)) || true
     fi
@@ -235,11 +236,13 @@ echo ""
 declare -A FILES_CHANGED
 
 while IFS='|' read -r full_action current_sha current_version new_sha latest_version; do
+    _pat_ver="${current_version//./\\.}"
+    _rep_ver="${latest_version//\\/\\\\}"; _rep_ver="${_rep_ver//&/\\&}"
     # Find every workflow file containing this action+sha and update it
     while IFS= read -r wf_file; do
         tmp_wf=$(mktemp)
         sed \
-            "s|${full_action}@${current_sha}[[:space:]]*#[[:space:]]*${current_version}|${full_action}@${new_sha}  # ${latest_version}|g" \
+            "s|${full_action}@${current_sha}[[:space:]]*#[[:space:]]*${_pat_ver}|${full_action}@${new_sha}  # ${_rep_ver}|g" \
             "$wf_file" > "$tmp_wf"
         mv "$tmp_wf" "$wf_file"
         FILES_CHANGED["$wf_file"]=1

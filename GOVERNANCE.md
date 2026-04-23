@@ -12,7 +12,7 @@ documentation, and community forums.
 |------------------|---------------------------------------------------------|
 | **Project Lead** | Has final authority on project decisions, oversees      |
 |                  | overall direction, and resolves conflicts.              |
-| **Core Team**    | Experienced contributors empowered to review            |
+| **Core Team**    | Experienced contributors authorized to review           |
 |                  | contributions, merge PRs, and mentor others.            |
 | **Maintainers**  | Individuals responsible for daily maintenance tasks,    |
 |                  | issue triage, and minor releases.                       |
