@@ -388,7 +388,7 @@ jobs:
 
   # Security gate validation
   security-gate:
-    name: Security Gate
+    name: Security Gate Validation
     runs-on: ubuntu-latest
     needs:
       - detect-changes
@@ -426,7 +426,7 @@ jobs:
 
   # Minimal security gate when security scanning is disabled
   security-gate:
-    name: Security Gate
+    name: Security Gate Validation
     runs-on: ubuntu-latest
     steps:
       - name: Validate Configuration

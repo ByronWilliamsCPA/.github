@@ -514,7 +514,7 @@ jobs:
 
   # Validation summary
   validation-summary:
-    name: Validation Summary
+    name: Dependency & Standards Validation
     needs: [pr-metadata, code-quality, tests, breaking-changes, size-labeling]
     runs-on: ubuntu-latest
     if: always()
@@ -522,7 +522,7 @@ jobs:
     steps:
       - name: Generate validation summary
         run: |
-          echo "## PR Validation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## Dependency & Standards Validation" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
