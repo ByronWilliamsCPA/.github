@@ -9,6 +9,10 @@
 # We install a fake "gh" binary first on PATH. The stub must honour the --jq
 # flag used by the script; it does so by piping the raw JSON through jq.
 
+# Prerequisite: run `git submodule update --init --recursive` before running
+# these tests to populate tests/libs/bats-core, tests/libs/bats-support,
+# and tests/libs/bats-assert.
+
 # Load bats helpers
 load 'libs/bats-support/load'
 load 'libs/bats-assert/load'
@@ -378,7 +382,8 @@ STUB
 @test "apply mode: replaces old SHA with new SHA in workflow file" {
   _write_gh_stub_with_update
 
-  apply_dir="$(mktemp -d)"
+  apply_dir="$TEST_TMPDIR/apply_workdir"
+  mkdir -p "$apply_dir"
   cp "$FIXTURES/test-ci.yml" "$apply_dir/"
 
   run "$SCRIPT" --apply --workflows-dir "$apply_dir"
@@ -388,13 +393,13 @@ STUB
   run grep "$OLD_CHECKOUT_SHA" "$apply_dir/test-ci.yml"
   assert_failure
 
-  rm -rf "$apply_dir"
 }
 
 @test "apply mode: new SHA is written into the workflow file" {
   _write_gh_stub_with_update
 
-  apply_dir="$(mktemp -d)"
+  apply_dir="$TEST_TMPDIR/apply_workdir"
+  mkdir -p "$apply_dir"
   cp "$FIXTURES/test-ci.yml" "$apply_dir/"
 
   run "$SCRIPT" --apply --workflows-dir "$apply_dir"
@@ -403,31 +408,30 @@ STUB
   run grep "$NEW_CHECKOUT_SHA" "$apply_dir/test-ci.yml"
   assert_success
 
-  rm -rf "$apply_dir"
 }
 
 @test "apply mode: output confirms files were updated" {
   _write_gh_stub_with_update
 
-  apply_dir="$(mktemp -d)"
+  apply_dir="$TEST_TMPDIR/apply_workdir"
+  mkdir -p "$apply_dir"
   cp "$FIXTURES/test-ci.yml" "$apply_dir/"
 
   run "$SCRIPT" --apply --workflows-dir "$apply_dir"
   assert_output --partial "Files updated"
 
-  rm -rf "$apply_dir"
 }
 
 @test "apply mode: output contains 'Applying changes'" {
   _write_gh_stub_with_update
 
-  apply_dir="$(mktemp -d)"
+  apply_dir="$TEST_TMPDIR/apply_workdir"
+  mkdir -p "$apply_dir"
   cp "$FIXTURES/test-ci.yml" "$apply_dir/"
 
   run "$SCRIPT" --apply --workflows-dir "$apply_dir"
   assert_output --partial "Applying changes"
 
-  rm -rf "$apply_dir"
 }
 
 # ---------------------------------------------------------------------------
@@ -441,7 +445,7 @@ STUB
   local sandbox="$TEST_TMPDIR/sandbox_bin"
   mkdir -p "$sandbox"
   # Symlink core tools explicitly (avoids pulling in /usr/bin/gh via wildcard)
-  for tool in bash sed grep awk wc sort uniq mktemp tr printf cut head tail cp mv rm; do
+  for tool in bash sed grep awk wc sort uniq mktemp tr printf cut head tail cp mv rm dirname; do
     local src
     src="$(command -v "$tool" 2>/dev/null)" || true
     if [[ -n "$src" && -x "$src" ]]; then
@@ -457,7 +461,7 @@ STUB
 @test "gh not found error message mentions gh CLI" {
   local sandbox="$TEST_TMPDIR/sandbox_bin2"
   mkdir -p "$sandbox"
-  for tool in bash sed grep awk wc sort uniq mktemp tr printf cut head tail cp mv rm; do
+  for tool in bash sed grep awk wc sort uniq mktemp tr printf cut head tail cp mv rm dirname; do
     local src
     src="$(command -v "$tool" 2>/dev/null)" || true
     if [[ -n "$src" && -x "$src" ]]; then
@@ -494,4 +498,112 @@ STUB
   run "$SCRIPT" --workflows-dir "$TEST_TMPDIR"
   assert_success
   assert_output --partial "SKIP"
+}
+
+# ---------------------------------------------------------------------------
+# Group 6: Extended coverage (annotated tags, multi-file apply, no-op apply)
+# ---------------------------------------------------------------------------
+
+# Stub for annotated tag resolution.
+# First API call (refs/tags) returns type=="tag" with an intermediate SHA.
+# Second API call (git/tags/<sha>) dereferences to the final commit SHA.
+_write_gh_stub_annotated_tag() {
+  local annotated_sha="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  local commit_sha="$NEW_CHECKOUT_SHA"
+  cat > "$TEST_TMPDIR/bin/gh" <<STUB
+#!/usr/bin/env bash
+
+if [[ "\$1 \$2" == "auth status" ]]; then exit 0; fi
+
+if [[ "\$1" == "release" && "\$2" == "list" ]]; then
+  repo_value=""
+  args=("\$@")
+  for i in "\${!args[@]}"; do
+    if [[ "\${args[\$i]}" == "--repo" ]]; then
+      repo_value="\${args[\$((i+1))]}"
+      break
+    fi
+  done
+  if [[ "\$repo_value" == "actions/checkout" ]]; then
+    _apply_jq_flag '[{"tagName":"v4.2.0"}]' "\$@"
+  else
+    _apply_jq_flag '[]' "\$@"
+  fi
+  exit 0
+fi
+
+if [[ "\$1" == "api" ]]; then
+  endpoint="\$2"
+  if [[ "\$endpoint" == *"refs/tags/v4.2.0"* ]]; then
+    _apply_jq_flag '{"object":{"type":"tag","sha":"${annotated_sha}"}}' "\$@"
+    exit 0
+  fi
+  if [[ "\$endpoint" == *"git/tags/"* ]]; then
+    _apply_jq_flag '{"object":{"sha":"${commit_sha}"}}' "\$@"
+    exit 0
+  fi
+  _apply_jq_flag '{}' "\$@"
+  exit 0
+fi
+
+exit 0
+STUB
+  chmod +x "$TEST_TMPDIR/bin/gh"
+}
+
+@test "annotated tag: resolved commit SHA is written into the workflow file" {
+  _write_gh_stub_annotated_tag
+
+  apply_dir="$TEST_TMPDIR/apply_workdir"
+  mkdir -p "$apply_dir"
+  cp "$FIXTURES/test-ci.yml" "$apply_dir/"
+
+  run "$SCRIPT" --apply --workflows-dir "$apply_dir"
+  assert_success
+
+  run grep "$NEW_CHECKOUT_SHA" "$apply_dir/test-ci.yml"
+  assert_success
+}
+
+@test "apply mode: updates SHAs in multiple workflow files" {
+  _write_gh_stub_with_update
+
+  apply_dir="$TEST_TMPDIR/apply_workdir"
+  mkdir -p "$apply_dir"
+  cp "$FIXTURES/test-ci.yml" "$apply_dir/"
+  cp "$FIXTURES/test-security.yml" "$apply_dir/"
+
+  run "$SCRIPT" --apply --workflows-dir "$apply_dir"
+  assert_success
+
+  run grep "$NEW_CHECKOUT_SHA" "$apply_dir/test-ci.yml"
+  assert_success
+  run grep "$NEW_CHECKOUT_SHA" "$apply_dir/test-security.yml"
+  assert_success
+}
+
+@test "apply mode: updated file contains version comment for new release" {
+  _write_gh_stub_with_update
+
+  apply_dir="$TEST_TMPDIR/apply_workdir"
+  mkdir -p "$apply_dir"
+  cp "$FIXTURES/test-ci.yml" "$apply_dir/"
+
+  run "$SCRIPT" --apply --workflows-dir "$apply_dir"
+  assert_success
+
+  run grep "v4.2.0" "$apply_dir/test-ci.yml"
+  assert_success
+}
+
+@test "apply mode: exit 0 and no 'Applying changes' when nothing to update" {
+  # Default stub returns no releases, so there is nothing to update.
+
+  apply_dir="$TEST_TMPDIR/apply_workdir"
+  mkdir -p "$apply_dir"
+  cp "$FIXTURES/test-ci.yml" "$apply_dir/"
+
+  run "$SCRIPT" --apply --workflows-dir "$apply_dir"
+  assert_success
+  refute_output --partial "Applying changes"
 }
