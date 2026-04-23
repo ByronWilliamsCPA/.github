@@ -17,8 +17,9 @@ next steps via the Security tab.
 
 This repository is a shared workflow library with continuous deployment. There
 are no numbered releases; the `main` branch is always the supported version.
-Callers that pin to a specific commit SHA will receive security fixes when they
-update their pin. All other commits may not contain the latest security patches.
+Callers that pin to a specific commit SHA must update their pin to a newer
+commit on `main` to receive security fixes. Older commits may not contain the
+latest security patches.
 
 ## Security Practices
 
@@ -38,7 +39,7 @@ We track and publish advisories for all confirmed vulnerabilities:
 
 1. **Request a CVE** for issues rated Moderate or above.
 2. **Draft and publish an advisory** in the Security tab.
-3. **Include remediation steps** in release notes and upgrade guide.
+3. **Include remediation steps** in the Security Advisory and CHANGELOG.
 
 ## Response Timeline
 
