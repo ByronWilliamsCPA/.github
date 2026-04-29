@@ -43,6 +43,11 @@ on:
         required: false
         default: 5
 
+    secrets:
+      SCORECARD_TOKEN:
+        description: 'Fine-grained PAT with Administration:Read for Branch-Protection check'
+        required: false
+
 permissions:
   # Needed to upload the results to code-scanning dashboard
   security-events: write
@@ -75,8 +80,8 @@ jobs:
         with:
           results_file: scorecard-results.sarif
           results_format: sarif
-          # Publish results to OpenSSF REST API for badge generation
           publish_results: ${{ inputs.publish-results }}
+          repo_token: ${{ secrets.SCORECARD_TOKEN }}
 
       - name: Upload Scorecard SARIF to Security tab
         if: ${{ inputs.upload-sarif }}
