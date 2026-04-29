@@ -205,7 +205,7 @@ jobs:
           echo "Generating Software Bill of Materials..."
           pip install cyclonedx-bom==7.3.0
           uv export --format requirements-txt --output-file requirements-all.txt --no-hashes
-          cyclonedx-py requirements requirements-all.txt --of json -o dist/sbom.json
+          cyclonedx-py requirements requirements-all.txt --of json --output-file dist/sbom.json
           rm -f requirements-all.txt
           echo "SBOM generated: dist/sbom.json"
 
