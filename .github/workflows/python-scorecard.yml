@@ -52,8 +52,6 @@ permissions:
   contents: read
   # Required for workflow_run event
   actions: read
-  # Needed for Branch-Protection check to read classic branch protection rules
-  administration: read
 
 jobs:
   scorecard:
