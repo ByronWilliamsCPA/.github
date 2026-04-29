@@ -224,7 +224,7 @@ jobs:
           github_token: ${{ github.token }}
           git_committer_name: "github-actions[bot]"
           git_committer_email: "github-actions[bot]@users.noreply.github.com"
-          force: ${{ inputs.force-release }}
+          force_level: ${{ inputs.force-release }}
 
       - name: Sign artifacts with Sigstore
         if: ${{ inputs.sign-artifacts && (steps.semantic-release.outputs.released == 'true' || !inputs.semantic-release) }}
