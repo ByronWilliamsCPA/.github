@@ -71,7 +71,7 @@ jobs:
       - name: Generate SBOM (Software Bill of Materials)
         run: |
           echo "📋 Generating SBOM in CycloneDX format..."
-          uv pip install cyclonedx-bom==4.6.1
+          uv pip install cyclonedx-bom==7.3.0
 
           # Generate runtime SBOM (production dependencies)
           uv pip compile pyproject.toml --output-file requirements-runtime.txt --no-dev
@@ -140,7 +140,7 @@ jobs:
           name: ${{  needs.provenance.outputs.provenance-name  }}
 
       - name: Install Cosign
-        uses: sigstore/cosign-installer@v3.7.0
+        uses: sigstore/cosign-installer@cad07c2e89fa2edd6e2d7bab4c1aa38e53f76003  # v4.1.1
 
       - name: Sign artifacts with Cosign
         env:

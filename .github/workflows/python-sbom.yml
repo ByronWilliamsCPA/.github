@@ -111,7 +111,7 @@ jobs:
         run: python -m pip install --upgrade pip
 
       - name: Install cyclonedx-bom
-        run: pip install cyclonedx-bom==4.6.1
+        run: pip install cyclonedx-bom==7.3.0
 
       - name: Install dependencies
         run: uv sync --frozen
@@ -120,7 +120,7 @@ jobs:
         run: |
           cyclonedx-py environment \
             --output-format JSON \
-            --outfile "$GITHUB_WORKSPACE/sbom-runtime.json" \
+            --output-file "$GITHUB_WORKSPACE/sbom-runtime.json" \
             .venv/bin/python3
           if [ ! -s "$GITHUB_WORKSPACE/sbom-runtime.json" ]; then
             echo "::error::sbom-runtime.json is missing or empty in $GITHUB_WORKSPACE"
