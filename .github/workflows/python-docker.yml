@@ -164,11 +164,6 @@ on:
         description: 'Image digest'
         value: ${{ jobs.build.outputs.digest }}
 
-# Cancel in-progress runs for same PR/branch
-concurrency:
-  group: ${{ github.workflow }}-docker-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
 permissions:
   contents: read
   packages: write
