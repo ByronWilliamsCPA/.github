@@ -143,11 +143,6 @@ on:
         required: false
         default: true
 
-# Cancel in-progress runs for same PR
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
 permissions:
   contents: read
   pull-requests: write
