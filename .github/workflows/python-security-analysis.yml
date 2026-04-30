@@ -405,21 +405,26 @@ jobs:
 
     steps:
       - name: Validate Security Results
+        env:
+          RESULT_CODEQL: ${{ needs.codeql.result }}
+          RESULT_DEP_REVIEW: ${{ needs.dependency-review.result }}
+          RESULT_PYTHON_SECURITY: ${{ needs.python-security.result }}
+          RESULT_OSV_SCANNER: ${{ needs.osv-scanner.result }}
         run: |
           echo "🔒 Security Analysis Results:"
-          echo "CodeQL: ${{ needs.codeql.result }}"
-          echo "Dependency Review: ${{ needs.dependency-review.result }}"
-          echo "Python Security: ${{ needs.python-security.result }}"
-          echo "OSV Scanner: ${{ needs.osv-scanner.result }}"
+          echo "CodeQL: $RESULT_CODEQL"
+          echo "Dependency Review: $RESULT_DEP_REVIEW"
+          echo "Python Security: $RESULT_PYTHON_SECURITY"
+          echo "OSV Scanner: $RESULT_OSV_SCANNER"
 
           is_acceptable() {
             [[ "$1" == "success" || "$1" == "skipped" ]]
           }
 
-          if is_acceptable "${{ needs.codeql.result }}" && \
-             is_acceptable "${{ needs.dependency-review.result }}" && \
-             is_acceptable "${{ needs.python-security.result }}" && \
-             is_acceptable "${{ needs.osv-scanner.result }}"; then
+          if is_acceptable "$RESULT_CODEQL" && \
+             is_acceptable "$RESULT_DEP_REVIEW" && \
+             is_acceptable "$RESULT_PYTHON_SECURITY" && \
+             is_acceptable "$RESULT_OSV_SCANNER"; then
             echo "✅ Security gate passed"
             echo "🔐 All security checks completed successfully"
           else

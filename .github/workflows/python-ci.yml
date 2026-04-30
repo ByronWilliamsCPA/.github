@@ -557,8 +557,9 @@ jobs:
         if: ${{ steps.check-tags.outputs.critical_tags > 0 }}
         env:
           SRC_DIR: ${{ inputs.source-directory }}
+          CRITICAL_TAGS: ${{ steps.check-tags.outputs.critical_tags }}
         run: |
-          echo "::error::PR blocked: Found ${{ steps.check-tags.outputs.critical_tags }} unverified #CRITICAL production risk tags"
+          echo "::error::PR blocked: Found $CRITICAL_TAGS unverified #CRITICAL production risk tags"
           echo ""
           echo "Please verify and remove these tags before merging:"
           grep -rn "#CRITICAL" --include="*.py" "$SRC_DIR"/ || true
@@ -570,8 +571,9 @@ jobs:
         if: ${{ inputs.fail-on-llm-tags && fromJSON(steps.check-tags.outputs.llm_tags) > 0 }}
         env:
           SRC_DIR: ${{ inputs.source-directory }}
+          LLM_TAGS: ${{ steps.check-tags.outputs.llm_tags }}
         run: |
-          echo "::error::PR blocked: Found ${{ steps.check-tags.outputs.llm_tags }} LLM debt tags"
+          echo "::error::PR blocked: Found $LLM_TAGS LLM debt tags"
           echo ""
           echo "Please address LLM debt before merging:"
           grep -rn "#LLM-" --include="*.py" "$SRC_DIR"/ || true
@@ -657,9 +659,10 @@ jobs:
       - name: Quality Gate Result
         env:
           SONAR_PROJECT_KEY: ${{ inputs.sonarcloud-project-key }}
+          QUALITY_GATE_STATUS: ${{ steps.quality-gate.outputs.quality-gate-status }}
         run: |
           echo "::group::Quality Gate Status"
-          echo "Quality Gate Status: ${{ steps.quality-gate.outputs.quality-gate-status }}"
+          echo "Quality Gate Status: $QUALITY_GATE_STATUS"
           echo "View detailed results: https://sonarcloud.io/project/overview?id=$SONAR_PROJECT_KEY"
           echo "::endgroup::"
 
@@ -715,8 +718,9 @@ jobs:
       - name: Run tests
         env:
           SRC_DIR: ${{ inputs.source-directory }}
+          PYTHON_VERSION: ${{ matrix.python-version }}
         run: |
-          echo "::group::Testing on Python ${{ matrix.python-version }}"
+          echo "::group::Testing on Python $PYTHON_VERSION"
           uv run pytest \
             --cov="$SRC_DIR" \
             --cov-report=term-missing \
@@ -734,27 +738,33 @@ jobs:
 
     steps:
       - name: Check CI results
+        env:
+          RESULT_CHECK_SECRETS: ${{ needs.check-secrets.result }}
+          RESULT_QUALITY_CHECKS: ${{ needs.quality-checks.result }}
+          RESULT_LLM_GOVERNANCE: ${{ needs.llm-governance.result }}
+          RESULT_SONARCLOUD: ${{ needs.sonarcloud-quality-gate.result }}
+          RESULT_MATRIX_TESTING: ${{ needs.matrix-testing.result }}
         run: |
           is_acceptable() { [[ "$1" == "success" || "$1" == "skipped" ]]; }
 
-          if ! is_acceptable "${{ needs.check-secrets.result }}"; then
-            echo "::error::CI Gate failed: check-secrets is ${{ needs.check-secrets.result }}"
+          if ! is_acceptable "$RESULT_CHECK_SECRETS"; then
+            echo "::error::CI Gate failed: check-secrets is $RESULT_CHECK_SECRETS"
             exit 1
           fi
-          if ! is_acceptable "${{ needs.quality-checks.result }}"; then
-            echo "::error::CI Gate failed: quality-checks is ${{ needs.quality-checks.result }}"
+          if ! is_acceptable "$RESULT_QUALITY_CHECKS"; then
+            echo "::error::CI Gate failed: quality-checks is $RESULT_QUALITY_CHECKS"
             exit 1
           fi
-          if ! is_acceptable "${{ needs.llm-governance.result }}"; then
-            echo "::error::CI Gate failed: llm-governance is ${{ needs.llm-governance.result }}"
+          if ! is_acceptable "$RESULT_LLM_GOVERNANCE"; then
+            echo "::error::CI Gate failed: llm-governance is $RESULT_LLM_GOVERNANCE"
             exit 1
           fi
-          if ! is_acceptable "${{ needs.sonarcloud-quality-gate.result }}"; then
-            echo "::error::CI Gate failed: sonarcloud-quality-gate is ${{ needs.sonarcloud-quality-gate.result }}"
+          if ! is_acceptable "$RESULT_SONARCLOUD"; then
+            echo "::error::CI Gate failed: sonarcloud-quality-gate is $RESULT_SONARCLOUD"
             exit 1
           fi
-          if ! is_acceptable "${{ needs.matrix-testing.result }}"; then
-            echo "::error::CI Gate failed: matrix-testing is ${{ needs.matrix-testing.result }}"
+          if ! is_acceptable "$RESULT_MATRIX_TESTING"; then
+            echo "::error::CI Gate failed: matrix-testing is $RESULT_MATRIX_TESTING"
             exit 1
           fi
           echo "CI Gate passed"

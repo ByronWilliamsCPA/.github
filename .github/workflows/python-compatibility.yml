@@ -252,14 +252,16 @@ jobs:
           COVERAGE_REPORT: ${{ inputs.coverage-report }}
           TEST_COMMAND: ${{ inputs.test-command }}
           SRC_DIR: ${{ inputs.source-directory }}
+          MATRIX_PYTHON: ${{ matrix.python }}
+          MATRIX_OS: ${{ matrix.os }}
         run: |
-          echo "Running tests on Python ${{ matrix.python }} (${{ matrix.os }})..."
+          echo "Running tests on Python $MATRIX_PYTHON ($MATRIX_OS)..."
 
           if [ "$COVERAGE_REPORT" == "true" ]; then
             # shellcheck disable=SC2086
             uv run $TEST_COMMAND \
               --cov="$SRC_DIR" \
-              --cov-report=xml:coverage-${{ matrix.python }}-${{ matrix.os }}.xml \
+              --cov-report=xml:coverage-${MATRIX_PYTHON}-${MATRIX_OS}.xml \
               --cov-report=term-missing
           else
             # shellcheck disable=SC2086
@@ -287,17 +289,22 @@ jobs:
     steps:
       - name: Set result output
         id: result
-        run: echo "result=${{ needs.test-matrix.result }}" >> $GITHUB_OUTPUT
+        env:
+          TEST_MATRIX_RESULT: ${{ needs.test-matrix.result }}
+        run: echo "result=$TEST_MATRIX_RESULT" >> $GITHUB_OUTPUT
 
       - name: Generate compatibility matrix summary
         env:
           SKIP_ON_DRAFT: ${{ inputs.skip-on-draft }}
+          GH_PR_DRAFT: ${{ github.event.pull_request.draft }}
+          BUILD_MATRIX: ${{ needs.build-matrix.outputs.matrix }}
+          TEST_MATRIX_RESULT: ${{ needs.test-matrix.result }}
         run: |
           echo "## Python Compatibility Matrix Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
           # Check if matrix was skipped due to draft PR
-          if [ "$SKIP_ON_DRAFT" == "true" ] && [ "${{ github.event.pull_request.draft }}" == "true" ]; then
+          if [ "$SKIP_ON_DRAFT" == "true" ] && [ "$GH_PR_DRAFT" == "true" ]; then
             echo "### Draft PR Mode" >> $GITHUB_STEP_SUMMARY
             echo "Matrix testing skipped to reduce costs during development." >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
@@ -307,7 +314,7 @@ jobs:
             exit 0
           fi
 
-          MATRIX='${{ needs.build-matrix.outputs.matrix }}'
+          MATRIX="$BUILD_MATRIX"
           PYTHON_VERSIONS=$(echo "$MATRIX" | jq -r '.python | join(", ")')
           OS_LIST=$(echo "$MATRIX" | jq -r '.os | join(", ")')
 
@@ -317,12 +324,12 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
 
           echo "### Results" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ needs.test-matrix.result }}" == "success" ]; then
+          if [ "$TEST_MATRIX_RESULT" == "success" ]; then
             echo "**Status:** All matrix combinations passed" >> $GITHUB_STEP_SUMMARY
-          elif [ "${{ needs.test-matrix.result }}" == "failure" ]; then
+          elif [ "$TEST_MATRIX_RESULT" == "failure" ]; then
             echo "**Status:** Some matrix combinations failed" >> $GITHUB_STEP_SUMMARY
           else
-            echo "**Status:** ${{ needs.test-matrix.result }}" >> $GITHUB_STEP_SUMMARY
+            echo "**Status:** $TEST_MATRIX_RESULT" >> $GITHUB_STEP_SUMMARY
           fi
 
       - name: Check matrix result
