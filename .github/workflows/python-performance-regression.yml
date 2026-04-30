@@ -41,6 +41,9 @@
 #
 #   Expected JSON output format:
 #     {"p95_ms": 100.0, "mean_ms": 95.0, "throughput_rps": 1000.0}
+#
+# Caller convention: place data-generation script at scripts/generate_test_data.py
+# in the calling repository. The script is invoked when generate-synthetic-data: true.
 # ============================================================================
 
 name: Performance Regression Testing (Reusable)
@@ -108,16 +111,10 @@ on:
         default: true
 
       generate-synthetic-data:
-        description: 'Generate synthetic test data (requires synthetic-data-script)'
+        description: 'Generate synthetic test data (calls scripts/generate_test_data.py)'
         type: boolean
         required: false
         default: false
-
-      synthetic-data-script:
-        description: 'Python code to generate synthetic test data'
-        type: string
-        required: false
-        default: ''
 
       test-data-directory:
         description: 'Directory for test data (default: /tmp/perf_test_data)'
@@ -182,41 +179,50 @@ jobs:
           fi
 
       - name: Generate Synthetic Test Data
-        if: inputs.generate-synthetic-data && inputs.synthetic-data-script != ''
+        if: inputs.generate-synthetic-data
+        env:
+          TEST_DATA_DIR: ${{ inputs.test-data-directory }}
         run: |
-          mkdir -p "${{ inputs.test-data-directory }}"
-          uv run python - <<'EOF'
-          ${{ inputs.synthetic-data-script }}
-          EOF
-          echo "✅ Synthetic test data generated in ${{ inputs.test-data-directory }}"
-          ls -lh "${{ inputs.test-data-directory }}" | head -20
+          mkdir -p "$TEST_DATA_DIR"
+          uv run python scripts/generate_test_data.py
+          echo "Synthetic test data generated in $TEST_DATA_DIR"
+          ls -lh "$TEST_DATA_DIR" | head -20
 
       - name: Validate Benchmark Script
+        env:
+          BENCHMARK_SCRIPT: ${{ inputs.benchmark-script }}
+          PRIMARY_METRIC: ${{ inputs.primary-metric }}
         run: |
-          if [ ! -f "${{ inputs.benchmark-script }}" ]; then
-            echo "❌ ERROR: Benchmark script not found: ${{ inputs.benchmark-script }}"
+          if [ ! -f "$BENCHMARK_SCRIPT" ]; then
+            echo "❌ ERROR: Benchmark script not found: $BENCHMARK_SCRIPT"
             echo ""
             echo "Ensure the script exists and outputs JSON with metrics:"
-            echo '  {"${{ inputs.primary-metric }}": 100.0, "mean_ms": 95.0, ...}'
+            echo "  {\"$PRIMARY_METRIC\": 100.0, \"mean_ms\": 95.0, ...}"
             exit 1
           fi
-          echo "✅ Benchmark script found: ${{ inputs.benchmark-script }}"
+          echo "✅ Benchmark script found: $BENCHMARK_SCRIPT"
 
       - name: Run PR Benchmarks
         id: pr_bench
+        env:
+          BENCHMARK_SCRIPT: ${{ inputs.benchmark-script }}
+          BENCHMARK_ARGS: ${{ inputs.benchmark-args }}
+          WARMUP_ITERATIONS: ${{ inputs.warmup-iterations }}
+          BENCHMARK_ITERATIONS: ${{ inputs.benchmark-iterations }}
+          PRIMARY_METRIC: ${{ inputs.primary-metric }}
         run: |
           echo "🏃 Running benchmark on PR branch..."
 
           # Check if script supports --output argument
           SUPPORTS_OUTPUT=false
-          if uv run python ${{ inputs.benchmark-script }} --help 2>&1 | grep -q -- '--output'; then
+          if uv run python "$BENCHMARK_SCRIPT" --help 2>&1 | grep -q -- '--output'; then
             SUPPORTS_OUTPUT=true
             echo "ℹ️  Script supports --output argument"
           fi
 
           # Check if script supports --warmup/--iterations arguments
           SUPPORTS_ITERATIONS=false
-          if uv run python ${{ inputs.benchmark-script }} --help 2>&1 | grep -q -- '--iterations'; then
+          if uv run python "$BENCHMARK_SCRIPT" --help 2>&1 | grep -q -- '--iterations'; then
             SUPPORTS_ITERATIONS=true
             echo "ℹ️  Script supports --warmup/--iterations arguments"
           fi
@@ -224,29 +230,32 @@ jobs:
           # Run benchmark with detected capabilities
           if [ "$SUPPORTS_OUTPUT" = "true" ] && [ "$SUPPORTS_ITERATIONS" = "true" ]; then
             # Full interface support
-            uv run python ${{ inputs.benchmark-script }} \
-              --warmup ${{ inputs.warmup-iterations }} \
-              --iterations ${{ inputs.benchmark-iterations }} \
+            # shellcheck disable=SC2086
+            uv run python "$BENCHMARK_SCRIPT" \
+              --warmup "$WARMUP_ITERATIONS" \
+              --iterations "$BENCHMARK_ITERATIONS" \
               --output /tmp/pr_benchmark.json \
-              ${{ inputs.benchmark-args }} || {
+              $BENCHMARK_ARGS || {
                 echo "⚠️ Benchmark execution failed, creating fallback results"
-                echo '{"${{ inputs.primary-metric }}": 0, "status": "failed"}' > /tmp/pr_benchmark.json
+                echo "{\"$PRIMARY_METRIC\": 0, \"status\": \"failed\"}" > /tmp/pr_benchmark.json
               }
           elif [ "$SUPPORTS_OUTPUT" = "true" ]; then
             # Only --output supported
-            uv run python ${{ inputs.benchmark-script }} \
+            # shellcheck disable=SC2086
+            uv run python "$BENCHMARK_SCRIPT" \
               --output /tmp/pr_benchmark.json \
-              ${{ inputs.benchmark-args }} || {
+              $BENCHMARK_ARGS || {
                 echo "⚠️ Benchmark execution failed, creating fallback results"
-                echo '{"${{ inputs.primary-metric }}": 0, "status": "failed"}' > /tmp/pr_benchmark.json
+                echo "{\"$PRIMARY_METRIC\": 0, \"status\": \"failed\"}" > /tmp/pr_benchmark.json
               }
           else
             # Minimal interface - capture stdout as JSON
             echo "ℹ️  Script uses stdout for output (no --output flag)"
-            uv run python ${{ inputs.benchmark-script }} \
-              ${{ inputs.benchmark-args }} > /tmp/pr_benchmark.json 2>&1 || {
+            # shellcheck disable=SC2086
+            uv run python "$BENCHMARK_SCRIPT" \
+              $BENCHMARK_ARGS > /tmp/pr_benchmark.json 2>&1 || {
                 echo "⚠️ Benchmark execution failed, creating fallback results"
-                echo '{"${{ inputs.primary-metric }}": 0, "status": "failed"}' > /tmp/pr_benchmark.json
+                echo "{\"$PRIMARY_METRIC\": 0, \"status\": \"failed\"}" > /tmp/pr_benchmark.json
               }
           fi
 
@@ -278,44 +287,53 @@ jobs:
 
       - name: Run Baseline Benchmarks
         if: steps.baseline_source.outputs.source == 'generated'
+        env:
+          BENCHMARK_SCRIPT: ${{ inputs.benchmark-script }}
+          BENCHMARK_ARGS: ${{ inputs.benchmark-args }}
+          WARMUP_ITERATIONS: ${{ inputs.warmup-iterations }}
+          BENCHMARK_ITERATIONS: ${{ inputs.benchmark-iterations }}
+          PRIMARY_METRIC: ${{ inputs.primary-metric }}
         run: |
           echo "🏃 Running baseline benchmark on main branch..."
           uv sync $(echo "${{ inputs.extra-dependencies }}" | tr ' ' '\n' | sed 's/^/--extra /' | tr '\n' ' ')
 
           # Check if script supports --output argument
           SUPPORTS_OUTPUT=false
-          if uv run python ${{ inputs.benchmark-script }} --help 2>&1 | grep -q -- '--output'; then
+          if uv run python "$BENCHMARK_SCRIPT" --help 2>&1 | grep -q -- '--output'; then
             SUPPORTS_OUTPUT=true
           fi
 
           # Check if script supports --warmup/--iterations arguments
           SUPPORTS_ITERATIONS=false
-          if uv run python ${{ inputs.benchmark-script }} --help 2>&1 | grep -q -- '--iterations'; then
+          if uv run python "$BENCHMARK_SCRIPT" --help 2>&1 | grep -q -- '--iterations'; then
             SUPPORTS_ITERATIONS=true
           fi
 
           # Run benchmark with detected capabilities
           if [ "$SUPPORTS_OUTPUT" = "true" ] && [ "$SUPPORTS_ITERATIONS" = "true" ]; then
-            uv run python ${{ inputs.benchmark-script }} \
-              --warmup ${{ inputs.warmup-iterations }} \
-              --iterations ${{ inputs.benchmark-iterations }} \
+            # shellcheck disable=SC2086
+            uv run python "$BENCHMARK_SCRIPT" \
+              --warmup "$WARMUP_ITERATIONS" \
+              --iterations "$BENCHMARK_ITERATIONS" \
               --output /tmp/baseline_benchmark.json \
-              ${{ inputs.benchmark-args }} || {
+              $BENCHMARK_ARGS || {
                 echo "⚠️ Baseline benchmark failed, using fallback"
-                echo '{"${{ inputs.primary-metric }}": 0, "status": "failed"}' > /tmp/baseline_benchmark.json
+                echo "{\"$PRIMARY_METRIC\": 0, \"status\": \"failed\"}" > /tmp/baseline_benchmark.json
               }
           elif [ "$SUPPORTS_OUTPUT" = "true" ]; then
-            uv run python ${{ inputs.benchmark-script }} \
+            # shellcheck disable=SC2086
+            uv run python "$BENCHMARK_SCRIPT" \
               --output /tmp/baseline_benchmark.json \
-              ${{ inputs.benchmark-args }} || {
+              $BENCHMARK_ARGS || {
                 echo "⚠️ Baseline benchmark failed, using fallback"
-                echo '{"${{ inputs.primary-metric }}": 0, "status": "failed"}' > /tmp/baseline_benchmark.json
+                echo "{\"$PRIMARY_METRIC\": 0, \"status\": \"failed\"}" > /tmp/baseline_benchmark.json
               }
           else
-            uv run python ${{ inputs.benchmark-script }} \
-              ${{ inputs.benchmark-args }} > /tmp/baseline_benchmark.json 2>&1 || {
+            # shellcheck disable=SC2086
+            uv run python "$BENCHMARK_SCRIPT" \
+              $BENCHMARK_ARGS > /tmp/baseline_benchmark.json 2>&1 || {
                 echo "⚠️ Baseline benchmark failed, using fallback"
-                echo '{"${{ inputs.primary-metric }}": 0, "status": "failed"}' > /tmp/baseline_benchmark.json
+                echo "{\"$PRIMARY_METRIC\": 0, \"status\": \"failed\"}" > /tmp/baseline_benchmark.json
               }
           fi
 
@@ -333,6 +351,11 @@ jobs:
 
       - name: Compare Performance
         id: compare
+        env:
+          PRIMARY_METRIC: ${{ inputs.primary-metric }}
+          REGRESSION_THRESHOLD: ${{ inputs.regression-threshold }}
+          IMPROVEMENT_THRESHOLD: ${{ inputs.improvement-threshold }}
+          FAIL_ON_REGRESSION: ${{ inputs.fail-on-regression }}
         run: |
           uv run python - <<'EOF'
           import json
@@ -345,45 +368,42 @@ jobs:
           baseline_results = json.loads(Path("/tmp/baseline_benchmark.json").read_text())
 
           # Extract primary metric
-          primary_metric = "${{ inputs.primary-metric }}"
+          primary_metric = os.environ["PRIMARY_METRIC"]
           pr_value = pr_results.get(primary_metric, 0.0)
           baseline_value = baseline_results.get(primary_metric, 0.0)
 
           # Get thresholds from inputs
-          regression_threshold = ${{ inputs.regression-threshold }}
-          improvement_threshold = ${{ inputs.improvement-threshold }}
+          regression_threshold = float(os.environ["REGRESSION_THRESHOLD"])
+          improvement_threshold = float(os.environ["IMPROVEMENT_THRESHOLD"])
 
           # Handle missing or zero values
           if baseline_value == 0:
-              print(f"⚠️  WARNING: Baseline {primary_metric} is 0 - cannot calculate regression")
+              print(f"WARNING: Baseline {primary_metric} is 0 - cannot calculate regression")
               regression_pct = 0
               regression_detected = False
               improvement_detected = False
           else:
-              # Calculate regression/improvement
               regression_pct = ((pr_value - baseline_value) / baseline_value) * 100
-
-              # Check thresholds
               regression_detected = regression_pct > regression_threshold
               improvement_detected = regression_pct < -improvement_threshold
 
           # Print results
-          print(f"📊 Performance Comparison:")
+          print(f"Performance Comparison:")
           print(f"  Metric: {primary_metric}")
           print(f"  Baseline: {baseline_value:.2f}")
           print(f"  PR: {pr_value:.2f}")
           print(f"  Change: {regression_pct:+.1f}%")
-          print(f"  Threshold: ±{regression_threshold}%")
+          print(f"  Threshold: +/-{regression_threshold}%")
           print()
 
           if regression_detected:
-              print(f"❌ REGRESSION DETECTED ({regression_pct:+.1f}%)")
+              print(f"REGRESSION DETECTED ({regression_pct:+.1f}%)")
               status = "regression"
           elif improvement_detected:
-              print(f"✅ IMPROVEMENT DETECTED ({regression_pct:+.1f}%)")
+              print(f"IMPROVEMENT DETECTED ({regression_pct:+.1f}%)")
               status = "improvement"
           else:
-              print(f"✅ PERFORMANCE OK ({regression_pct:+.1f}%)")
+              print(f"PERFORMANCE OK ({regression_pct:+.1f}%)")
               status = "ok"
 
           # Extract additional metrics for summary
@@ -410,13 +430,11 @@ jobs:
               f.write(f"improvement_detected={str(improvement_detected).lower()}\n")
               f.write(f"status={status}\n")
               f.write(f"primary_metric={primary_metric}\n")
-
-              # Write additional metrics as JSON
-              import json
               f.write(f"summary_metrics={json.dumps(summary_metrics)}\n")
 
           # Exit with error if regression detected and fail-on-regression is true
-          if regression_detected and ${{ inputs.fail-on-regression }}:
+          fail_on_regression = os.environ.get("FAIL_ON_REGRESSION", "false").lower() == "true"
+          if regression_detected and fail_on_regression:
               sys.exit(1)
           else:
               sys.exit(0)
