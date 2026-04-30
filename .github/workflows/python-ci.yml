@@ -130,8 +130,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
-  checks: write
 
 jobs:
   # ============================================================================
@@ -194,37 +192,50 @@ jobs:
           enable-cache: true
 
       - name: Set up Python
-        run: uv python install ${{ inputs.python-version }}
+        env:
+          PYTHON_VERSION: ${{ inputs.python-version }}
+        run: uv python install "$PYTHON_VERSION"
 
       - name: Install dependencies
         run: |
           uv sync --all-extras
 
       - name: Run Ruff formatter check
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
+          TEST_DIR: ${{ inputs.test-directory }}
         run: |
           echo "::group::Ruff Formatting"
-          uv run ruff format --check ${{ inputs.source-directory }}/ ${{ inputs.test-directory }}/ || {
-            echo "::error::Code formatting issues detected. Run 'uv run ruff format ${{ inputs.source-directory }}/ ${{ inputs.test-directory }}/' to fix."
+          uv run ruff format --check "$SRC_DIR"/ "$TEST_DIR"/ || {
+            echo "::error::Code formatting issues detected. Run 'uv run ruff format "$SRC_DIR"/ "$TEST_DIR"/' to fix."
             exit 1
           }
           echo "::endgroup::"
 
       - name: Run Ruff linter
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
+          TEST_DIR: ${{ inputs.test-directory }}
         run: |
           echo "::group::Ruff Linting"
-          uv run ruff check ${{ inputs.source-directory }}/ ${{ inputs.test-directory }}/ --output-format=github
+          uv run ruff check "$SRC_DIR"/ "$TEST_DIR"/ --output-format=github
           echo "::endgroup::"
 
       - name: Run BasedPyright type checker
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
         run: |
           echo "::group::BasedPyright Type Checking"
-          uv run basedpyright ${{ inputs.source-directory }}/ || {
+          uv run basedpyright "$SRC_DIR"/ || {
             echo "::warning::Type checking found issues"
           }
           echo "::endgroup::"
 
       - name: Dead code detection with Vulture
         if: inputs.enable-dead-code-check
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
+          DEAD_CODE_CONFIDENCE: ${{ inputs.dead-code-confidence }}
         run: |
           echo "::group::Vulture Dead Code Detection"
 
@@ -232,10 +243,10 @@ jobs:
           uv pip install vulture 2>/dev/null || true
 
           # Run vulture with configurable confidence threshold
-          echo "Scanning for dead code (min confidence: ${{ inputs.dead-code-confidence }}%)..."
+          echo "Scanning for dead code (min confidence: $DEAD_CODE_CONFIDENCE%)..."
 
           # Capture output for reporting
-          VULTURE_OUTPUT=$(uv run vulture ${{ inputs.source-directory }}/ --min-confidence ${{ inputs.dead-code-confidence }} 2>&1) || true
+          VULTURE_OUTPUT=$(uv run vulture "$SRC_DIR"/ --min-confidence "$DEAD_CODE_CONFIDENCE" 2>&1) || true
 
           if [ -n "$VULTURE_OUTPUT" ]; then
             echo "$VULTURE_OUTPUT"
@@ -246,7 +257,7 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### Dead Code Detection (Vulture)" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Found $DEAD_CODE_COUNT potential dead code issue(s)** (confidence ≥${{ inputs.dead-code-confidence }}%)" >> $GITHUB_STEP_SUMMARY
+            echo "**Found $DEAD_CODE_COUNT potential dead code issue(s)** (confidence >=$DEAD_CODE_CONFIDENCE%)" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
             echo "$VULTURE_OUTPUT" >> $GITHUB_STEP_SUMMARY
@@ -262,21 +273,23 @@ jobs:
               echo "::warning::Potential dead code detected. Review vulture output above."
             fi
           else
-            echo "No dead code detected at ${{ inputs.dead-code-confidence }}% confidence threshold."
+            echo "No dead code detected at $DEAD_CODE_CONFIDENCE% confidence threshold."
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### Dead Code Detection (Vulture)" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "✅ No dead code detected (confidence ≥${{ inputs.dead-code-confidence }}%)" >> $GITHUB_STEP_SUMMARY
+            echo "No dead code detected (confidence >=$DEAD_CODE_CONFIDENCE%)" >> $GITHUB_STEP_SUMMARY
           fi
 
           echo "::endgroup::"
 
       - name: Run unit tests with coverage
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
         run: |
           echo "::group::Unit Test Execution"
           uv run pytest \
             -m "unit or not (integration or security or slow)" \
-            --cov=${{ inputs.source-directory }} \
+            --cov="$SRC_DIR" \
             --cov-report=xml:coverage-unit.xml \
             --cov-report=term-missing \
             --cov-branch \
@@ -287,35 +300,47 @@ jobs:
 
       - name: Run integration tests with coverage
         if: inputs.run-integration-tests
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
         run: |
           echo "::group::Integration Test Execution"
+          set +e
           uv run pytest \
             -m "integration" \
-            --cov=${{ inputs.source-directory }} \
+            --cov="$SRC_DIR" \
             --cov-report=xml:coverage-integration.xml \
             --cov-report=term-missing \
             --cov-branch \
             --cov-append \
             --junitxml=junit-integration.xml \
             -o junit_family=xunit2 \
-            -v || echo "No integration tests found or all skipped"
+            -v
+          EXIT=$?
+          set -e
           echo "::endgroup::"
+          if [ $EXIT -ne 0 ] && [ $EXIT -ne 5 ]; then exit $EXIT; fi
 
       - name: Run security tests with coverage
         if: inputs.run-security-tests
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
         run: |
           echo "::group::Security Test Execution"
+          set +e
           uv run pytest \
             -m "security" \
-            --cov=${{ inputs.source-directory }} \
+            --cov="$SRC_DIR" \
             --cov-report=xml:coverage-security.xml \
             --cov-report=term-missing \
             --cov-branch \
             --cov-append \
             --junitxml=junit-security.xml \
             -o junit_family=xunit2 \
-            -v || echo "No security tests found or all skipped"
+            -v
+          EXIT=$?
+          set -e
           echo "::endgroup::"
+          if [ $EXIT -ne 0 ] && [ $EXIT -ne 5 ]; then exit $EXIT; fi
 
       - name: Generate combined coverage report
         run: |
@@ -327,9 +352,11 @@ jobs:
           echo "::endgroup::"
 
       - name: Security scan with Bandit
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
         run: |
           echo "::group::Bandit Security Scan"
-          uv run bandit -r ${{ inputs.source-directory }}/ -f json -o bandit-report.json || {
+          uv run bandit -r "$SRC_DIR"/ -f json -o bandit-report.json || {
             echo "::warning::Security issues detected"
             cat bandit-report.json
           }
