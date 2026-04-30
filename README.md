@@ -1,12 +1,12 @@
 # Centralized Community Health Files
 
-[![CI Status](https://github.com/williaby/.github/actions/workflows/python-ci.yml/badge.svg?branch=main)](https://github.com/williaby/.github/actions/workflows/python-ci.yml)
+[![CI Status](https://github.com/ByronWilliamsCPA/.github/actions/workflows/shell-tests.yml/badge.svg?branch=main)](https://github.com/ByronWilliamsCPA/.github/actions/workflows/shell-tests.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](https://www.contributor-covenant.org/version/2/1/code_of_conduct/)
-[![GitHub last commit](https://img.shields.io/github/last-commit/williaby/.github/main)](https://github.com/williaby/.github/commits/main)
+[![GitHub last commit](https://img.shields.io/github/last-commit/ByronWilliamsCPA/.github/main)](https://github.com/ByronWilliamsCPA/.github/commits/main)
 
 This repository contains shared community-health files that apply
-organization-wide across all public repositories under the `williaby` GitHub
+organization-wide across all public repositories under the `ByronWilliamsCPA` GitHub
 account. They ensure consistency, simplify onboarding,
 and support best practices.
 
@@ -69,6 +69,16 @@ The `.github/workflows/` directory contains centralized, reusable GitHub Actions
 - **[Qlty Coverage](docs/workflows/python-qlty-coverage.md)** (`python-qlty-coverage.yml`) - Coverage tracking with Qlty Cloud
 - **[Documentation](USAGE_EXAMPLES.md#documentation)** (`python-docs.yml`) - MkDocs build and GitHub Pages deployment
 - **[Releases](USAGE_EXAMPLES.md#releases)** (`python-release.yml`) - Signed releases with SLSA provenance and SBOM
+- **[Codecov Coverage Upload](.github/workflows/python-codecov.yml)** (`python-codecov.yml`) - Securely uploads coverage reports to Codecov without re-running tests
+- **[Compatibility Testing](.github/workflows/python-compatibility.yml)** (`python-compatibility.yml`) - Matrix testing across Python versions and operating systems
+- **[Container Security](.github/workflows/python-container-security.yml)** (`python-container-security.yml`) - Trivy container image scanning and Hadolint Dockerfile linting
+- **[Docker Build](.github/workflows/python-docker.yml)** (`python-docker.yml`) - Multi-platform Docker image builds with GHCR publishing
+- **[FIPS Compatibility](docs/workflows/python-fips-compatibility.md)** (`python-fips-compatibility.yml`) - FIPS 140-2/140-3 compliance checks for code and dependencies
+- **[Mutation Testing](.github/workflows/python-mutation.yml)** (`python-mutation.yml`) - Validates test suite effectiveness using mutmut mutation testing
+- **[REUSE Compliance](.github/workflows/python-reuse.yml)** (`python-reuse.yml`) - FSFE REUSE 3.0 license and copyright compliance
+- **[SBOM](.github/workflows/python-sbom.yml)** (`python-sbom.yml`) - Software Bill of Materials generation and dependency vulnerability scanning
+- **[OpenSSF Scorecard](.github/workflows/python-scorecard.yml)** (`python-scorecard.yml`) - Repository security health scoring via OpenSSF Scorecard
+- **[Supplemental Checks](.github/workflows/python-supplemental-checks.yml)** (`python-supplemental-checks.yml`) - Optional PR checks including link validation and changelog enforcement
 
 ### Key Features
 
@@ -88,7 +98,7 @@ on: [push, pull_request]
 
 jobs:
   ci:
-    uses: williaby/.github/.github/workflows/python-ci.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@main
     with:
       python-versions: '["3.11", "3.12"]'
     secrets:
@@ -126,4 +136,4 @@ overridden by a repo-specific copy).
 3. If you maintain a repository that needs specialized adjustments, copy the
     relevant file into your repo’s root or `.github/` folder and tailor it accordingly.
 
-_Last updated: December 15, 2025_  
+_Last updated: April 30, 2026_  
