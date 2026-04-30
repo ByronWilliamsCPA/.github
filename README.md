@@ -5,10 +5,7 @@
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](https://www.contributor-covenant.org/version/2/1/code_of_conduct/)
 [![GitHub last commit](https://img.shields.io/github/last-commit/ByronWilliamsCPA/.github/main)](https://github.com/ByronWilliamsCPA/.github/commits/main)
 
-This repository contains shared community-health files that apply
-organization-wide across all public repositories under the `ByronWilliamsCPA` GitHub
-account. They ensure consistency, simplify onboarding,
-and support best practices.
+This repository serves two purposes for the `ByronWilliamsCPA` GitHub organization: it provides shared community-health files that automatically apply to all public repositories, and it hosts centralized reusable GitHub Actions workflows for Python projects. Both live here to keep org-level governance in one place.
 
 ## Included Files
 
@@ -56,7 +53,23 @@ and support best practices.
 
 ## Reusable Workflows
 
-The `.github/workflows/` directory contains centralized, reusable GitHub Actions workflows that can be called from any Python repository:
+The `.github/workflows/` directory contains centralized, reusable GitHub Actions workflows that can be called from any Python repository. Most workflows are zero-config or lightly configured via inputs. A few -- SonarCloud, Qlty Coverage, and Fuzzing -- require an account and project setup on the respective platform before use.
+
+### Prerequisites
+
+Calling repos must provide:
+
+- `pyproject.toml` at the repo root -- used by Ruff, BasedPyright, pytest, and coverage tools to read project configuration
+- A `[tool.pytest.ini_options]` section (or equivalent `pytest.ini`) with `testpaths` configured
+- Any workflow-specific secrets set at the org or repo level:
+
+| Workflow | Required secret(s) |
+| --- | --- |
+| Python CI | `CODECOV_TOKEN` (optional, for coverage upload) |
+| SonarCloud | `SONAR_TOKEN` + external SonarCloud project setup |
+| OpenSSF Scorecard | `SCORECARD_TOKEN` (for scheduled publish runs) |
+| PyPI Publishing | None -- uses OIDC trusted publishing |
+| Qlty Coverage | `QLTY_COVERAGE_TOKEN` + `qlty.toml` in calling repo |
 
 ### Available Workflows
 
@@ -108,7 +121,7 @@ jobs:
 ### Documentation
 
 - **[USAGE_EXAMPLES.md](USAGE_EXAMPLES.md)** - Detailed usage examples
-- **[CONVERSION_ACTION_PLAN.md](CONVERSION_ACTION_PLAN.md)** - Migration guide
+- **[CONVERSION_ACTION_PLAN.md](CONVERSION_ACTION_PLAN.md)** - Step-by-step guide for migrating a repo from standalone workflow definitions to these centralized ones
 - **[ACTION_SHA_REFERENCE.md](ACTION_SHA_REFERENCE.md)** - Action commit SHAs
 - **[QLTY_INTEGRATION.md](QLTY_INTEGRATION.md)** - Qlty Cloud integration guide
 - **[PYPI_WORKFLOW_ANALYSIS.md](PYPI_WORKFLOW_ANALYSIS.md)** - PyPI workflow analysis & migration
@@ -130,10 +143,16 @@ overridden by a repo-specific copy).
 
 ## Getting Started
 
-1. **Fork & Clone** this repo if you need to customize any file for a
-     specific project.  
-2. Review each file to see how it applies to your repository.  
-3. If you maintain a repository that needs specialized adjustments, copy the
-    relevant file into your repo’s root or `.github/` folder and tailor it accordingly.
+**To use the reusable workflows in your Python project**, reference them directly by name -- no fork or clone needed:
+
+```yaml
+uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@main
+```
+
+See [USAGE_EXAMPLES.md](USAGE_EXAMPLES.md) for full examples and all available input parameters. See the [Prerequisites](#prerequisites) section above for what your repo must provide.
+
+**To override a community health file** for a specific repo, copy the relevant file into that repo’s root or `.github/` folder. GitHub uses the repo-level copy when one exists.
+
+**To improve or extend the workflow templates or community health files**, open a pull request against this repository. Merged changes apply org-wide automatically.
 
 _Last updated: April 30, 2026_  
