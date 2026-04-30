@@ -253,11 +253,14 @@ jobs:
 
       - name: PR Metadata Summary
         if: always()
+        env:
+          REQUIRE_CONVENTIONAL_COMMITS: ${{ inputs.require-conventional-commits }}
+          REQUIRE_DESCRIPTION: ${{ inputs.require-description }}
         run: |
           echo "## PR Metadata Validation" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          if [ "${{ inputs.require-conventional-commits }}" == "true" ]; then
+          if [ "$REQUIRE_CONVENTIONAL_COMMITS" == "true" ]; then
             if [ "${{ steps.validate-title.outputs.valid }}" == "true" ]; then
               echo "- Title: Valid (Conventional Commits)" >> $GITHUB_STEP_SUMMARY
             else
@@ -265,7 +268,7 @@ jobs:
             fi
           fi
 
-          if [ "${{ inputs.require-description }}" == "true" ]; then
+          if [ "$REQUIRE_DESCRIPTION" == "true" ]; then
             if [ "${{ steps.validate-description.outputs.valid }}" == "true" ]; then
               echo "- Description: Valid" >> $GITHUB_STEP_SUMMARY
             else
@@ -304,22 +307,30 @@ jobs:
         run: uv sync --all-extras
 
       - name: Check formatting (Ruff)
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
+          TEST_DIR: ${{ inputs.test-directory }}
         run: |
           echo "Checking code formatting..."
-          uv run ruff format --check ${{ inputs.source-directory }}/ ${{ inputs.test-directory }}/ || {
+          uv run ruff format --check "$SRC_DIR/" "$TEST_DIR/" || {
             echo "::error::Code formatting issues detected. Run 'ruff format' to fix."
             exit 1
           }
 
       - name: Run linter (Ruff)
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
+          TEST_DIR: ${{ inputs.test-directory }}
         run: |
           echo "Running linter..."
-          uv run ruff check ${{ inputs.source-directory }}/ ${{ inputs.test-directory }}/ --output-format=github
+          uv run ruff check "$SRC_DIR/" "$TEST_DIR/" --output-format=github
 
       - name: Run type checker (BasedPyright)
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
         run: |
           echo "Running type checker..."
-          uv run basedpyright ${{ inputs.source-directory }}/ || {
+          uv run basedpyright "$SRC_DIR/" || {
             echo "::warning::Type checking found issues"
           }
 
@@ -362,12 +373,15 @@ jobs:
         run: uv sync --all-extras
 
       - name: Run tests with coverage
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
+          COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold }}
         run: |
           uv run pytest \
-            --cov=${{ inputs.source-directory }} \
+            --cov="$SRC_DIR" \
             --cov-report=xml:coverage.xml \
             --cov-report=term-missing \
-            --cov-fail-under=${{ inputs.coverage-threshold }} \
+            --cov-fail-under="$COVERAGE_THRESHOLD" \
             -v
 
       - name: Upload coverage artifact
