@@ -409,8 +409,7 @@ jobs:
               f.write(f"improvement_detected={str(improvement_detected).lower()}\n")
               f.write(f"status={status}\n")
               f.write(f"primary_metric={primary_metric}\n")
-              import json as json2
-              f.write(f"summary_metrics={json2.dumps(summary_metrics)}\n")
+              f.write(f"summary_metrics={json.dumps(summary_metrics)}\n")
 
           # Exit with error if regression detected and fail-on-regression is true
           fail_on_regression = os.environ.get("FAIL_ON_REGRESSION", "false").lower() == "true"
