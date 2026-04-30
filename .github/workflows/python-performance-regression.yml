@@ -330,6 +330,11 @@ jobs:
 
       - name: Compare Performance
         id: compare
+        env:
+          PRIMARY_METRIC: ${{ inputs.primary-metric }}
+          REGRESSION_THRESHOLD: ${{ inputs.regression-threshold }}
+          IMPROVEMENT_THRESHOLD: ${{ inputs.improvement-threshold }}
+          FAIL_ON_REGRESSION: ${{ inputs.fail-on-regression }}
         run: |
           uv run python - <<'EOF'
           import json
@@ -342,45 +347,42 @@ jobs:
           baseline_results = json.loads(Path("/tmp/baseline_benchmark.json").read_text())
 
           # Extract primary metric
-          primary_metric = "${{ inputs.primary-metric }}"
+          primary_metric = os.environ["PRIMARY_METRIC"]
           pr_value = pr_results.get(primary_metric, 0.0)
           baseline_value = baseline_results.get(primary_metric, 0.0)
 
           # Get thresholds from inputs
-          regression_threshold = ${{ inputs.regression-threshold }}
-          improvement_threshold = ${{ inputs.improvement-threshold }}
+          regression_threshold = float(os.environ["REGRESSION_THRESHOLD"])
+          improvement_threshold = float(os.environ["IMPROVEMENT_THRESHOLD"])
 
           # Handle missing or zero values
           if baseline_value == 0:
-              print(f"⚠️  WARNING: Baseline {primary_metric} is 0 - cannot calculate regression")
+              print(f"WARNING: Baseline {primary_metric} is 0 - cannot calculate regression")
               regression_pct = 0
               regression_detected = False
               improvement_detected = False
           else:
-              # Calculate regression/improvement
               regression_pct = ((pr_value - baseline_value) / baseline_value) * 100
-
-              # Check thresholds
               regression_detected = regression_pct > regression_threshold
               improvement_detected = regression_pct < -improvement_threshold
 
           # Print results
-          print(f"📊 Performance Comparison:")
+          print(f"Performance Comparison:")
           print(f"  Metric: {primary_metric}")
           print(f"  Baseline: {baseline_value:.2f}")
           print(f"  PR: {pr_value:.2f}")
           print(f"  Change: {regression_pct:+.1f}%")
-          print(f"  Threshold: ±{regression_threshold}%")
+          print(f"  Threshold: +/-{regression_threshold}%")
           print()
 
           if regression_detected:
-              print(f"❌ REGRESSION DETECTED ({regression_pct:+.1f}%)")
+              print(f"REGRESSION DETECTED ({regression_pct:+.1f}%)")
               status = "regression"
           elif improvement_detected:
-              print(f"✅ IMPROVEMENT DETECTED ({regression_pct:+.1f}%)")
+              print(f"IMPROVEMENT DETECTED ({regression_pct:+.1f}%)")
               status = "improvement"
           else:
-              print(f"✅ PERFORMANCE OK ({regression_pct:+.1f}%)")
+              print(f"PERFORMANCE OK ({regression_pct:+.1f}%)")
               status = "ok"
 
           # Extract additional metrics for summary
@@ -407,13 +409,12 @@ jobs:
               f.write(f"improvement_detected={str(improvement_detected).lower()}\n")
               f.write(f"status={status}\n")
               f.write(f"primary_metric={primary_metric}\n")
-
-              # Write additional metrics as JSON
-              import json
-              f.write(f"summary_metrics={json.dumps(summary_metrics)}\n")
+              import json as json2
+              f.write(f"summary_metrics={json2.dumps(summary_metrics)}\n")
 
           # Exit with error if regression detected and fail-on-regression is true
-          if regression_detected and ${{ inputs.fail-on-regression }}:
+          fail_on_regression = os.environ.get("FAIL_ON_REGRESSION", "false").lower() == "true"
+          if regression_detected and fail_on_regression:
               sys.exit(1)
           else:
               sys.exit(0)
