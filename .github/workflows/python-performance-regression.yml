@@ -41,6 +41,9 @@
 #
 #   Expected JSON output format:
 #     {"p95_ms": 100.0, "mean_ms": 95.0, "throughput_rps": 1000.0}
+#
+# Caller convention: place data-generation script at scripts/generate_test_data.py
+# in the calling repository. The script is invoked when generate-synthetic-data: true.
 # ============================================================================
 
 name: Performance Regression Testing (Reusable)
@@ -108,16 +111,10 @@ on:
         default: true
 
       generate-synthetic-data:
-        description: 'Generate synthetic test data (requires synthetic-data-script)'
+        description: 'Generate synthetic test data (calls scripts/generate_test_data.py)'
         type: boolean
         required: false
         default: false
-
-      synthetic-data-script:
-        description: 'Python code to generate synthetic test data'
-        type: string
-        required: false
-        default: ''
 
       test-data-directory:
         description: 'Directory for test data (default: /tmp/perf_test_data)'
@@ -182,14 +179,14 @@ jobs:
           fi
 
       - name: Generate Synthetic Test Data
-        if: inputs.generate-synthetic-data && inputs.synthetic-data-script != ''
+        if: inputs.generate-synthetic-data
+        env:
+          TEST_DATA_DIR: ${{ inputs.test-data-directory }}
         run: |
-          mkdir -p "${{ inputs.test-data-directory }}"
-          uv run python - <<'EOF'
-          ${{ inputs.synthetic-data-script }}
-          EOF
-          echo "✅ Synthetic test data generated in ${{ inputs.test-data-directory }}"
-          ls -lh "${{ inputs.test-data-directory }}" | head -20
+          mkdir -p "$TEST_DATA_DIR"
+          uv run python scripts/generate_test_data.py
+          echo "Synthetic test data generated in $TEST_DATA_DIR"
+          ls -lh "$TEST_DATA_DIR" | head -20
 
       - name: Validate Benchmark Script
         run: |
