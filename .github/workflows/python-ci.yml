@@ -236,6 +236,7 @@ jobs:
         env:
           SRC_DIR: ${{ inputs.source-directory }}
           DEAD_CODE_CONFIDENCE: ${{ inputs.dead-code-confidence }}
+          FAIL_ON_DEAD_CODE: ${{ inputs.fail-on-dead-code }}
         run: |
           echo "::group::Vulture Dead Code Detection"
 
@@ -266,7 +267,7 @@ jobs:
             echo "> **Note:** Review these findings. Some may be false positives (e.g., pytest fixtures, CLI entry points)." >> $GITHUB_STEP_SUMMARY
             echo "> Use a `.vulture_whitelist.py` file to suppress known false positives." >> $GITHUB_STEP_SUMMARY
 
-            if [ "${{ inputs.fail-on-dead-code }}" == "true" ]; then
+            if [ "$FAIL_ON_DEAD_CODE" == "true" ]; then
               echo "::error::Dead code detected. Set 'fail-on-dead-code: false' to make this a warning."
               exit 1
             else
@@ -343,12 +344,14 @@ jobs:
           if [ $EXIT -ne 0 ] && [ $EXIT -ne 5 ]; then exit $EXIT; fi
 
       - name: Generate combined coverage report
+        env:
+          COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold }}
         run: |
           echo "::group::Combined Coverage"
           uv run coverage combine --keep || true
           uv run coverage xml -o coverage.xml
           uv run coverage html
-          uv run coverage report --fail-under=${{ inputs.coverage-threshold }}
+          uv run coverage report --fail-under="$COVERAGE_THRESHOLD"
           echo "::endgroup::"
 
       - name: Security scan with Bandit
@@ -493,21 +496,23 @@ jobs:
 
       - name: Check for unverified assumption tags
         id: check-tags
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
         run: |
           echo "::group::Scanning for Unverified Assumption Tags"
 
           # Check for RAD tags (Layer 1: Production Runtime Risks)
-          CRITICAL_TAGS=$(grep -r "#CRITICAL" --include="*.py" ${{ inputs.source-directory }}/ 2>/dev/null | wc -l || echo "0")
-          ASSUME_TAGS=$(grep -r "#ASSUME" --include="*.py" ${{ inputs.source-directory }}/ 2>/dev/null | wc -l || echo "0")
-          EDGE_TAGS=$(grep -r "#EDGE" --include="*.py" ${{ inputs.source-directory }}/ 2>/dev/null | wc -l || echo "0")
+          CRITICAL_TAGS=$(grep -r "#CRITICAL" --include="*.py" "$SRC_DIR"/ 2>/dev/null | wc -l || echo "0")
+          ASSUME_TAGS=$(grep -r "#ASSUME" --include="*.py" "$SRC_DIR"/ 2>/dev/null | wc -l || echo "0")
+          EDGE_TAGS=$(grep -r "#EDGE" --include="*.py" "$SRC_DIR"/ 2>/dev/null | wc -l || echo "0")
 
           # Check for LLM debt tags (Layer 2: LLM Development Debt)
-          LLM_MOCK=$(grep -r "#LLM-MOCK" --include="*.py" ${{ inputs.source-directory }}/ 2>/dev/null | wc -l || echo "0")
-          LLM_PLACEHOLDER=$(grep -r "#LLM-PLACEHOLDER" --include="*.py" ${{ inputs.source-directory }}/ 2>/dev/null | wc -l || echo "0")
-          LLM_LOGIC=$(grep -r "#LLM-LOGIC" --include="*.py" ${{ inputs.source-directory }}/ 2>/dev/null | wc -l || echo "0")
-          LLM_SCAFFOLD=$(grep -r "#LLM-SCAFFOLD" --include="*.py" ${{ inputs.source-directory }}/ 2>/dev/null | wc -l || echo "0")
-          LLM_INFERRED=$(grep -r "#LLM-INFERRED" --include="*.py" ${{ inputs.source-directory }}/ 2>/dev/null | wc -l || echo "0")
-          LLM_TEST_FIRST=$(grep -r "#LLM-TEST-FIRST" --include="*.py" ${{ inputs.source-directory }}/ 2>/dev/null | wc -l || echo "0")
+          LLM_MOCK=$(grep -r "#LLM-MOCK" --include="*.py" "$SRC_DIR"/ 2>/dev/null | wc -l || echo "0")
+          LLM_PLACEHOLDER=$(grep -r "#LLM-PLACEHOLDER" --include="*.py" "$SRC_DIR"/ 2>/dev/null | wc -l || echo "0")
+          LLM_LOGIC=$(grep -r "#LLM-LOGIC" --include="*.py" "$SRC_DIR"/ 2>/dev/null | wc -l || echo "0")
+          LLM_SCAFFOLD=$(grep -r "#LLM-SCAFFOLD" --include="*.py" "$SRC_DIR"/ 2>/dev/null | wc -l || echo "0")
+          LLM_INFERRED=$(grep -r "#LLM-INFERRED" --include="*.py" "$SRC_DIR"/ 2>/dev/null | wc -l || echo "0")
+          LLM_TEST_FIRST=$(grep -r "#LLM-TEST-FIRST" --include="*.py" "$SRC_DIR"/ 2>/dev/null | wc -l || echo "0")
 
           TOTAL_RAD=$((CRITICAL_TAGS + ASSUME_TAGS))
           TOTAL_LLM=$((LLM_MOCK + LLM_PLACEHOLDER + LLM_LOGIC + LLM_SCAFFOLD + LLM_INFERRED + LLM_TEST_FIRST))
@@ -550,38 +555,44 @@ jobs:
 
       - name: Block PR if critical tags found
         if: ${{ steps.check-tags.outputs.critical_tags > 0 }}
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
         run: |
           echo "::error::PR blocked: Found ${{ steps.check-tags.outputs.critical_tags }} unverified #CRITICAL production risk tags"
           echo ""
           echo "Please verify and remove these tags before merging:"
-          grep -rn "#CRITICAL" --include="*.py" ${{ inputs.source-directory }}/ || true
+          grep -rn "#CRITICAL" --include="*.py" "$SRC_DIR"/ || true
           echo ""
           echo "See CLAUDE.md for verification workflow"
           exit 1
 
       - name: Fail on LLM tags (if configured)
         if: ${{ inputs.fail-on-llm-tags && fromJSON(steps.check-tags.outputs.llm_tags) > 0 }}
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
         run: |
           echo "::error::PR blocked: Found ${{ steps.check-tags.outputs.llm_tags }} LLM debt tags"
           echo ""
           echo "Please address LLM debt before merging:"
-          grep -rn "#LLM-" --include="*.py" ${{ inputs.source-directory }}/ || true
+          grep -rn "#LLM-" --include="*.py" "$SRC_DIR"/ || true
           exit 1
 
       - name: Detect LLM anti-patterns
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
         run: |
           echo "::group::LLM Anti-Pattern Detection"
 
           # Hardcoded localhost/URLs
           echo "Checking for hardcoded localhost/URLs..."
-          if grep -rE "(localhost|127\.0\.0\.1|http://|https://)" --include="*.py" ${{ inputs.source-directory }}/ | \
+          if grep -rE "(localhost|127\.0\.0\.1|http://|https://)" --include="*.py" "$SRC_DIR"/ | \
              grep -v "#LLM-PLACEHOLDER" | grep -v "^[[:space:]]*#"; then
             echo "::warning::Found hardcoded URLs without #LLM-PLACEHOLDER tag"
           fi
 
           # Hardcoded secrets patterns
           echo "Checking for potential hardcoded secrets..."
-          if grep -rE "(api_key|password|secret|token)\s*=\s*[\"'][^\"']+[\"']" --include="*.py" ${{ inputs.source-directory }}/ | \
+          if grep -rE "(api_key|password|secret|token)\s*=\s*[\"'][^\"']+[\"']" --include="*.py" "$SRC_DIR"/ | \
              grep -v "#LLM-PLACEHOLDER" | grep -v "^[[:space:]]*#"; then
             echo "::error::Potential hardcoded secret detected"
             exit 1
@@ -589,7 +600,7 @@ jobs:
 
           # Magic numbers
           echo "Checking for magic numbers..."
-          MAGIC_NUMBERS=$(grep -rE "\b[0-9]{2,}\b" --include="*.py" ${{ inputs.source-directory }}/ | \
+          MAGIC_NUMBERS=$(grep -rE "\b[0-9]{2,}\b" --include="*.py" "$SRC_DIR"/ | \
                           grep -v "#LLM-PLACEHOLDER" | \
                           grep -v "^[[:space:]]*#" | \
                           wc -l || echo "0")
@@ -644,21 +655,26 @@ jobs:
         id: quality-gate
 
       - name: Quality Gate Result
+        env:
+          SONAR_PROJECT_KEY: ${{ inputs.sonarcloud-project-key }}
         run: |
           echo "::group::Quality Gate Status"
           echo "Quality Gate Status: ${{ steps.quality-gate.outputs.quality-gate-status }}"
-          echo "View detailed results: https://sonarcloud.io/project/overview?id=${{ inputs.sonarcloud-project-key }}"
+          echo "View detailed results: https://sonarcloud.io/project/overview?id=$SONAR_PROJECT_KEY"
           echo "::endgroup::"
 
       - name: Block PR if quality gate fails
         if: steps.quality-gate.outputs.quality-gate-status == 'FAILED'
+        env:
+          SONAR_PROJECT_KEY: ${{ inputs.sonarcloud-project-key }}
+          COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold }}
         run: |
           echo "::error::Quality Gate FAILED"
           echo ""
           echo "SonarQube quality gate did not pass. Please fix the issues:"
-          echo "- Review issues at: https://sonarcloud.io/project/overview?id=${{ inputs.sonarcloud-project-key }}"
+          echo "- Review issues at: https://sonarcloud.io/project/overview?id=$SONAR_PROJECT_KEY"
           echo "- Fix all BLOCKER and CRITICAL issues"
-          echo "- Ensure test coverage >= ${{ inputs.coverage-threshold }}%"
+          echo "- Ensure test coverage >= $COVERAGE_THRESHOLD%"
           echo "- Reduce code duplication"
           exit 1
 
@@ -697,10 +713,12 @@ jobs:
         run: uv sync --all-extras
 
       - name: Run tests
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
         run: |
           echo "::group::Testing on Python ${{ matrix.python-version }}"
           uv run pytest \
-            --cov=${{ inputs.source-directory }} \
+            --cov="$SRC_DIR" \
             --cov-report=term-missing \
             -v
           echo "::endgroup::"
