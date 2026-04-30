@@ -9,15 +9,35 @@
 #       uses: ByronWilliamsCPA/.github/.github/workflows/python-scorecard.yml@main
 #       permissions:
 #         security-events: write
-#         id-token: write
 #         contents: read
 #         actions: read
+#       with:
+#         publish-results: false   # REQUIRED -- see Known Limitations below
+#       secrets:
+#         SCORECARD_TOKEN: ${{ secrets.SCORECARD_TOKEN }}
 #
 # Features:
 #   - OpenSSF Scorecard security analysis
 #   - SARIF upload to GitHub Security tab
 #   - Supply chain security assessment
 #   - Branch protection verification
+#
+# Known Limitations
+# -----------------
+# publish-results MUST be set to false by all callers.
+#
+# When this workflow runs as a reusable callee, the OIDC token's `repository`
+# claim resolves to the .github repo (where the workflow lives), not the
+# calling repository. The scorecard-action uses that claim to publish results
+# to securityscorecards.dev. With the wrong repo claim the publication fails
+# and the job errors. Setting publish-results: false skips the OIDC publish
+# step entirely; the SARIF upload to the Security tab still works correctly.
+#
+# SCORECARD_TOKEN secret: pass SCORECARD_TOKEN via the secrets: block so the
+# Branch-Protection check can read admin-level branch protection fields
+# (DismissStaleReviews, EnforceAdmins, RequireLastPushApproval, etc.).
+# Without it, Branch-Protection always scores 0. The secret requires a
+# fine-grained PAT with Administration:Read on the calling repository.
 # ============================================================================
 
 name: OpenSSF Scorecard (Reusable)
@@ -29,7 +49,7 @@ on:
         description: 'Publish results to OpenSSF REST API'
         type: boolean
         required: false
-        default: true
+        default: false
 
       upload-sarif:
         description: 'Upload SARIF results to GitHub Security tab'
