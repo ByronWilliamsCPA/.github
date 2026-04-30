@@ -14,7 +14,7 @@
 #         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 #       with:
 #         sonar-organization: 'byronwilliamscpa'
-#         sonar-project-key: 'ByronWilliamsCPA_your-repo'
+#         sonar-project-key: 'byronwilliamscpa_your-repo'
 #
 # Features:
 #   - Code quality metrics (bugs, code smells, technical debt)

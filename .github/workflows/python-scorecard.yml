@@ -9,7 +9,6 @@
 #       uses: ByronWilliamsCPA/.github/.github/workflows/python-scorecard.yml@main
 #       permissions:
 #         security-events: write
-#         id-token: write
 #         contents: read
 #         actions: read
 #       with:
@@ -50,7 +49,7 @@ on:
         description: 'Publish results to OpenSSF REST API'
         type: boolean
         required: false
-        default: true
+        default: false
 
       upload-sarif:
         description: 'Upload SARIF results to GitHub Security tab'
