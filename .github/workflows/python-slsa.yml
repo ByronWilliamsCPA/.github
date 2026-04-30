@@ -14,12 +14,12 @@
 #       outputs:
 #         hashes: ${{ steps.hash.outputs.hashes }}
 #       steps:
-#         - uses: actions/checkout@v4
+#         - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 #         - run: pip install build && python -m build
 #         - id: hash
 #           run: |
 #             cd dist && echo "hashes=$(sha256sum * | base64 -w0)" >> "$GITHUB_OUTPUT"
-#         - uses: actions/upload-artifact@v4
+#         - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
 #           with:
 #             name: dist
 #             path: dist/
@@ -50,6 +50,13 @@
 #   you must call it directly from your workflow.
 #
 # See: https://docs.github.com/en/actions/using-workflows/reusing-workflows#limitations
+#
+# IMPORTANT: SLSA provenance is NOT included in python-release.yml.
+# Every caller must add the provenance job from this template directly
+# into their own top-level release workflow. GitHub Actions prohibits
+# nested reusable workflow calls, so this job cannot be called from
+# python-release.yml.
+#
 # ============================================================================
 
 name: SLSA Provenance (Template)
