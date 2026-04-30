@@ -6,12 +6,15 @@
 # Usage from downstream repos:
 #   jobs:
 #     sonarcloud:
-#       uses: williaby/.github/.github/workflows/python-sonarcloud.yml@main
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-sonarcloud.yml@main
+#       permissions:
+#         contents: read
+#         pull-requests: write   # REQUIRED for PR decoration -- see Known Limitations
 #       secrets:
 #         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 #       with:
-#         sonar-organization: 'your-org'
-#         sonar-project-key: 'your-org_your-project'
+#         sonar-organization: 'byronwilliamscpa'
+#         sonar-project-key: 'ByronWilliamsCPA_your-repo'
 #
 # Features:
 #   - Code quality metrics (bugs, code smells, technical debt)
@@ -31,6 +34,22 @@
 #   2. Import your repository
 #   3. Generate token at https://sonarcloud.io/account/security
 #   4. Add SONAR_TOKEN to repository secrets
+#
+# Known Limitations
+# -----------------
+# pull-requests: write MUST be granted by the caller job.
+#
+# Reusable workflows cannot escalate beyond the permissions the caller grants.
+# The SonarCloud scan action posts inline comments on pull requests using the
+# GITHUB_TOKEN. If the caller does not grant pull-requests: write, the
+# decoration step silently succeeds but no comments appear on the PR. The
+# analysis still runs and the quality gate still evaluates, but reviewers lose
+# the inline feedback. Always add pull-requests: write to the calling job's
+# permissions block.
+#
+# SONAR_TOKEN secret: must be explicitly passed via the secrets: block. Org
+# secrets are not automatically forwarded to reusable workflows even when
+# configured for the calling repository -- the caller must relay them.
 # ============================================================================
 
 name: SonarCloud Analysis (Reusable)
