@@ -130,8 +130,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
-  checks: write
 
 jobs:
   # ============================================================================
@@ -194,37 +192,51 @@ jobs:
           enable-cache: true
 
       - name: Set up Python
-        run: uv python install ${{ inputs.python-version }}
+        env:
+          PYTHON_VERSION: ${{ inputs.python-version }}
+        run: uv python install "$PYTHON_VERSION"
 
       - name: Install dependencies
         run: |
           uv sync --all-extras
 
       - name: Run Ruff formatter check
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
+          TEST_DIR: ${{ inputs.test-directory }}
         run: |
           echo "::group::Ruff Formatting"
-          uv run ruff format --check ${{ inputs.source-directory }}/ ${{ inputs.test-directory }}/ || {
-            echo "::error::Code formatting issues detected. Run 'uv run ruff format ${{ inputs.source-directory }}/ ${{ inputs.test-directory }}/' to fix."
+          uv run ruff format --check "$SRC_DIR"/ "$TEST_DIR"/ || {
+            echo "::error::Code formatting issues detected. Run 'uv run ruff format "$SRC_DIR"/ "$TEST_DIR"/' to fix."
             exit 1
           }
           echo "::endgroup::"
 
       - name: Run Ruff linter
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
+          TEST_DIR: ${{ inputs.test-directory }}
         run: |
           echo "::group::Ruff Linting"
-          uv run ruff check ${{ inputs.source-directory }}/ ${{ inputs.test-directory }}/ --output-format=github
+          uv run ruff check "$SRC_DIR"/ "$TEST_DIR"/ --output-format=github
           echo "::endgroup::"
 
       - name: Run BasedPyright type checker
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
         run: |
           echo "::group::BasedPyright Type Checking"
-          uv run basedpyright ${{ inputs.source-directory }}/ || {
+          uv run basedpyright "$SRC_DIR"/ || {
             echo "::warning::Type checking found issues"
           }
           echo "::endgroup::"
 
       - name: Dead code detection with Vulture
         if: inputs.enable-dead-code-check
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
+          DEAD_CODE_CONFIDENCE: ${{ inputs.dead-code-confidence }}
+          FAIL_ON_DEAD_CODE: ${{ inputs.fail-on-dead-code }}
         run: |
           echo "::group::Vulture Dead Code Detection"
 
@@ -232,10 +244,10 @@ jobs:
           uv pip install vulture 2>/dev/null || true
 
           # Run vulture with configurable confidence threshold
-          echo "Scanning for dead code (min confidence: ${{ inputs.dead-code-confidence }}%)..."
+          echo "Scanning for dead code (min confidence: $DEAD_CODE_CONFIDENCE%)..."
 
           # Capture output for reporting
-          VULTURE_OUTPUT=$(uv run vulture ${{ inputs.source-directory }}/ --min-confidence ${{ inputs.dead-code-confidence }} 2>&1) || true
+          VULTURE_OUTPUT=$(uv run vulture "$SRC_DIR"/ --min-confidence "$DEAD_CODE_CONFIDENCE" 2>&1) || true
 
           if [ -n "$VULTURE_OUTPUT" ]; then
             echo "$VULTURE_OUTPUT"
@@ -246,7 +258,7 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### Dead Code Detection (Vulture)" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "**Found $DEAD_CODE_COUNT potential dead code issue(s)** (confidence ≥${{ inputs.dead-code-confidence }}%)" >> $GITHUB_STEP_SUMMARY
+            echo "**Found $DEAD_CODE_COUNT potential dead code issue(s)** (confidence >=$DEAD_CODE_CONFIDENCE%)" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
             echo "$VULTURE_OUTPUT" >> $GITHUB_STEP_SUMMARY
@@ -255,28 +267,30 @@ jobs:
             echo "> **Note:** Review these findings. Some may be false positives (e.g., pytest fixtures, CLI entry points)." >> $GITHUB_STEP_SUMMARY
             echo "> Use a `.vulture_whitelist.py` file to suppress known false positives." >> $GITHUB_STEP_SUMMARY
 
-            if [ "${{ inputs.fail-on-dead-code }}" == "true" ]; then
+            if [ "$FAIL_ON_DEAD_CODE" == "true" ]; then
               echo "::error::Dead code detected. Set 'fail-on-dead-code: false' to make this a warning."
               exit 1
             else
               echo "::warning::Potential dead code detected. Review vulture output above."
             fi
           else
-            echo "No dead code detected at ${{ inputs.dead-code-confidence }}% confidence threshold."
+            echo "No dead code detected at $DEAD_CODE_CONFIDENCE% confidence threshold."
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### Dead Code Detection (Vulture)" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "✅ No dead code detected (confidence ≥${{ inputs.dead-code-confidence }}%)" >> $GITHUB_STEP_SUMMARY
+            echo "No dead code detected (confidence >=$DEAD_CODE_CONFIDENCE%)" >> $GITHUB_STEP_SUMMARY
           fi
 
           echo "::endgroup::"
 
       - name: Run unit tests with coverage
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
         run: |
           echo "::group::Unit Test Execution"
           uv run pytest \
             -m "unit or not (integration or security or slow)" \
-            --cov=${{ inputs.source-directory }} \
+            --cov="$SRC_DIR" \
             --cov-report=xml:coverage-unit.xml \
             --cov-report=term-missing \
             --cov-branch \
@@ -287,49 +301,65 @@ jobs:
 
       - name: Run integration tests with coverage
         if: inputs.run-integration-tests
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
         run: |
           echo "::group::Integration Test Execution"
+          set +e
           uv run pytest \
             -m "integration" \
-            --cov=${{ inputs.source-directory }} \
+            --cov="$SRC_DIR" \
             --cov-report=xml:coverage-integration.xml \
             --cov-report=term-missing \
             --cov-branch \
             --cov-append \
             --junitxml=junit-integration.xml \
             -o junit_family=xunit2 \
-            -v || echo "No integration tests found or all skipped"
+            -v
+          EXIT=$?
+          set -e
           echo "::endgroup::"
+          if [ $EXIT -ne 0 ] && [ $EXIT -ne 5 ]; then exit $EXIT; fi
 
       - name: Run security tests with coverage
         if: inputs.run-security-tests
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
         run: |
           echo "::group::Security Test Execution"
+          set +e
           uv run pytest \
             -m "security" \
-            --cov=${{ inputs.source-directory }} \
+            --cov="$SRC_DIR" \
             --cov-report=xml:coverage-security.xml \
             --cov-report=term-missing \
             --cov-branch \
             --cov-append \
             --junitxml=junit-security.xml \
             -o junit_family=xunit2 \
-            -v || echo "No security tests found or all skipped"
+            -v
+          EXIT=$?
+          set -e
           echo "::endgroup::"
+          if [ $EXIT -ne 0 ] && [ $EXIT -ne 5 ]; then exit $EXIT; fi
 
       - name: Generate combined coverage report
+        env:
+          COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold }}
         run: |
           echo "::group::Combined Coverage"
           uv run coverage combine --keep || true
           uv run coverage xml -o coverage.xml
           uv run coverage html
-          uv run coverage report --fail-under=${{ inputs.coverage-threshold }}
+          uv run coverage report --fail-under="$COVERAGE_THRESHOLD"
           echo "::endgroup::"
 
       - name: Security scan with Bandit
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
         run: |
           echo "::group::Bandit Security Scan"
-          uv run bandit -r ${{ inputs.source-directory }}/ -f json -o bandit-report.json || {
+          uv run bandit -r "$SRC_DIR"/ -f json -o bandit-report.json || {
             echo "::warning::Security issues detected"
             cat bandit-report.json
           }
@@ -466,21 +496,23 @@ jobs:
 
       - name: Check for unverified assumption tags
         id: check-tags
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
         run: |
           echo "::group::Scanning for Unverified Assumption Tags"
 
           # Check for RAD tags (Layer 1: Production Runtime Risks)
-          CRITICAL_TAGS=$(grep -r "#CRITICAL" --include="*.py" ${{ inputs.source-directory }}/ 2>/dev/null | wc -l || echo "0")
-          ASSUME_TAGS=$(grep -r "#ASSUME" --include="*.py" ${{ inputs.source-directory }}/ 2>/dev/null | wc -l || echo "0")
-          EDGE_TAGS=$(grep -r "#EDGE" --include="*.py" ${{ inputs.source-directory }}/ 2>/dev/null | wc -l || echo "0")
+          CRITICAL_TAGS=$(grep -r "#CRITICAL" --include="*.py" "$SRC_DIR"/ 2>/dev/null | wc -l || echo "0")
+          ASSUME_TAGS=$(grep -r "#ASSUME" --include="*.py" "$SRC_DIR"/ 2>/dev/null | wc -l || echo "0")
+          EDGE_TAGS=$(grep -r "#EDGE" --include="*.py" "$SRC_DIR"/ 2>/dev/null | wc -l || echo "0")
 
           # Check for LLM debt tags (Layer 2: LLM Development Debt)
-          LLM_MOCK=$(grep -r "#LLM-MOCK" --include="*.py" ${{ inputs.source-directory }}/ 2>/dev/null | wc -l || echo "0")
-          LLM_PLACEHOLDER=$(grep -r "#LLM-PLACEHOLDER" --include="*.py" ${{ inputs.source-directory }}/ 2>/dev/null | wc -l || echo "0")
-          LLM_LOGIC=$(grep -r "#LLM-LOGIC" --include="*.py" ${{ inputs.source-directory }}/ 2>/dev/null | wc -l || echo "0")
-          LLM_SCAFFOLD=$(grep -r "#LLM-SCAFFOLD" --include="*.py" ${{ inputs.source-directory }}/ 2>/dev/null | wc -l || echo "0")
-          LLM_INFERRED=$(grep -r "#LLM-INFERRED" --include="*.py" ${{ inputs.source-directory }}/ 2>/dev/null | wc -l || echo "0")
-          LLM_TEST_FIRST=$(grep -r "#LLM-TEST-FIRST" --include="*.py" ${{ inputs.source-directory }}/ 2>/dev/null | wc -l || echo "0")
+          LLM_MOCK=$(grep -r "#LLM-MOCK" --include="*.py" "$SRC_DIR"/ 2>/dev/null | wc -l || echo "0")
+          LLM_PLACEHOLDER=$(grep -r "#LLM-PLACEHOLDER" --include="*.py" "$SRC_DIR"/ 2>/dev/null | wc -l || echo "0")
+          LLM_LOGIC=$(grep -r "#LLM-LOGIC" --include="*.py" "$SRC_DIR"/ 2>/dev/null | wc -l || echo "0")
+          LLM_SCAFFOLD=$(grep -r "#LLM-SCAFFOLD" --include="*.py" "$SRC_DIR"/ 2>/dev/null | wc -l || echo "0")
+          LLM_INFERRED=$(grep -r "#LLM-INFERRED" --include="*.py" "$SRC_DIR"/ 2>/dev/null | wc -l || echo "0")
+          LLM_TEST_FIRST=$(grep -r "#LLM-TEST-FIRST" --include="*.py" "$SRC_DIR"/ 2>/dev/null | wc -l || echo "0")
 
           TOTAL_RAD=$((CRITICAL_TAGS + ASSUME_TAGS))
           TOTAL_LLM=$((LLM_MOCK + LLM_PLACEHOLDER + LLM_LOGIC + LLM_SCAFFOLD + LLM_INFERRED + LLM_TEST_FIRST))
@@ -523,38 +555,46 @@ jobs:
 
       - name: Block PR if critical tags found
         if: ${{ steps.check-tags.outputs.critical_tags > 0 }}
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
+          CRITICAL_TAGS: ${{ steps.check-tags.outputs.critical_tags }}
         run: |
-          echo "::error::PR blocked: Found ${{ steps.check-tags.outputs.critical_tags }} unverified #CRITICAL production risk tags"
+          echo "::error::PR blocked: Found $CRITICAL_TAGS unverified #CRITICAL production risk tags"
           echo ""
           echo "Please verify and remove these tags before merging:"
-          grep -rn "#CRITICAL" --include="*.py" ${{ inputs.source-directory }}/ || true
+          grep -rn "#CRITICAL" --include="*.py" "$SRC_DIR"/ || true
           echo ""
           echo "See CLAUDE.md for verification workflow"
           exit 1
 
       - name: Fail on LLM tags (if configured)
         if: ${{ inputs.fail-on-llm-tags && fromJSON(steps.check-tags.outputs.llm_tags) > 0 }}
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
+          LLM_TAGS: ${{ steps.check-tags.outputs.llm_tags }}
         run: |
-          echo "::error::PR blocked: Found ${{ steps.check-tags.outputs.llm_tags }} LLM debt tags"
+          echo "::error::PR blocked: Found $LLM_TAGS LLM debt tags"
           echo ""
           echo "Please address LLM debt before merging:"
-          grep -rn "#LLM-" --include="*.py" ${{ inputs.source-directory }}/ || true
+          grep -rn "#LLM-" --include="*.py" "$SRC_DIR"/ || true
           exit 1
 
       - name: Detect LLM anti-patterns
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
         run: |
           echo "::group::LLM Anti-Pattern Detection"
 
           # Hardcoded localhost/URLs
           echo "Checking for hardcoded localhost/URLs..."
-          if grep -rE "(localhost|127\.0\.0\.1|http://|https://)" --include="*.py" ${{ inputs.source-directory }}/ | \
+          if grep -rE "(localhost|127\.0\.0\.1|http://|https://)" --include="*.py" "$SRC_DIR"/ | \
              grep -v "#LLM-PLACEHOLDER" | grep -v "^[[:space:]]*#"; then
             echo "::warning::Found hardcoded URLs without #LLM-PLACEHOLDER tag"
           fi
 
           # Hardcoded secrets patterns
           echo "Checking for potential hardcoded secrets..."
-          if grep -rE "(api_key|password|secret|token)\s*=\s*[\"'][^\"']+[\"']" --include="*.py" ${{ inputs.source-directory }}/ | \
+          if grep -rE "(api_key|password|secret|token)\s*=\s*[\"'][^\"']+[\"']" --include="*.py" "$SRC_DIR"/ | \
              grep -v "#LLM-PLACEHOLDER" | grep -v "^[[:space:]]*#"; then
             echo "::error::Potential hardcoded secret detected"
             exit 1
@@ -562,7 +602,7 @@ jobs:
 
           # Magic numbers
           echo "Checking for magic numbers..."
-          MAGIC_NUMBERS=$(grep -rE "\b[0-9]{2,}\b" --include="*.py" ${{ inputs.source-directory }}/ | \
+          MAGIC_NUMBERS=$(grep -rE "\b[0-9]{2,}\b" --include="*.py" "$SRC_DIR"/ | \
                           grep -v "#LLM-PLACEHOLDER" | \
                           grep -v "^[[:space:]]*#" | \
                           wc -l || echo "0")
@@ -617,21 +657,27 @@ jobs:
         id: quality-gate
 
       - name: Quality Gate Result
+        env:
+          SONAR_PROJECT_KEY: ${{ inputs.sonarcloud-project-key }}
+          QUALITY_GATE_STATUS: ${{ steps.quality-gate.outputs.quality-gate-status }}
         run: |
           echo "::group::Quality Gate Status"
-          echo "Quality Gate Status: ${{ steps.quality-gate.outputs.quality-gate-status }}"
-          echo "View detailed results: https://sonarcloud.io/project/overview?id=${{ inputs.sonarcloud-project-key }}"
+          echo "Quality Gate Status: $QUALITY_GATE_STATUS"
+          echo "View detailed results: https://sonarcloud.io/project/overview?id=$SONAR_PROJECT_KEY"
           echo "::endgroup::"
 
       - name: Block PR if quality gate fails
         if: steps.quality-gate.outputs.quality-gate-status == 'FAILED'
+        env:
+          SONAR_PROJECT_KEY: ${{ inputs.sonarcloud-project-key }}
+          COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold }}
         run: |
           echo "::error::Quality Gate FAILED"
           echo ""
           echo "SonarQube quality gate did not pass. Please fix the issues:"
-          echo "- Review issues at: https://sonarcloud.io/project/overview?id=${{ inputs.sonarcloud-project-key }}"
+          echo "- Review issues at: https://sonarcloud.io/project/overview?id=$SONAR_PROJECT_KEY"
           echo "- Fix all BLOCKER and CRITICAL issues"
-          echo "- Ensure test coverage >= ${{ inputs.coverage-threshold }}%"
+          echo "- Ensure test coverage >= $COVERAGE_THRESHOLD%"
           echo "- Reduce code duplication"
           exit 1
 
@@ -664,16 +710,21 @@ jobs:
           enable-cache: true
 
       - name: Set up Python ${{ matrix.python-version }}
-        run: uv python install ${{ matrix.python-version }}
+        env:
+          PYTHON_VERSION: ${{ matrix.python-version }}
+        run: uv python install "$PYTHON_VERSION"
 
       - name: Install dependencies
         run: uv sync --all-extras
 
       - name: Run tests
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
+          PYTHON_VERSION: ${{ matrix.python-version }}
         run: |
-          echo "::group::Testing on Python ${{ matrix.python-version }}"
+          echo "::group::Testing on Python $PYTHON_VERSION"
           uv run pytest \
-            --cov=${{ inputs.source-directory }} \
+            --cov="$SRC_DIR" \
             --cov-report=term-missing \
             -v
           echo "::endgroup::"
@@ -689,27 +740,33 @@ jobs:
 
     steps:
       - name: Check CI results
+        env:
+          RESULT_CHECK_SECRETS: ${{ needs.check-secrets.result }}
+          RESULT_QUALITY_CHECKS: ${{ needs.quality-checks.result }}
+          RESULT_LLM_GOVERNANCE: ${{ needs.llm-governance.result }}
+          RESULT_SONARCLOUD: ${{ needs.sonarcloud-quality-gate.result }}
+          RESULT_MATRIX_TESTING: ${{ needs.matrix-testing.result }}
         run: |
           is_acceptable() { [[ "$1" == "success" || "$1" == "skipped" ]]; }
 
-          if ! is_acceptable "${{ needs.check-secrets.result }}"; then
-            echo "::error::CI Gate failed: check-secrets is ${{ needs.check-secrets.result }}"
+          if ! is_acceptable "$RESULT_CHECK_SECRETS"; then
+            echo "::error::CI Gate failed: check-secrets is $RESULT_CHECK_SECRETS"
             exit 1
           fi
-          if ! is_acceptable "${{ needs.quality-checks.result }}"; then
-            echo "::error::CI Gate failed: quality-checks is ${{ needs.quality-checks.result }}"
+          if ! is_acceptable "$RESULT_QUALITY_CHECKS"; then
+            echo "::error::CI Gate failed: quality-checks is $RESULT_QUALITY_CHECKS"
             exit 1
           fi
-          if ! is_acceptable "${{ needs.llm-governance.result }}"; then
-            echo "::error::CI Gate failed: llm-governance is ${{ needs.llm-governance.result }}"
+          if ! is_acceptable "$RESULT_LLM_GOVERNANCE"; then
+            echo "::error::CI Gate failed: llm-governance is $RESULT_LLM_GOVERNANCE"
             exit 1
           fi
-          if ! is_acceptable "${{ needs.sonarcloud-quality-gate.result }}"; then
-            echo "::error::CI Gate failed: sonarcloud-quality-gate is ${{ needs.sonarcloud-quality-gate.result }}"
+          if ! is_acceptable "$RESULT_SONARCLOUD"; then
+            echo "::error::CI Gate failed: sonarcloud-quality-gate is $RESULT_SONARCLOUD"
             exit 1
           fi
-          if ! is_acceptable "${{ needs.matrix-testing.result }}"; then
-            echo "::error::CI Gate failed: matrix-testing is ${{ needs.matrix-testing.result }}"
+          if ! is_acceptable "$RESULT_MATRIX_TESTING"; then
+            echo "::error::CI Gate failed: matrix-testing is $RESULT_MATRIX_TESTING"
             exit 1
           fi
           echo "CI Gate passed"

@@ -253,20 +253,25 @@ jobs:
 
       - name: PR Metadata Summary
         if: always()
+        env:
+          REQUIRE_CONVENTIONAL_COMMITS: ${{ inputs.require-conventional-commits }}
+          REQUIRE_DESCRIPTION: ${{ inputs.require-description }}
+          TITLE_VALID: ${{ steps.validate-title.outputs.valid }}
+          DESCRIPTION_VALID: ${{ steps.validate-description.outputs.valid }}
         run: |
           echo "## PR Metadata Validation" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          if [ "${{ inputs.require-conventional-commits }}" == "true" ]; then
-            if [ "${{ steps.validate-title.outputs.valid }}" == "true" ]; then
+          if [ "$REQUIRE_CONVENTIONAL_COMMITS" == "true" ]; then
+            if [ "$TITLE_VALID" == "true" ]; then
               echo "- Title: Valid (Conventional Commits)" >> $GITHUB_STEP_SUMMARY
             else
               echo "- Title: Invalid" >> $GITHUB_STEP_SUMMARY
             fi
           fi
 
-          if [ "${{ inputs.require-description }}" == "true" ]; then
-            if [ "${{ steps.validate-description.outputs.valid }}" == "true" ]; then
+          if [ "$REQUIRE_DESCRIPTION" == "true" ]; then
+            if [ "$DESCRIPTION_VALID" == "true" ]; then
               echo "- Description: Valid" >> $GITHUB_STEP_SUMMARY
             else
               echo "- Description: Invalid or too short" >> $GITHUB_STEP_SUMMARY
@@ -304,22 +309,30 @@ jobs:
         run: uv sync --all-extras
 
       - name: Check formatting (Ruff)
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
+          TEST_DIR: ${{ inputs.test-directory }}
         run: |
           echo "Checking code formatting..."
-          uv run ruff format --check ${{ inputs.source-directory }}/ ${{ inputs.test-directory }}/ || {
+          uv run ruff format --check "$SRC_DIR/" "$TEST_DIR/" || {
             echo "::error::Code formatting issues detected. Run 'ruff format' to fix."
             exit 1
           }
 
       - name: Run linter (Ruff)
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
+          TEST_DIR: ${{ inputs.test-directory }}
         run: |
           echo "Running linter..."
-          uv run ruff check ${{ inputs.source-directory }}/ ${{ inputs.test-directory }}/ --output-format=github
+          uv run ruff check "$SRC_DIR/" "$TEST_DIR/" --output-format=github
 
       - name: Run type checker (BasedPyright)
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
         run: |
           echo "Running type checker..."
-          uv run basedpyright ${{ inputs.source-directory }}/ || {
+          uv run basedpyright "$SRC_DIR/" || {
             echo "::warning::Type checking found issues"
           }
 
@@ -362,12 +375,15 @@ jobs:
         run: uv sync --all-extras
 
       - name: Run tests with coverage
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
+          COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold }}
         run: |
           uv run pytest \
-            --cov=${{ inputs.source-directory }} \
+            --cov="$SRC_DIR" \
             --cov-report=xml:coverage.xml \
             --cov-report=term-missing \
-            --cov-fail-under=${{ inputs.coverage-threshold }} \
+            --cov-fail-under="$COVERAGE_THRESHOLD" \
             -v
 
       - name: Upload coverage artifact
@@ -400,6 +416,7 @@ jobs:
         id: breaking
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
+          BASE_REF: ${{ github.base_ref }}
         run: |
           # Check PR title for breaking change indicator
           if [[ "$PR_TITLE" =~ "!" ]] || [[ "$PR_TITLE" =~ "BREAKING" ]]; then
@@ -418,7 +435,7 @@ jobs:
             "public/"
           )
 
-          git diff --name-only origin/${{ github.base_ref }}...HEAD > changed_files.txt
+          git diff --name-only "origin/$BASE_REF"...HEAD > changed_files.txt
 
           BREAKING_FILES=""
           for pattern in "${BREAKING_PATTERNS[@]}"; do
@@ -434,18 +451,21 @@ jobs:
 
       - name: Breaking Change Summary
         if: always()
+        env:
+          HAS_BREAKING: ${{ steps.breaking.outputs.has_breaking }}
+          BREAKING_FILES: ${{ steps.breaking.outputs.breaking_files }}
         run: |
           echo "## Breaking Change Analysis" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          if [ "${{ steps.breaking.outputs.has_breaking }}" == "true" ]; then
+          if [ "$HAS_BREAKING" == "true" ]; then
             echo "**Breaking change indicator found in PR title**" >> $GITHUB_STEP_SUMMARY
           fi
 
-          if [ -n "${{ steps.breaking.outputs.breaking_files }}" ]; then
+          if [ -n "$BREAKING_FILES" ]; then
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "**Potentially breaking files modified:**" >> $GITHUB_STEP_SUMMARY
-            echo "${{ steps.breaking.outputs.breaking_files }}" >> $GITHUB_STEP_SUMMARY
+            echo "$BREAKING_FILES" >> $GITHUB_STEP_SUMMARY
           fi
 
   # PR size labeling
@@ -521,23 +541,33 @@ jobs:
 
     steps:
       - name: Generate validation summary
+        env:
+          PR_META_RESULT: ${{ needs.pr-metadata.result }}
+          CODE_QUALITY_RESULT: ${{ needs.code-quality.result }}
+          TESTS_RESULT: ${{ needs.tests.result }}
+          BREAKING_CHANGES_RESULT: ${{ needs.breaking-changes.result }}
+          SIZE_LABELING_RESULT: ${{ needs.size-labeling.result }}
         run: |
           echo "## Dependency & Standards Validation" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| PR Metadata | ${{ needs.pr-metadata.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Code Quality | ${{ needs.code-quality.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Tests | ${{ needs.tests.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Breaking Changes | ${{ needs.breaking-changes.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Size Labeling | ${{ needs.size-labeling.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| PR Metadata | $PR_META_RESULT |" >> $GITHUB_STEP_SUMMARY
+          echo "| Code Quality | $CODE_QUALITY_RESULT |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tests | $TESTS_RESULT |" >> $GITHUB_STEP_SUMMARY
+          echo "| Breaking Changes | $BREAKING_CHANGES_RESULT |" >> $GITHUB_STEP_SUMMARY
+          echo "| Size Labeling | $SIZE_LABELING_RESULT |" >> $GITHUB_STEP_SUMMARY
 
       - name: Check validation result
+        env:
+          PR_META_RESULT: ${{ needs.pr-metadata.result }}
+          CODE_QUALITY_RESULT: ${{ needs.code-quality.result }}
+          TESTS_RESULT: ${{ needs.tests.result }}
         run: |
           # Check critical jobs
-          if [ "${{ needs.pr-metadata.result }}" == "failure" ] || \
-             [ "${{ needs.code-quality.result }}" == "failure" ] || \
-             [ "${{ needs.tests.result }}" == "failure" ]; then
+          if [ "$PR_META_RESULT" == "failure" ] || \
+             [ "$CODE_QUALITY_RESULT" == "failure" ] || \
+             [ "$TESTS_RESULT" == "failure" ]; then
             echo "::error::PR validation failed"
             exit 1
           fi
