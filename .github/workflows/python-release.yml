@@ -285,13 +285,13 @@ jobs:
         env:
           SIGN_ARTIFACTS: ${{ inputs.sign-artifacts }}
           GENERATE_SBOM: ${{ inputs.generate-sbom }}
+          RELEASE_VERSION: ${{ steps.semantic-release.outputs.version || steps.manual-release.outputs.version }}
+          RELEASE_TAG: ${{ steps.semantic-release.outputs.tag || steps.manual-release.outputs.tag }}
         run: |
-          VERSION="${{ steps.semantic-release.outputs.version || steps.manual-release.outputs.version }}"
-          TAG="${{ steps.semantic-release.outputs.tag || steps.manual-release.outputs.tag }}"
           echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** $VERSION" >> $GITHUB_STEP_SUMMARY
-          echo "**Tag:** $TAG" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** $RELEASE_VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** $RELEASE_TAG" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Security Features" >> $GITHUB_STEP_SUMMARY
           if [ "$SIGN_ARTIFACTS" == "true" ]; then
