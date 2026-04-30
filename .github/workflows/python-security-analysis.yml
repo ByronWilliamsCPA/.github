@@ -224,12 +224,14 @@ jobs:
 
       - name: Bandit Static Analysis
         if: ${{ inputs.run-bandit }}
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
         run: |
           echo "🔒 Running Bandit security analysis..."
-          uv run bandit -r ${{ inputs.source-directory }} \
+          uv run bandit -r "$SRC_DIR" \
             -f json -o bandit-report.json \
             -c pyproject.toml || true
-          uv run bandit -r ${{ inputs.source-directory }} -c pyproject.toml
+          uv run bandit -r "$SRC_DIR" -c pyproject.toml
 
       - name: Safety Vulnerability Scan
         if: ${{ inputs.run-safety }}
@@ -279,10 +281,14 @@ jobs:
             --output=osv-results.json
 
       - name: Analyze OSV Results
+        env:
+          FAIL_ON_HIGH: ${{ inputs.fail-on-high }}
+          FAIL_ON_MEDIUM: ${{ inputs.fail-on-medium }}
         run: |
           echo "🔍 Analyzing OSV scan results..."
           python3 << 'EOF'
           import json
+          import os
           import sys
 
           def extract_severity(vuln):
@@ -314,6 +320,9 @@ jobs:
                   return 'MEDIUM' if max_severity == 'MODERATE' else max_severity
 
               return 'UNKNOWN'
+
+          fail_on_high = os.environ.get("FAIL_ON_HIGH", "false").lower() == "true"
+          fail_on_medium = os.environ.get("FAIL_ON_MEDIUM", "false").lower() == "true"
 
           try:
               with open('osv-results.json', 'r') as f:
@@ -355,13 +364,13 @@ jobs:
                   print(f'❌ HIGH/CRITICAL: {len(high_crit)} vulnerabilities')
                   for v in high_crit[:5]:
                       print(f'   - {v}')
-                  if '${{ inputs.fail-on-high }}' == 'true':
+                  if fail_on_high:
                       print('\n❌ Build FAILED: HIGH/CRITICAL vulnerabilities found')
                       sys.exit(1)
 
               if medium:
                   print(f'⚠️  MEDIUM: {len(medium)} vulnerabilities')
-                  if '${{ inputs.fail-on-medium }}' == 'true':
+                  if fail_on_medium:
                       print('\n❌ Build FAILED: MEDIUM vulnerabilities found')
                       sys.exit(1)
 
