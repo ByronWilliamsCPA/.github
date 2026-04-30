@@ -132,7 +132,13 @@ on:
         description: 'Generate Software Bill of Materials'
         type: boolean
         required: false
-        default: false
+        default: true
+
+      enable-provenance:
+        description: 'Generate SLSA provenance attestation for the Docker image'
+        type: boolean
+        required: false
+        default: true
 
       # PR comment
       enable-pr-comment:
@@ -296,7 +302,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           sbom: ${{ inputs.enable-sbom }}
-          provenance: ${{ inputs.enable-sbom }}
+          provenance: ${{ inputs.enable-provenance }}
 
       # Export local image for Trivy scanning when not pushed to registry
       - name: Export local image for scanning
