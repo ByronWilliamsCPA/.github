@@ -30,7 +30,7 @@ on:
 permissions: read-all
 
 env:
-  POETRY_VERSION: 2.1.2
+  POETRY_VERSION: 2.3.4
 
 jobs:
   # Detect if security-relevant files changed in this PR
@@ -41,11 +41,11 @@ jobs:
       security_files: ${{  steps.filter.outputs.security  }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Check for security-relevant file changes
         id: filter
-        uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        uses: dorny/paths-filter@fbd0ab8f3e69293af611ebaee6363fc25e6d187d  # v4.0.1
         with:
           filters: |
             security:
@@ -66,15 +66,15 @@ jobs:
       actions: read
     steps:
       - name: Harden the runner (Audit outbound calls)
-        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7 # v2.10.1
+        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40  # v2.19.0
         with:
           egress-policy: audit
 
       - name: Checkout repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Setup Python
-        uses: actions/setup-python@8d9ed9ac5c53483de85588cdf95a591a75ab9f55 # v5.5.0
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: '3.12'
 
@@ -92,7 +92,7 @@ jobs:
           uv sync --only main --no-interaction
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@48ab28a6f5dbc2a99bf1e0131198dd8f1df78169 # v3.27.5
+        uses: github/codeql-action/init@95e58e9a2cdfd71adc6e0353d5c52f41a045d225  # v4.35.2
         with:
           languages: python
           queries: security-extended,security-and-quality
@@ -108,10 +108,10 @@ jobs:
               - uses: security-and-quality
 
       - name: Build CodeQL Database
-        uses: github/codeql-action/autobuild@48ab28a6f5dbc2a99bf1e0131198dd8f1df78169 # v3.27.5
+        uses: github/codeql-action/autobuild@95e58e9a2cdfd71adc6e0353d5c52f41a045d225  # v4.35.2
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@48ab28a6f5dbc2a99bf1e0131198dd8f1df78169 # v3.27.5
+        uses: github/codeql-action/analyze@95e58e9a2cdfd71adc6e0353d5c52f41a045d225  # v4.35.2
         with:
           category: "/language:python"
           upload: true
@@ -129,15 +129,15 @@ jobs:
       pull-requests: write  # Required for PR comments
     steps:
       - name: Harden the runner (Audit outbound calls)
-        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7 # v2.10.1
+        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40  # v2.19.0
         with:
           egress-policy: audit
 
       - name: Checkout Repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Dependency Review
-        uses: actions/dependency-review-action@4081bf99e2866ebe428fc0477b69eb4fcda7220a # v4.5.0
+        uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48  # v4.9.0
         with:
           fail-on-severity: moderate
           license-check: true
@@ -153,14 +153,14 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Harden the runner (Audit outbound calls)
-        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7 # v2.10.1
+        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40  # v2.19.0
         with:
           egress-policy: audit
 
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Set up Python
-        uses: actions/setup-python@8d9ed9ac5c53483de85588cdf95a591a75ab9f55 # v5.5.0
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: '3.12'
 
@@ -201,7 +201,7 @@ jobs:
 
       - name: Upload Security Reports
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: security-scan-reports
           path: |
@@ -217,15 +217,15 @@ jobs:
     if: needs.detect-changes.outputs.security_files == 'true'
     steps:
       - name: Harden the runner (Audit outbound calls)
-        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7 # v2.10.1
+        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40  # v2.19.0
         with:
           egress-policy: audit
 
       - name: Checkout Repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Run OSV Scanner
-        uses: google/osv-scanner-action/osv-scanner-action@9bb69575e74019c2ad085a1860787043adf47ccb # v2.2.4
+        uses: google/osv-scanner-action/osv-scanner-action@c51854704019a247608d928f370c98740469d4b5  # v2.3.5
         with:
           scan-args: |-
             --lockfile=poetry.lock
@@ -337,7 +337,7 @@ jobs:
 
       - name: Upload OSV Scanner Report
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: osv-scanner-results
           path: osv-results.json
@@ -354,15 +354,15 @@ jobs:
       security-events: write
     steps:
       - name: Harden the runner (Audit outbound calls)
-        uses: step-security/harden-runner@91182cccc01eb5e619899d80e4e971d6181294a7 # v2.10.1
+        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40  # v2.19.0
         with:
           egress-policy: audit
 
       - name: Checkout Repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Run OWASP Dependency-Check
-        uses: dependency-check/Dependency-Check_Action@8e1bb6be9e091e71c084d05e7f35de5aef7cb7c7 # v1.2.1
+        uses: dependency-check/Dependency-Check_Action@75ba02d6183445fe0761d26e836bde58b1560600  # v1.1.0
         with:
           project: 'Python Project'
           path: '.'
@@ -374,7 +374,7 @@ jobs:
 
       - name: Upload OWASP Report
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: owasp-dependency-check-report
           path: reports/
@@ -382,7 +382,7 @@ jobs:
 
       - name: Upload SARIF to GitHub Security tab
         if: always()
-        uses: github/codeql-action/upload-sarif@48ab28a6f5dbc2a99bf1e0131198dd8f1df78169 # v3.27.5
+        uses: github/codeql-action/upload-sarif@95e58e9a2cdfd71adc6e0353d5c52f41a045d225  # v4.35.2
         with:
           sarif_file: reports/dependency-check-report.sarif
 
