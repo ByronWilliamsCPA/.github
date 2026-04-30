@@ -321,8 +321,8 @@ jobs:
 
               return 'UNKNOWN'
 
-          fail_on_high = os.environ.get("FAIL_ON_HIGH", "false").lower() == "true"
-          fail_on_medium = os.environ.get("FAIL_ON_MEDIUM", "false").lower() == "true"
+          fail_on_high = os.environ["FAIL_ON_HIGH"] == "true"
+          fail_on_medium = os.environ["FAIL_ON_MEDIUM"] == "true"
 
           try:
               with open('osv-results.json', 'r') as f:
