@@ -358,44 +358,25 @@ jobs:
         with:
           script: |
             const pr = context.payload.pull_request;
-            const title = pr.title.toLowerCase();
+            const labels = pr.labels.map(l => l.name.toLowerCase());
 
-            // Detect update type from PR title
-            // Dependabot format: "Bump X from A to B"
-            // Renovate format: "Update X to vB" or "chore(deps): update X"
+            // Use Dependabot/Renovate native labels instead of PR title parsing.
+            // Label-based detection is not spoofable via title text.
+            // Dependabot sets: "major", "minor", "patch" (semver:* variants also supported)
             let updateType = 'unknown';
-
-            // Check for major update indicators
-            if (title.includes('major') ||
-                /from \d+\.\d+\.\d+ to (\d+)\./.test(title) && RegExp.$1 !== title.match(/from (\d+)\./)?.[1]) {
+            if (labels.includes('major') || labels.includes('semver:major')) {
               updateType = 'major';
-            }
-            // Check for minor update indicators
-            else if (title.includes('minor') ||
-                     /from \d+\.(\d+)\.\d+ to \d+\.(\d+)\./.test(title)) {
-              const fromMinor = title.match(/from \d+\.(\d+)\./)?.[1];
-              const toMinor = title.match(/to \d+\.(\d+)\./)?.[1];
-              if (fromMinor && toMinor && fromMinor !== toMinor) {
-                updateType = 'minor';
-              } else {
-                updateType = 'patch';
-              }
-            }
-            // Default to patch for security updates and small bumps
-            else if (title.includes('patch') || title.includes('security') || title.includes('bump')) {
+            } else if (labels.includes('minor') || labels.includes('semver:minor')) {
+              updateType = 'minor';
+            } else if (labels.includes('patch') || labels.includes('semver:patch')) {
               updateType = 'patch';
             }
 
-            console.log(`Detected update type: ${updateType}`);
+            console.log(`Detected update type from labels: ${updateType}`);
             core.setOutput('update-type', updateType);
 
-            // Check labels for more accurate detection
-            const labels = pr.labels.map(l => l.name.toLowerCase());
-            if (labels.includes('dependencies') || labels.includes('dependency')) {
-              core.setOutput('is-dependency', 'true');
-            } else {
-              core.setOutput('is-dependency', 'false');
-            }
+            const isDep = labels.includes('dependencies') || labels.includes('dependency');
+            core.setOutput('is-dependency', isDep ? 'true' : 'false');
 
       - name: Check if update type is allowed
         if: steps.check-actor.outputs.allowed == 'true'
