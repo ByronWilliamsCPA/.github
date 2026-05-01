@@ -97,11 +97,7 @@ on:
         value: ${{ jobs.release.outputs.tag }}
 
 permissions:
-  contents: write
-  issues: write
-  pull-requests: write
-  id-token: write
-  attestations: write
+  contents: read
 
 jobs:
   # ============================================================================
@@ -129,24 +125,33 @@ jobs:
           enable-cache: true
 
       - name: Set up Python
-        run: uv python install ${{ inputs.python-version }}
+        env:
+          PYTHON_VERSION: ${{ inputs.python-version }}
+        run: uv python install "$PYTHON_VERSION"
 
       - name: Install dependencies
         run: uv sync --all-extras
 
       - name: Run tests
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
+          COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold }}
         run: |
           uv run pytest \
-            --cov=${{ inputs.source-directory }} \
+            --cov="$SRC_DIR" \
             --cov-report=term-missing \
-            --cov-fail-under=${{ inputs.coverage-threshold }} \
+            --cov-fail-under="$COVERAGE_THRESHOLD" \
             -v
 
       - name: Run type checker
-        run: uv run basedpyright ${{ inputs.source-directory }}/
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
+        run: uv run basedpyright "$SRC_DIR/"
 
       - name: Run linter
-        run: uv run ruff check ${{ inputs.source-directory }}/
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
+        run: uv run ruff check "$SRC_DIR/"
 
   # ============================================================================
   # Job 2: Build and Create Release
@@ -157,6 +162,12 @@ jobs:
     if: always() && (needs.test.result == 'success' || needs.test.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+      issues: write        # semantic-release posts release notes to referenced issues
+      pull-requests: write # semantic-release comments on merged PRs in release notes
     outputs:
       released: ${{ steps.semantic-release.outputs.released || steps.manual-release.outputs.released }}
       version: ${{ steps.semantic-release.outputs.version || steps.manual-release.outputs.version }}
@@ -264,6 +275,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
 
       - name: Upload distribution artifacts
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: release-dist
@@ -272,19 +284,22 @@ jobs:
 
       - name: Release Summary
         if: steps.semantic-release.outputs.released == 'true' || steps.manual-release.outputs.released == 'true'
+        env:
+          SIGN_ARTIFACTS: ${{ inputs.sign-artifacts }}
+          GENERATE_SBOM: ${{ inputs.generate-sbom }}
+          RELEASE_VERSION: ${{ steps.semantic-release.outputs.version || steps.manual-release.outputs.version }}
+          RELEASE_TAG: ${{ steps.semantic-release.outputs.tag || steps.manual-release.outputs.tag }}
         run: |
-          VERSION="${{ steps.semantic-release.outputs.version || steps.manual-release.outputs.version }}"
-          TAG="${{ steps.semantic-release.outputs.tag || steps.manual-release.outputs.tag }}"
           echo "## Release Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Version:** $VERSION" >> $GITHUB_STEP_SUMMARY
-          echo "**Tag:** $TAG" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** $RELEASE_VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag:** $RELEASE_TAG" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Security Features" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ inputs.sign-artifacts }}" == "true" ]; then
+          if [ "$SIGN_ARTIFACTS" == "true" ]; then
             echo "- Sigstore signing: enabled" >> $GITHUB_STEP_SUMMARY
           fi
-          if [ "${{ inputs.generate-sbom }}" == "true" ]; then
+          if [ "$GENERATE_SBOM" == "true" ]; then
             echo "- SBOM generated: enabled" >> $GITHUB_STEP_SUMMARY
           fi
           echo "- SHA256 hashes: available" >> $GITHUB_STEP_SUMMARY
@@ -298,6 +313,8 @@ jobs:
     if: ${{ inputs.publish-to-pypi && (needs.release.outputs.released == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      id-token: write
     environment:
       name: pypi
       url: https://pypi.org/project/${{ inputs.pypi-package-name }}/
@@ -323,9 +340,12 @@ jobs:
           UV_PUBLISH_URL: ${{ inputs.pypi-url }}
 
       - name: PyPI Summary
+        env:
+          PYPI_PACKAGE: ${{ inputs.pypi-package-name }}
+          RELEASE_VERSION: ${{ needs.release.outputs.version }}
         run: |
           echo "## PyPI Publication" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Published **${{ inputs.pypi-package-name }}** version **${{ needs.release.outputs.version }}** to PyPI" >> $GITHUB_STEP_SUMMARY
+          echo "Published **$PYPI_PACKAGE** version **$RELEASE_VERSION** to PyPI" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "[View on PyPI](https://pypi.org/project/${{ inputs.pypi-package-name }}/${{ needs.release.outputs.version }}/)" >> $GITHUB_STEP_SUMMARY
+          echo "[View on PyPI](https://pypi.org/project/$PYPI_PACKAGE/$RELEASE_VERSION/)" >> $GITHUB_STEP_SUMMARY

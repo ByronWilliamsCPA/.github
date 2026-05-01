@@ -139,22 +139,27 @@ jobs:
     steps:
       - name: Build matrix configuration
         id: set-matrix
+        env:
+          OS_INPUT: ${{ inputs.operating-systems }}
+          PYTHON_INPUT: ${{ inputs.python-versions }}
+          INCLUDE_WINDOWS: ${{ inputs.include-windows }}
+          INCLUDE_MACOS: ${{ inputs.include-macos }}
         run: |
           # Start with the provided operating systems
-          OS_LIST='${{ inputs.operating-systems }}'
+          OS_LIST="$OS_INPUT"
 
           # Add additional platforms if requested
-          if [ "${{ inputs.include-windows }}" == "true" ]; then
+          if [ "$INCLUDE_WINDOWS" == "true" ]; then
             OS_LIST=$(echo "$OS_LIST" | jq '. + ["windows-latest"] | unique')
           fi
 
-          if [ "${{ inputs.include-macos }}" == "true" ]; then
+          if [ "$INCLUDE_MACOS" == "true" ]; then
             OS_LIST=$(echo "$OS_LIST" | jq '. + ["macos-latest"] | unique')
           fi
 
           # Build the full matrix (use -c for compact single-line JSON)
           MATRIX=$(jq -c -n \
-            --argjson python '${{ inputs.python-versions }}' \
+            --argjson python "$PYTHON_INPUT" \
             --argjson os "$OS_LIST" \
             '{python: $python, os: $os}')
 
@@ -194,22 +199,48 @@ jobs:
 
       - name: Install system dependencies (Ubuntu)
         if: runner.os == 'Linux' && inputs.system-deps-ubuntu != ''
+        env:
+          SYSTEM_DEPS_UBUNTU: ${{ inputs.system-deps-ubuntu }}
         run: |
-          echo "📦 Installing system dependencies: ${{ inputs.system-deps-ubuntu }}"
-          sudo apt-get update
-          sudo apt-get install -y ${{ inputs.system-deps-ubuntu }}
+          PKGS="$SYSTEM_DEPS_UBUNTU"
+          if [[ "$PKGS" =~ ^[a-zA-Z0-9_\-\. ]+$ ]]; then
+            echo "Installing system dependencies: $PKGS"
+            sudo apt-get update
+            # shellcheck disable=SC2086
+            sudo apt-get install -y $PKGS
+          else
+            echo "::error::Invalid package name characters in system-deps-ubuntu"
+            exit 1
+          fi
 
       - name: Install system dependencies (macOS)
         if: runner.os == 'macOS' && inputs.system-deps-macos != ''
+        env:
+          SYSTEM_DEPS_MACOS: ${{ inputs.system-deps-macos }}
         run: |
-          echo "📦 Installing system dependencies: ${{ inputs.system-deps-macos }}"
-          brew install ${{ inputs.system-deps-macos }}
+          PKGS="$SYSTEM_DEPS_MACOS"
+          if [[ "$PKGS" =~ ^[a-zA-Z0-9_\-\. ]+$ ]]; then
+            echo "Installing system dependencies: $PKGS"
+            # shellcheck disable=SC2086
+            brew install $PKGS
+          else
+            echo "::error::Invalid package name characters in system-deps-macos"
+            exit 1
+          fi
 
       - name: Install system dependencies (Windows)
         if: runner.os == 'Windows' && inputs.system-deps-windows != ''
+        env:
+          SYSTEM_DEPS_WINDOWS: ${{ inputs.system-deps-windows }}
         run: |
-          echo "📦 Installing system dependencies: ${{ inputs.system-deps-windows }}"
-          choco install ${{ inputs.system-deps-windows }} -y
+          $Pkgs = $env:SYSTEM_DEPS_WINDOWS
+          if ($Pkgs -match '^[a-zA-Z0-9_\-\. ]+$') {
+            Write-Output "Installing system dependencies: $Pkgs"
+            choco install $Pkgs.Split(' ') -y
+          } else {
+            Write-Output "::error::Invalid package name characters in system-deps-windows"
+            exit 1
+          }
         shell: pwsh
 
       - name: Install dependencies
@@ -217,16 +248,24 @@ jobs:
 
       - name: Run tests
         id: tests
+        env:
+          COVERAGE_REPORT: ${{ inputs.coverage-report }}
+          TEST_COMMAND: ${{ inputs.test-command }}
+          SRC_DIR: ${{ inputs.source-directory }}
+          MATRIX_PYTHON: ${{ matrix.python }}
+          MATRIX_OS: ${{ matrix.os }}
         run: |
-          echo "Running tests on Python ${{ matrix.python }} (${{ matrix.os }})..."
+          echo "Running tests on Python $MATRIX_PYTHON ($MATRIX_OS)..."
 
-          if [ "${{ inputs.coverage-report }}" == "true" ]; then
-            uv run ${{ inputs.test-command }} \
-              --cov=${{ inputs.source-directory }} \
-              --cov-report=xml:coverage-${{ matrix.python }}-${{ matrix.os }}.xml \
+          if [ "$COVERAGE_REPORT" == "true" ]; then
+            # shellcheck disable=SC2086
+            uv run $TEST_COMMAND \
+              --cov="$SRC_DIR" \
+              --cov-report=xml:coverage-${MATRIX_PYTHON}-${MATRIX_OS}.xml \
               --cov-report=term-missing
           else
-            uv run ${{ inputs.test-command }}
+            # shellcheck disable=SC2086
+            uv run $TEST_COMMAND
           fi
         shell: bash
 
@@ -250,15 +289,22 @@ jobs:
     steps:
       - name: Set result output
         id: result
-        run: echo "result=${{ needs.test-matrix.result }}" >> $GITHUB_OUTPUT
+        env:
+          TEST_MATRIX_RESULT: ${{ needs.test-matrix.result }}
+        run: echo "result=$TEST_MATRIX_RESULT" >> $GITHUB_OUTPUT
 
       - name: Generate compatibility matrix summary
+        env:
+          SKIP_ON_DRAFT: ${{ inputs.skip-on-draft }}
+          GH_PR_DRAFT: ${{ github.event.pull_request.draft }}
+          BUILD_MATRIX: ${{ needs.build-matrix.outputs.matrix }}
+          TEST_MATRIX_RESULT: ${{ needs.test-matrix.result }}
         run: |
           echo "## Python Compatibility Matrix Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
           # Check if matrix was skipped due to draft PR
-          if [ "${{ inputs.skip-on-draft }}" == "true" ] && [ "${{ github.event.pull_request.draft }}" == "true" ]; then
+          if [ "$SKIP_ON_DRAFT" == "true" ] && [ "$GH_PR_DRAFT" == "true" ]; then
             echo "### Draft PR Mode" >> $GITHUB_STEP_SUMMARY
             echo "Matrix testing skipped to reduce costs during development." >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
@@ -268,7 +314,7 @@ jobs:
             exit 0
           fi
 
-          MATRIX='${{ needs.build-matrix.outputs.matrix }}'
+          MATRIX="$BUILD_MATRIX"
           PYTHON_VERSIONS=$(echo "$MATRIX" | jq -r '.python | join(", ")')
           OS_LIST=$(echo "$MATRIX" | jq -r '.os | join(", ")')
 
@@ -278,12 +324,12 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
 
           echo "### Results" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ needs.test-matrix.result }}" == "success" ]; then
+          if [ "$TEST_MATRIX_RESULT" == "success" ]; then
             echo "**Status:** All matrix combinations passed" >> $GITHUB_STEP_SUMMARY
-          elif [ "${{ needs.test-matrix.result }}" == "failure" ]; then
+          elif [ "$TEST_MATRIX_RESULT" == "failure" ]; then
             echo "**Status:** Some matrix combinations failed" >> $GITHUB_STEP_SUMMARY
           else
-            echo "**Status:** ${{ needs.test-matrix.result }}" >> $GITHUB_STEP_SUMMARY
+            echo "**Status:** $TEST_MATRIX_RESULT" >> $GITHUB_STEP_SUMMARY
           fi
 
       - name: Check matrix result

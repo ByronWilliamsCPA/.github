@@ -132,7 +132,13 @@ on:
         description: 'Generate Software Bill of Materials'
         type: boolean
         required: false
-        default: false
+        default: true
+
+      enable-provenance:
+        description: 'Generate SLSA provenance attestation for the Docker image'
+        type: boolean
+        required: false
+        default: true
 
       # PR comment
       enable-pr-comment:
@@ -221,9 +227,13 @@ jobs:
 
       - name: Check if fork PR
         id: check-fork
+        env:
+          GH_EVENT_NAME: ${{ github.event_name }}
+          GH_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          GH_REPOSITORY: ${{ github.repository }}
         run: |
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
-            if [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
+          if [ "$GH_EVENT_NAME" == "pull_request" ]; then
+            if [ "$GH_HEAD_REPO" != "$GH_REPOSITORY" ]; then
               echo "is_fork=true" >> $GITHUB_OUTPUT
               echo "This is a fork PR"
             else
@@ -236,12 +246,16 @@ jobs:
 
       - name: Determine if push is allowed
         id: push-check
+        env:
+          INPUT_PUSH: ${{ inputs.push }}
+          INPUT_PUSH_ON_FORK: ${{ inputs.push-on-fork }}
+          IS_FORK: ${{ steps.check-fork.outputs.is_fork }}
         run: |
           SHOULD_PUSH="false"
 
-          if [ "${{ inputs.push }}" == "true" ]; then
-            if [ "${{ steps.check-fork.outputs.is_fork }}" == "true" ]; then
-              if [ "${{ inputs.push-on-fork }}" == "true" ]; then
+          if [ "$INPUT_PUSH" == "true" ]; then
+            if [ "$IS_FORK" == "true" ]; then
+              if [ "$INPUT_PUSH_ON_FORK" == "true" ]; then
                 SHOULD_PUSH="true"
                 echo "::warning::Pushing from fork PR (push-on-fork enabled)"
               else
@@ -296,14 +310,16 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           sbom: ${{ inputs.enable-sbom }}
-          provenance: ${{ inputs.enable-sbom }}
+          provenance: ${{ inputs.enable-provenance }}
 
       # Export local image for Trivy scanning when not pushed to registry
       - name: Export local image for scanning
         if: inputs.enable-trivy-scan && steps.push-check.outputs.push != 'true'
+        env:
+          META_TAGS: ${{ steps.meta.outputs.tags }}
         run: |
           # Get the first tag from metadata (local reference)
-          LOCAL_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
+          LOCAL_TAG=$(echo "$META_TAGS" | head -n1)
           echo "LOCAL_IMAGE_TAG=${LOCAL_TAG}" >> $GITHUB_ENV
           echo "Exporting local image: ${LOCAL_TAG}"
           # Export image to tarball for Trivy to scan

@@ -91,19 +91,12 @@ jobs:
 
       - name: Run security checks
         if: ${{ inputs.run-security-checks }}
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
         run: |
-          echo "🔒 Running pre-publish security checks..."
-
-          # Install security tools
-          pip install safety bandit
-
-          # Check for known vulnerabilities in dependencies
-          echo "📦 Checking dependencies for vulnerabilities..."
-          safety check || echo "⚠️  Safety check found issues - review before publishing"
-
-          # Scan source code for security issues
-          echo "🔍 Scanning source code..."
-          bandit -r ${{ inputs.source-directory }} -ll || echo "⚠️  Bandit found issues - review before publishing"
+          echo "Running pre-publish security checks..."
+          uvx pip-audit
+          uvx bandit -r "$SRC_DIR" -c pyproject.toml -ll
 
       - name: Build distribution packages
         run: |
@@ -161,12 +154,14 @@ jobs:
           verbose: true
 
       - name: Publication summary
+        env:
+          PACKAGE_NAME: ${{ inputs.package-name }}
         run: |
           echo "## 🎉 Published to PyPI!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Project**: https://pypi.org/project/${{ inputs.package-name }}/" >> $GITHUB_STEP_SUMMARY
+          echo "**Project**: https://pypi.org/project/$PACKAGE_NAME/" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Install**: \`pip install ${{ inputs.package-name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Install**: \`pip install $PACKAGE_NAME\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🔒 Security" >> $GITHUB_STEP_SUMMARY
           echo "- Published using OIDC Trusted Publishing" >> $GITHUB_STEP_SUMMARY
@@ -211,14 +206,16 @@ jobs:
           verbose: true
 
       - name: Publication summary
+        env:
+          PACKAGE_NAME: ${{ inputs.package-name }}
         run: |
           echo "## 🧪 Published to TestPyPI!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Project**: https://test.pypi.org/project/${{ inputs.package-name }}/" >> $GITHUB_STEP_SUMMARY
+          echo "**Project**: https://test.pypi.org/project/$PACKAGE_NAME/" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Test Install**:" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo "pip install --index-url https://test.pypi.org/simple/ ${{ inputs.package-name }}" >> $GITHUB_STEP_SUMMARY
+          echo "pip install --index-url https://test.pypi.org/simple/ $PACKAGE_NAME" >> $GITHUB_STEP_SUMMARY
           echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 🔒 Security" >> $GITHUB_STEP_SUMMARY

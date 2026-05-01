@@ -41,3 +41,6 @@ actionlint
 
 # Git worktrees
 .worktrees/
+
+# Internal planning and brainstorming docs (not for public consumption)
+docs/superpowers/

@@ -224,12 +224,14 @@ jobs:
 
       - name: Bandit Static Analysis
         if: ${{ inputs.run-bandit }}
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
         run: |
           echo "🔒 Running Bandit security analysis..."
-          uv run bandit -r ${{ inputs.source-directory }} \
+          uv run bandit -r "$SRC_DIR" \
             -f json -o bandit-report.json \
             -c pyproject.toml || true
-          uv run bandit -r ${{ inputs.source-directory }} -c pyproject.toml
+          uv run bandit -r "$SRC_DIR" -c pyproject.toml
 
       - name: Safety Vulnerability Scan
         if: ${{ inputs.run-safety }}
@@ -279,10 +281,14 @@ jobs:
             --output=osv-results.json
 
       - name: Analyze OSV Results
+        env:
+          FAIL_ON_HIGH: ${{ inputs.fail-on-high }}
+          FAIL_ON_MEDIUM: ${{ inputs.fail-on-medium }}
         run: |
           echo "🔍 Analyzing OSV scan results..."
           python3 << 'EOF'
           import json
+          import os
           import sys
 
           def extract_severity(vuln):
@@ -314,6 +320,9 @@ jobs:
                   return 'MEDIUM' if max_severity == 'MODERATE' else max_severity
 
               return 'UNKNOWN'
+
+          fail_on_high = os.environ["FAIL_ON_HIGH"] == "true"
+          fail_on_medium = os.environ["FAIL_ON_MEDIUM"] == "true"
 
           try:
               with open('osv-results.json', 'r') as f:
@@ -355,13 +364,13 @@ jobs:
                   print(f'❌ HIGH/CRITICAL: {len(high_crit)} vulnerabilities')
                   for v in high_crit[:5]:
                       print(f'   - {v}')
-                  if '${{ inputs.fail-on-high }}' == 'true':
+                  if fail_on_high:
                       print('\n❌ Build FAILED: HIGH/CRITICAL vulnerabilities found')
                       sys.exit(1)
 
               if medium:
                   print(f'⚠️  MEDIUM: {len(medium)} vulnerabilities')
-                  if '${{ inputs.fail-on-medium }}' == 'true':
+                  if fail_on_medium:
                       print('\n❌ Build FAILED: MEDIUM vulnerabilities found')
                       sys.exit(1)
 
@@ -396,21 +405,26 @@ jobs:
 
     steps:
       - name: Validate Security Results
+        env:
+          RESULT_CODEQL: ${{ needs.codeql.result }}
+          RESULT_DEP_REVIEW: ${{ needs.dependency-review.result }}
+          RESULT_PYTHON_SECURITY: ${{ needs.python-security.result }}
+          RESULT_OSV_SCANNER: ${{ needs.osv-scanner.result }}
         run: |
           echo "🔒 Security Analysis Results:"
-          echo "CodeQL: ${{ needs.codeql.result }}"
-          echo "Dependency Review: ${{ needs.dependency-review.result }}"
-          echo "Python Security: ${{ needs.python-security.result }}"
-          echo "OSV Scanner: ${{ needs.osv-scanner.result }}"
+          echo "CodeQL: $RESULT_CODEQL"
+          echo "Dependency Review: $RESULT_DEP_REVIEW"
+          echo "Python Security: $RESULT_PYTHON_SECURITY"
+          echo "OSV Scanner: $RESULT_OSV_SCANNER"
 
           is_acceptable() {
             [[ "$1" == "success" || "$1" == "skipped" ]]
           }
 
-          if is_acceptable "${{ needs.codeql.result }}" && \
-             is_acceptable "${{ needs.dependency-review.result }}" && \
-             is_acceptable "${{ needs.python-security.result }}" && \
-             is_acceptable "${{ needs.osv-scanner.result }}"; then
+          if is_acceptable "$RESULT_CODEQL" && \
+             is_acceptable "$RESULT_DEP_REVIEW" && \
+             is_acceptable "$RESULT_PYTHON_SECURITY" && \
+             is_acceptable "$RESULT_OSV_SCANNER"; then
             echo "✅ Security gate passed"
             echo "🔐 All security checks completed successfully"
           else
