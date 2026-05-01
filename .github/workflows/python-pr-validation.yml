@@ -145,13 +145,11 @@ on:
         default: false
 
 # Permissions granted to this workflow.
-# Note for callers: only `contents: read` and `pull-requests: write` are
-# required. `checks: write` was previously included here but is not used by
-# any step in this workflow; it has been removed to prevent startup_failure
-# in callers that did not explicitly grant that permission.
+# Note: this workflow is a migration stub that exits 1 immediately. No
+# pull-requests: write permission is needed; the stub emits only error
+# annotations and performs no GitHub API calls.
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
   migration-required:
