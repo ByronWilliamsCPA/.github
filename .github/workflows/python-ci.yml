@@ -307,7 +307,7 @@ jobs:
       - name: Dependency vulnerability scan
         run: |
           echo "::group::pip-audit Dependency Scan"
-          uvx pip-audit || echo "::warning::Vulnerable dependencies detected"
+          uv run pip-audit || echo "::warning::Vulnerable dependencies detected"
           echo "::endgroup::"
 
       - name: Upload coverage artifacts
