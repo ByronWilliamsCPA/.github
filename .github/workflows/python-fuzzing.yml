@@ -6,7 +6,7 @@
 # Usage from downstream repos:
 #   jobs:
 #     fuzzing:
-#       uses: williaby/.github/.github/workflows/python-fuzzing.yml@main
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@main
 #       with:
 #         fuzz-seconds: 1200
 #         sanitizer: 'address'

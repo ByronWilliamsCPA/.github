@@ -8,7 +8,7 @@
 #     qlty-coverage:
 #       needs: [ci]  # Run after CI workflow completes
 #       if: success()
-#       uses: williaby/.github/.github/workflows/python-qlty-coverage.yml@main
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-qlty-coverage.yml@main
 #       secrets:
 #         QLTY_COVERAGE_TOKEN: ${{ secrets.QLTY_COVERAGE_TOKEN }}
 #       with:
