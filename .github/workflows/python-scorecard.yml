@@ -13,6 +13,9 @@
 #         actions: read
 #       with:
 #         publish-results: false   # REQUIRED -- see Known Limitations below
+#         min-score: 7             # Optional: gate fails if Branch-Protection, Code-Review,
+#                                  # Dangerous-Workflow, Token-Permissions, or Pinned-Dependencies
+#                                  # scores below this threshold (0 disables gate; default 0)
 #       secrets:
 #         SCORECARD_TOKEN: ${{ secrets.SCORECARD_TOKEN }}
 #
@@ -50,6 +53,12 @@ on:
         type: boolean
         required: false
         default: false
+
+      min-score:
+        description: 'Minimum acceptable score for gated checks (0-10). Set 0 to disable gate.'
+        type: number
+        required: false
+        default: 0
 
       upload-sarif:
         description: 'Upload SARIF results to GitHub Security tab'
@@ -116,6 +125,41 @@ jobs:
           name: scorecard-results
           path: scorecard-results.sarif
           retention-days: ${{ inputs.artifact-retention-days }}
+
+      - name: Evaluate Scorecard Scores
+        if: ${{ inputs.min-score > 0 }}
+        env:
+          MIN_SCORE: ${{ inputs.min-score }}
+        run: |
+          python3 - <<'EOF'
+          import json, os, sys
+
+          with open('scorecard-results.sarif') as f:
+              sarif = json.load(f)
+
+          min_score = float(os.environ["MIN_SCORE"])
+          if not 0 <= min_score <= 10:
+              print(f"::error::min-score must be between 0 and 10, got {min_score}")
+              sys.exit(1)
+          gate_checks = {"Branch-Protection", "Code-Review", "Dangerous-Workflow",
+                         "Token-Permissions", "Pinned-Dependencies"}
+          failures = []
+
+          for run in sarif.get("runs", []):
+              for result in run.get("results", []):
+                  rule_id = result.get("ruleId", "")
+                  score = result.get("properties", {}).get("score", 0)
+                  if rule_id in gate_checks and score < min_score:
+                      failures.append(f"{rule_id}: {score}/10 (minimum {min_score})")
+
+          if failures:
+              print("::error::Scorecard score gate failed:")
+              for f in failures:
+                  print(f"  - {f}")
+              sys.exit(1)
+          else:
+              print(f"Scorecard score gate passed (all gated checks >= {min_score}/10)")
+          EOF
 
       - name: Scorecard Summary
         if: always()

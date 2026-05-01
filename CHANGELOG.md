@@ -12,6 +12,7 @@ are no numbered releases.
 
 ### Added
 
+- `python-scorecard.yml`: `min-score` input (type: number, default 0 = gate disabled) and `Evaluate Scorecard Scores` step that parses SARIF output and fails CI if any of Branch-Protection, Code-Review, Dangerous-Workflow, Token-Permissions, or Pinned-Dependencies scores below the threshold
 - `scripts/update-pinned-actions.sh`: developer tool to scan workflow files for outdated pinned action SHAs and propose or apply updates within the same major version
 - `CHANGELOG.md`: required OpenSSF baseline file
 - Actionlint static analysis for GitHub Actions workflows via `.qlty/qlty.toml`
@@ -22,6 +23,11 @@ are no numbered releases.
 
 ### Changed
 
+- `python-ci.yml`: remove `check-secrets` job, `sonarcloud-quality-gate` job, and 7 Codecov upload/analytics steps; use `python-sonarcloud.yml` and `python-codecov.yml` directly for those integrations
+- `python-ci.yml`: replace `safety` with `uvx`-free `uv run pip-audit` for dependency vulnerability scanning (CLAUDE.md standard); add `-c pyproject.toml` flag to bandit
+- `python-ci.yml`: simplify `ci-gate` from 5-job to 3-job dependency (`quality-checks`, `llm-governance`, `matrix-testing`)
+- `python-supplemental-checks.yml`: replace PR-title string parsing for major/minor/patch classification with label-based detection (`major`, `minor`, `patch`, `semver:*`, `version-update:semver-*` labels) -- not spoofable via title text
+- `python-pr-validation.yml`: replace 7-job implementation with single hard-fail migration stub; callers must migrate to `python-ci.yml` and `python-supplemental-checks.yml` (breaking change)
 - Rename `ci-summary` to `CI Gate` in `python-ci.yml`; upgrade from passive summary to active gate that fails when required upstream jobs (`quality-checks`, `llm-governance`) fail or are cancelled; optional jobs (`sonarcloud-quality-gate`, `matrix-testing`) pass when skipped
 - Rename `Security Gate` to `Security Gate Validation` in `python-security-analysis.yml` to match CI-015 branch protection context
 - Rename `Validation Summary` to `Dependency & Standards Validation` in `python-pr-validation.yml` to match CI-016 branch protection context
@@ -31,6 +37,9 @@ are no numbered releases.
 
 ### Fixed
 
+- Fix stale `williaby` org reference in usage example comments for `python-fuzzing.yml`, `python-performance-regression.yml`, and `python-qlty-coverage.yml`
+- Add `timeout-minutes: 5` to `build-matrix` and `compatibility-summary` jobs in `python-compatibility.yml`
+- Add `timeout-minutes: 5` to `check-configuration` jobs in `python-sonarcloud.yml` and `python-qlty-coverage.yml`
 - `scripts/update-pinned-actions.sh`: `usage()` function now exits with code 1 instead of 0 on invalid usage
 
 ### Security
