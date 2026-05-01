@@ -170,9 +170,12 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
+        env:
+          EXTRA_DEPENDENCIES: ${{ inputs.extra-dependencies }}
         run: |
-          if [ -n "${{ inputs.extra-dependencies }}" ]; then
-            EXTRAS=$(echo "${{ inputs.extra-dependencies }}" | tr ' ' '\n' | sed 's/^/--extra /' | tr '\n' ' ')
+          if [ -n "$EXTRA_DEPENDENCIES" ]; then
+            EXTRAS=$(echo "$EXTRA_DEPENDENCIES" | tr ' ' '\n' | sed 's/^/--extra /' | tr '\n' ' ')
+            # shellcheck disable=SC2086
             uv sync $EXTRAS
           else
             uv sync
@@ -274,11 +277,13 @@ jobs:
 
       - name: Determine Baseline Source
         id: baseline_source
+        env:
+          BASELINE_FILE: ${{ inputs.baseline-file }}
         run: |
-          if [ -n "${{ inputs.baseline-file }}" ] && [ -f "${{ inputs.baseline-file }}" ]; then
+          if [ -n "$BASELINE_FILE" ] && [ -f "$BASELINE_FILE" ]; then
             echo "source=committed" >> $GITHUB_OUTPUT
-            echo "file=${{ inputs.baseline-file }}" >> $GITHUB_OUTPUT
-            echo "✅ Using committed baseline: ${{ inputs.baseline-file }}"
+            echo "file=$BASELINE_FILE" >> $GITHUB_OUTPUT
+            echo "✅ Using committed baseline: $BASELINE_FILE"
           else
             echo "source=generated" >> $GITHUB_OUTPUT
             echo "file=/tmp/baseline_benchmark.json" >> $GITHUB_OUTPUT
@@ -293,9 +298,16 @@ jobs:
           WARMUP_ITERATIONS: ${{ inputs.warmup-iterations }}
           BENCHMARK_ITERATIONS: ${{ inputs.benchmark-iterations }}
           PRIMARY_METRIC: ${{ inputs.primary-metric }}
+          EXTRA_DEPENDENCIES: ${{ inputs.extra-dependencies }}
         run: |
           echo "🏃 Running baseline benchmark on main branch..."
-          uv sync $(echo "${{ inputs.extra-dependencies }}" | tr ' ' '\n' | sed 's/^/--extra /' | tr '\n' ' ')
+          if [ -n "$EXTRA_DEPENDENCIES" ]; then
+            EXTRAS=$(echo "$EXTRA_DEPENDENCIES" | tr ' ' '\n' | sed 's/^/--extra /' | tr '\n' ' ')
+            # shellcheck disable=SC2086
+            uv sync $EXTRAS
+          else
+            uv sync
+          fi
 
           # Check if script supports --output argument
           SUPPORTS_OUTPUT=false
@@ -344,8 +356,10 @@ jobs:
 
       - name: Copy Committed Baseline
         if: steps.baseline_source.outputs.source == 'committed'
+        env:
+          BASELINE_FILE: ${{ inputs.baseline-file }}
         run: |
-          cp "${{ inputs.baseline-file }}" /tmp/baseline_benchmark.json
+          cp "$BASELINE_FILE" /tmp/baseline_benchmark.json
           echo "📊 Committed Baseline:"
           cat /tmp/baseline_benchmark.json | python3 -m json.tool
 
@@ -443,14 +457,32 @@ jobs:
       - name: Post PR Comment
         if: inputs.comment-on-pr && github.event_name == 'pull_request'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
+        env:
+          COMPARE_BASELINE: ${{ steps.compare.outputs.baseline_value }}
+          COMPARE_PR: ${{ steps.compare.outputs.pr_value }}
+          COMPARE_REGRESSION_PCT: ${{ steps.compare.outputs.regression_pct }}
+          COMPARE_STATUS: ${{ steps.compare.outputs.status }}
+          COMPARE_PRIMARY_METRIC: ${{ steps.compare.outputs.primary_metric }}
+          COMPARE_SUMMARY_METRICS: ${{ steps.compare.outputs.summary_metrics }}
+          REGRESSION_THRESHOLD: ${{ inputs.regression-threshold }}
+          WARMUP_ITERATIONS: ${{ inputs.warmup-iterations }}
+          BENCHMARK_ITERATIONS: ${{ inputs.benchmark-iterations }}
+          BASELINE_SOURCE: ${{ steps.baseline_source.outputs.source }}
+          BENCHMARK_SCRIPT: ${{ inputs.benchmark-script }}
+          BENCHMARK_ARGS: ${{ inputs.benchmark-args }}
         with:
           script: |
-            const baseline = '${{ steps.compare.outputs.baseline_value }}';
-            const pr_value = '${{ steps.compare.outputs.pr_value }}';
-            const regression_pct = '${{ steps.compare.outputs.regression_pct }}';
-            const status = '${{ steps.compare.outputs.status }}';
-            const primary_metric = '${{ steps.compare.outputs.primary_metric }}';
-            const threshold = '${{ inputs.regression-threshold }}';
+            const baseline = process.env.COMPARE_BASELINE;
+            const pr_value = process.env.COMPARE_PR;
+            const regression_pct = process.env.COMPARE_REGRESSION_PCT;
+            const status = process.env.COMPARE_STATUS;
+            const primary_metric = process.env.COMPARE_PRIMARY_METRIC;
+            const threshold = process.env.REGRESSION_THRESHOLD;
+            const warmup = process.env.WARMUP_ITERATIONS;
+            const iterations = process.env.BENCHMARK_ITERATIONS;
+            const baselineSource = process.env.BASELINE_SOURCE;
+            const benchmarkScript = process.env.BENCHMARK_SCRIPT;
+            const benchmarkArgs = process.env.BENCHMARK_ARGS;
 
             let icon, statusText, actionText;
             if (status === 'regression') {
@@ -470,7 +502,7 @@ jobs:
             // Parse additional metrics
             let additionalMetricsTable = '';
             try {
-              const summaryMetrics = JSON.parse('${{ steps.compare.outputs.summary_metrics }}');
+              const summaryMetrics = JSON.parse(process.env.COMPARE_SUMMARY_METRICS || '{}');
               if (Object.keys(summaryMetrics).length > 0) {
                 additionalMetricsTable = '\n\n### Additional Metrics\n\n';
                 additionalMetricsTable += '| Metric | Baseline | PR | Change |\n';
@@ -492,7 +524,7 @@ jobs:
             |--------|-----------------|-----------|--------|
             | ${primary_metric} | ${baseline} | ${pr_value} | ${regression_pct}% |
 
-            **Threshold**: ±${threshold}% allowed regression
+            **Threshold**: +/-${threshold}% allowed regression
 
             ${actionText}
             ${additionalMetricsTable}
@@ -503,13 +535,13 @@ jobs:
             This automated check compares \`${primary_metric}\` on this PR against the main branch baseline.
 
             - **Regression Threshold**: ${threshold}%
-            - **Warmup Iterations**: ${{ inputs.warmup-iterations }}
-            - **Benchmark Iterations**: ${{ inputs.benchmark-iterations }}
-            - **Baseline Source**: ${{ steps.baseline_source.outputs.source }}
+            - **Warmup Iterations**: ${warmup}
+            - **Benchmark Iterations**: ${iterations}
+            - **Baseline Source**: ${baselineSource}
 
             To reproduce locally:
             \`\`\`bash
-            uv run python ${{ inputs.benchmark-script }} --iterations 1000 ${{ inputs.benchmark-args }}
+            uv run python ${benchmarkScript} --iterations 1000 ${benchmarkArgs}
             \`\`\`
             </details>
             `;
@@ -523,28 +555,36 @@ jobs:
 
       - name: Performance Summary
         if: always()
+        env:
+          COMPARE_PRIMARY_METRIC: ${{ steps.compare.outputs.primary_metric }}
+          COMPARE_BASELINE: ${{ steps.compare.outputs.baseline_value }}
+          COMPARE_PR: ${{ steps.compare.outputs.pr_value }}
+          COMPARE_REGRESSION_PCT: ${{ steps.compare.outputs.regression_pct }}
+          COMPARE_STATUS: ${{ steps.compare.outputs.status }}
+          REGRESSION_THRESHOLD: ${{ inputs.regression-threshold }}
+          BASELINE_SOURCE: ${{ steps.baseline_source.outputs.source }}
         run: |
           echo "# 📊 Performance Regression Test Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Primary Metric | ${{ steps.compare.outputs.primary_metric }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Baseline | ${{ steps.compare.outputs.baseline_value }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| PR | ${{ steps.compare.outputs.pr_value }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Change | ${{ steps.compare.outputs.regression_pct }}% |" >> $GITHUB_STEP_SUMMARY
-          echo "| Status | ${{ steps.compare.outputs.status }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Threshold | ±${{ inputs.regression-threshold }}% |" >> $GITHUB_STEP_SUMMARY
-          echo "| Baseline Source | ${{ steps.baseline_source.outputs.source }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Primary Metric | $COMPARE_PRIMARY_METRIC |" >> $GITHUB_STEP_SUMMARY
+          echo "| Baseline | $COMPARE_BASELINE |" >> $GITHUB_STEP_SUMMARY
+          echo "| PR | $COMPARE_PR |" >> $GITHUB_STEP_SUMMARY
+          echo "| Change | $COMPARE_REGRESSION_PCT% |" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | $COMPARE_STATUS |" >> $GITHUB_STEP_SUMMARY
+          echo "| Threshold | +/-$REGRESSION_THRESHOLD% |" >> $GITHUB_STEP_SUMMARY
+          echo "| Baseline Source | $BASELINE_SOURCE |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          if [ "${{ steps.compare.outputs.status }}" == "regression" ]; then
+          if [ "$COMPARE_STATUS" == "regression" ]; then
             echo "## ❌ Performance Regression Detected" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Performance has degraded by ${{ steps.compare.outputs.regression_pct }}%." >> $GITHUB_STEP_SUMMARY
-          elif [ "${{ steps.compare.outputs.status }}" == "improvement" ]; then
+            echo "Performance has degraded by $COMPARE_REGRESSION_PCT%." >> $GITHUB_STEP_SUMMARY
+          elif [ "$COMPARE_STATUS" == "improvement" ]; then
             echo "## 🎉 Performance Improved" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Performance has improved by ${{ steps.compare.outputs.regression_pct }}%." >> $GITHUB_STEP_SUMMARY
+            echo "Performance has improved by $COMPARE_REGRESSION_PCT%." >> $GITHUB_STEP_SUMMARY
           else
             echo "## ✅ Performance OK" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
@@ -553,6 +593,9 @@ jobs:
 
       - name: Fail on Regression
         if: inputs.fail-on-regression && steps.compare.outputs.regression_detected == 'true'
+        env:
+          COMPARE_REGRESSION_PCT: ${{ steps.compare.outputs.regression_pct }}
+          REGRESSION_THRESHOLD: ${{ inputs.regression-threshold }}
         run: |
-          echo "::error::Performance regression detected: ${{ steps.compare.outputs.regression_pct }}% (threshold: ${{ inputs.regression-threshold }}%)"
+          echo "::error::Performance regression detected: $COMPARE_REGRESSION_PCT% (threshold: $REGRESSION_THRESHOLD%)"
           exit 1

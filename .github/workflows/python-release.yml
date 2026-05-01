@@ -166,6 +166,8 @@ jobs:
       contents: write
       id-token: write
       attestations: write
+      issues: write        # semantic-release posts release notes to referenced issues
+      pull-requests: write # semantic-release comments on merged PRs in release notes
     outputs:
       released: ${{ steps.semantic-release.outputs.released || steps.manual-release.outputs.released }}
       version: ${{ steps.semantic-release.outputs.version || steps.manual-release.outputs.version }}
