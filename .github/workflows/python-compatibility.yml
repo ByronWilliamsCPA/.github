@@ -133,6 +133,7 @@ jobs:
   build-matrix:
     name: Build Test Matrix
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
 
@@ -282,6 +283,7 @@ jobs:
     name: Compatibility Summary
     needs: [build-matrix, test-matrix]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     if: always()
     outputs:
       result: ${{ steps.result.outputs.result }}
