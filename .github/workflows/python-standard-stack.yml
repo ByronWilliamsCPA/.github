@@ -1,0 +1,111 @@
+# ============================================================================
+# Reusable Standard Stack Workflow
+# ============================================================================
+# Quickstart composite that chains CI, security analysis, and SBOM generation.
+# Recommended starting point for new Python repos needing full coverage with
+# minimal configuration.
+#
+# Usage from downstream repos:
+#   jobs:
+#     standard-stack:
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-standard-stack.yml@main
+#       permissions:
+#         contents: read
+#         pull-requests: write
+#         security-events: write
+#       with:
+#         python-version: '3.12'
+#         source-directory: 'src'
+#         coverage-threshold: 80
+#         fail-on-high: true
+#       secrets:
+#         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}    # optional
+#         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }} # optional
+#
+# For advanced configuration (matrix testing, mutation, fuzzing, custom
+# Scorecard gates), call the individual workflows directly.
+#
+# Nesting depth: caller (1) -> standard-stack (2) ->
+#   python-ci / python-security-analysis / python-sbom (3).
+# Within GitHub's 4-level reusable workflow limit.
+# ============================================================================
+
+name: Standard Stack (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        description: 'Python version to use'
+        type: string
+        required: false
+        default: '3.12'
+
+      source-directory:
+        description: 'Source code directory'
+        type: string
+        required: false
+        default: 'src'
+
+      coverage-threshold:
+        description: 'Minimum code coverage percentage'
+        type: number
+        required: false
+        default: 80
+
+      fail-on-high:
+        description: 'Fail on HIGH or CRITICAL security findings'
+        type: boolean
+        required: false
+        default: true
+
+    secrets:
+      SONAR_TOKEN:
+        description: 'SonarCloud token (optional, passed to python-sonarcloud.yml callers)'
+        required: false
+      CODECOV_TOKEN:
+        description: 'Codecov token (optional, passed to python-codecov.yml callers)'
+        required: false
+
+# Workflow-level permissions are the ceiling for all jobs in this workflow.
+# Each job below declares only what it actually needs.
+permissions:
+  contents: read
+  pull-requests: write
+  security-events: write
+
+jobs:
+  ci:
+    name: CI
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@main
+    permissions:
+      contents: read
+      pull-requests: write
+    with:
+      python-version: ${{ inputs.python-version }}
+      source-directory: ${{ inputs.source-directory }}
+      coverage-threshold: ${{ inputs.coverage-threshold }}
+
+  security:
+    name: Security Analysis
+    needs: [ci]
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-security-analysis.yml@main
+    permissions:
+      contents: read
+      security-events: write
+      pull-requests: write
+    with:
+      python-version: ${{ inputs.python-version }}
+      source-directory: ${{ inputs.source-directory }}
+      fail-on-high: ${{ inputs.fail-on-high }}
+
+  sbom:
+    name: SBOM
+    needs: [ci]
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-sbom.yml@main
+    permissions:
+      contents: read
+      security-events: write
+    with:
+      python-version: ${{ inputs.python-version }}
+      fail-on-vulnerabilities: ${{ inputs.fail-on-high }}
