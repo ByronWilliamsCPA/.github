@@ -360,15 +360,15 @@ jobs:
             const pr = context.payload.pull_request;
             const labels = pr.labels.map(l => l.name.toLowerCase());
 
-            // Use Dependabot/Renovate native labels instead of PR title parsing.
-            // Label-based detection is not spoofable via title text.
-            // Dependabot sets: "major", "minor", "patch" (semver:* variants also supported)
+            // Use label-based detection instead of PR title parsing.
+            // Dependabot natively sets version-update:semver-{major,minor,patch} labels.
+            // Renovate and custom dependabot.yml configs may set major/minor/patch or semver:* labels.
             let updateType = 'unknown';
-            if (labels.includes('major') || labels.includes('semver:major')) {
+            if (labels.includes('major') || labels.includes('semver:major') || labels.includes('version-update:semver-major')) {
               updateType = 'major';
-            } else if (labels.includes('minor') || labels.includes('semver:minor')) {
+            } else if (labels.includes('minor') || labels.includes('semver:minor') || labels.includes('version-update:semver-minor')) {
               updateType = 'minor';
-            } else if (labels.includes('patch') || labels.includes('semver:patch')) {
+            } else if (labels.includes('patch') || labels.includes('semver:patch') || labels.includes('version-update:semver-patch')) {
               updateType = 'patch';
             }
 
