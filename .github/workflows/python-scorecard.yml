@@ -13,6 +13,9 @@
 #         actions: read
 #       with:
 #         publish-results: false   # REQUIRED -- see Known Limitations below
+#         min-score: 7             # Optional: gate fails if Branch-Protection, Code-Review,
+#                                  # Dangerous-Workflow, Token-Permissions, or Pinned-Dependencies
+#                                  # scores below this threshold (0 disables gate; default 0)
 #       secrets:
 #         SCORECARD_TOKEN: ${{ secrets.SCORECARD_TOKEN }}
 #
@@ -135,6 +138,9 @@ jobs:
               sarif = json.load(f)
 
           min_score = float(os.environ["MIN_SCORE"])
+          if not 0 <= min_score <= 10:
+              print(f"::error::min-score must be between 0 and 10, got {min_score}")
+              sys.exit(1)
           gate_checks = {"Branch-Protection", "Code-Review", "Dangerous-Workflow",
                          "Token-Permissions", "Pinned-Dependencies"}
           failures = []
@@ -142,7 +148,7 @@ jobs:
           for run in sarif.get("runs", []):
               for result in run.get("results", []):
                   rule_id = result.get("ruleId", "")
-                  score = result.get("properties", {}).get("score", 10)
+                  score = result.get("properties", {}).get("score", 0)
                   if rule_id in gate_checks and score < min_score:
                       failures.append(f"{rule_id}: {score}/10 (minimum {min_score})")
 
