@@ -12,6 +12,9 @@ are no numbered releases.
 
 ### Added
 
+- `python-precommit.yml`: new reusable workflow that runs `pre-commit run --all-files` in the project virtualenv via `uv run`; inputs `config-path`, `python-version`, `fail-fast`; all inputs via env vars; SHA-pinned actions
+- `python-standard-stack.yml`: new composite reusable workflow chaining `python-ci.yml`, `python-security-analysis.yml`, and `python-sbom.yml` via `needs:`; recommended quickstart for new repos; exposes `python-version`, `source-directory`, `coverage-threshold`, `fail-on-high`; optional `SONAR_TOKEN`/`CODECOV_TOKEN` passthroughs
+- `python-supplemental-checks.yml`: `enable-commit-lint` input (default false) that validates PR titles against Conventional Commits format via SHA-pinned `amannn/action-semantic-pull-request`; commit-lint status added to supplemental summary
 - `python-scorecard.yml`: `min-score` input (type: number, default 0 = gate disabled) and `Evaluate Scorecard Scores` step that parses SARIF output and fails CI if any of Branch-Protection, Code-Review, Dangerous-Workflow, Token-Permissions, or Pinned-Dependencies scores below the threshold
 - `scripts/update-pinned-actions.sh`: developer tool to scan workflow files for outdated pinned action SHAs and propose or apply updates within the same major version
 - `CHANGELOG.md`: required OpenSSF baseline file

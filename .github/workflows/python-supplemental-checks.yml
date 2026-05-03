@@ -105,6 +105,13 @@ on:
         required: false
         default: 'squash'
 
+      # Commit lint configuration
+      enable-commit-lint:
+        description: 'Enable Conventional Commits format validation for PR titles'
+        type: boolean
+        required: false
+        default: false
+
 permissions:
   contents: read
   pull-requests: write
@@ -435,16 +442,58 @@ jobs:
           fi
 
   # ==========================================================================
+  # Commit Lint (Conventional Commits PR Title Validation)
+  # ==========================================================================
+  commit-lint:
+    name: Conventional Commits PR Title
+    if: inputs.enable-commit-lint && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40  # v2.19.0
+        with:
+          egress-policy: audit
+
+      - name: Validate PR title follows Conventional Commits
+        uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50  # v6.1.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Commit Lint Summary
+        if: always()
+        run: |
+          echo "## Conventional Commits PR Title" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "PR title follows Conventional Commits format." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "PR title does not follow Conventional Commits format." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Expected format: \`type(scope): description\`" >> $GITHUB_STEP_SUMMARY
+            echo "Examples: \`feat: add login\`, \`fix(auth): handle expired tokens\`" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # ==========================================================================
   # Summary Job
   # ==========================================================================
   supplemental-summary:
     name: Supplemental Summary
     runs-on: ubuntu-latest
-    needs: [link-check, changelog-check, cruft-check, automerge]
+    needs: [link-check, changelog-check, cruft-check, automerge, commit-lint]
     if: always()
 
     steps:
       - name: Generate summary
+        env:
+          LINK_CHECK_ENABLED: ${{ inputs.enable-link-check }}
+          CHANGELOG_CHECK_ENABLED: ${{ inputs.enable-changelog-check }}
+          CRUFT_CHECK_ENABLED: ${{ inputs.enable-cruft-check }}
+          AUTOMERGE_ENABLED: ${{ inputs.enable-automerge }}
+          COMMIT_LINT_ENABLED: ${{ inputs.enable-commit-lint }}
         run: |
           echo "## Supplemental Checks Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -452,7 +501,7 @@ jobs:
           echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
 
           # Link check
-          if [ "${{ inputs.enable-link-check }}" == "true" ]; then
+          if [ "$LINK_CHECK_ENABLED" == "true" ]; then
             if [ "${{ needs.link-check.result }}" == "success" ]; then
               echo "| Link Check | Passed |" >> $GITHUB_STEP_SUMMARY
             elif [ "${{ needs.link-check.result }}" == "skipped" ]; then
@@ -465,7 +514,7 @@ jobs:
           fi
 
           # Changelog check
-          if [ "${{ inputs.enable-changelog-check }}" == "true" ]; then
+          if [ "$CHANGELOG_CHECK_ENABLED" == "true" ]; then
             if [ "${{ needs.changelog-check.result }}" == "success" ]; then
               echo "| Changelog | Updated |" >> $GITHUB_STEP_SUMMARY
             elif [ "${{ needs.changelog-check.result }}" == "skipped" ]; then
@@ -478,7 +527,7 @@ jobs:
           fi
 
           # Cruft check
-          if [ "${{ inputs.enable-cruft-check }}" == "true" ]; then
+          if [ "$CRUFT_CHECK_ENABLED" == "true" ]; then
             if [ "${{ needs.cruft-check.result }}" == "success" ]; then
               echo "| Template Sync | In Sync |" >> $GITHUB_STEP_SUMMARY
             elif [ "${{ needs.cruft-check.result }}" == "skipped" ]; then
@@ -491,7 +540,7 @@ jobs:
           fi
 
           # Auto-merge
-          if [ "${{ inputs.enable-automerge }}" == "true" ]; then
+          if [ "$AUTOMERGE_ENABLED" == "true" ]; then
             if [ "${{ needs.automerge.result }}" == "success" ]; then
               echo "| Auto-Merge | Enabled |" >> $GITHUB_STEP_SUMMARY
             elif [ "${{ needs.automerge.result }}" == "skipped" ]; then
@@ -501,4 +550,17 @@ jobs:
             fi
           else
             echo "| Auto-Merge | Disabled |" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Commit lint
+          if [ "$COMMIT_LINT_ENABLED" == "true" ]; then
+            if [ "${{ needs.commit-lint.result }}" == "success" ]; then
+              echo "| Commit Lint | Passed |" >> $GITHUB_STEP_SUMMARY
+            elif [ "${{ needs.commit-lint.result }}" == "skipped" ]; then
+              echo "| Commit Lint | Skipped (not a PR) |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| Commit Lint | ${{ needs.commit-lint.result }} |" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "| Commit Lint | Disabled |" >> $GITHUB_STEP_SUMMARY
           fi

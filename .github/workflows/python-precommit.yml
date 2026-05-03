@@ -1,0 +1,93 @@
+# ============================================================================
+# Reusable Pre-Commit Workflow
+# ============================================================================
+# Runs pre-commit hooks against the entire repository in the project virtualenv.
+#
+# Usage from downstream repos:
+#   jobs:
+#     pre-commit:
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-precommit.yml@main
+#       with:
+#         python-version: '3.12'
+#         fail-fast: true
+#
+# Features:
+#   - Runs pre-commit run --all-files via uv run (project virtualenv)
+#   - All inputs passed via env vars (no direct ${{ inputs.* }} in run: blocks)
+#   - Optional config-path override for non-standard pre-commit configs
+# ============================================================================
+
+name: Pre-Commit (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      config-path:
+        description: 'Path to the pre-commit config file'
+        type: string
+        required: false
+        default: '.pre-commit-config.yaml'
+
+      python-version:
+        description: 'Python version to use'
+        type: string
+        required: false
+        default: '3.12'
+
+      fail-fast:
+        description: 'Show diff on first hook failure (--show-diff-on-failure)'
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  pre-commit:
+    name: Pre-Commit Hooks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40  # v2.19.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
+        with:
+          python-version: ${{ inputs.python-version }}
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run pre-commit hooks
+        env:
+          CONFIG_PATH: ${{ inputs.config-path }}
+          FAIL_FAST: ${{ inputs.fail-fast }}
+        run: |
+          if [ "$FAIL_FAST" = "true" ]; then
+            uv run pre-commit run --all-files --config "$CONFIG_PATH" --show-diff-on-failure
+          else
+            uv run pre-commit run --all-files --config "$CONFIG_PATH"
+          fi
+
+      - name: Pre-Commit Summary
+        if: always()
+        run: |
+          echo "## Pre-Commit Hook Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ job.status }}" == "success" ]; then
+            echo "All pre-commit hooks passed." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "One or more pre-commit hooks failed. Review the output above." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "To run locally: \`uv run pre-commit run --all-files\`" >> $GITHUB_STEP_SUMMARY
+          fi
