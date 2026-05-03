@@ -39,6 +39,9 @@ tmp/
 tmp_cleanup/
 actionlint
 
+# AI assistant state
+.claude/
+
 # Git worktrees
 .worktrees/
 
