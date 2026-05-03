@@ -63,20 +63,21 @@ jobs:
         with:
           python-version: ${{ inputs.python-version }}
           enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --frozen
 
       - name: Run pre-commit hooks
         env:
           CONFIG_PATH: ${{ inputs.config-path }}
           FAIL_FAST: ${{ inputs.fail-fast }}
         run: |
-          EXTRA_ARGS=""
           if [ "$FAIL_FAST" = "true" ]; then
-            EXTRA_ARGS="--show-diff-on-failure"
+            uv run pre-commit run --all-files --config "$CONFIG_PATH" --show-diff-on-failure
+          else
+            uv run pre-commit run --all-files --config "$CONFIG_PATH"
           fi
-          uv run pre-commit run --all-files --config "$CONFIG_PATH" $EXTRA_ARGS
 
       - name: Pre-Commit Summary
         if: always()
