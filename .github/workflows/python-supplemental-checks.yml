@@ -449,6 +449,8 @@ jobs:
     if: inputs.enable-commit-lint && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      pull-requests: write
 
     steps:
       - name: Harden Runner
@@ -486,6 +488,12 @@ jobs:
 
     steps:
       - name: Generate summary
+        env:
+          LINK_CHECK_ENABLED: ${{ inputs.enable-link-check }}
+          CHANGELOG_CHECK_ENABLED: ${{ inputs.enable-changelog-check }}
+          CRUFT_CHECK_ENABLED: ${{ inputs.enable-cruft-check }}
+          AUTOMERGE_ENABLED: ${{ inputs.enable-automerge }}
+          COMMIT_LINT_ENABLED: ${{ inputs.enable-commit-lint }}
         run: |
           echo "## Supplemental Checks Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -493,7 +501,7 @@ jobs:
           echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
 
           # Link check
-          if [ "${{ inputs.enable-link-check }}" == "true" ]; then
+          if [ "$LINK_CHECK_ENABLED" == "true" ]; then
             if [ "${{ needs.link-check.result }}" == "success" ]; then
               echo "| Link Check | Passed |" >> $GITHUB_STEP_SUMMARY
             elif [ "${{ needs.link-check.result }}" == "skipped" ]; then
@@ -506,7 +514,7 @@ jobs:
           fi
 
           # Changelog check
-          if [ "${{ inputs.enable-changelog-check }}" == "true" ]; then
+          if [ "$CHANGELOG_CHECK_ENABLED" == "true" ]; then
             if [ "${{ needs.changelog-check.result }}" == "success" ]; then
               echo "| Changelog | Updated |" >> $GITHUB_STEP_SUMMARY
             elif [ "${{ needs.changelog-check.result }}" == "skipped" ]; then
@@ -519,7 +527,7 @@ jobs:
           fi
 
           # Cruft check
-          if [ "${{ inputs.enable-cruft-check }}" == "true" ]; then
+          if [ "$CRUFT_CHECK_ENABLED" == "true" ]; then
             if [ "${{ needs.cruft-check.result }}" == "success" ]; then
               echo "| Template Sync | In Sync |" >> $GITHUB_STEP_SUMMARY
             elif [ "${{ needs.cruft-check.result }}" == "skipped" ]; then
@@ -532,7 +540,7 @@ jobs:
           fi
 
           # Auto-merge
-          if [ "${{ inputs.enable-automerge }}" == "true" ]; then
+          if [ "$AUTOMERGE_ENABLED" == "true" ]; then
             if [ "${{ needs.automerge.result }}" == "success" ]; then
               echo "| Auto-Merge | Enabled |" >> $GITHUB_STEP_SUMMARY
             elif [ "${{ needs.automerge.result }}" == "skipped" ]; then
@@ -545,7 +553,7 @@ jobs:
           fi
 
           # Commit lint
-          if [ "${{ inputs.enable-commit-lint }}" == "true" ]; then
+          if [ "$COMMIT_LINT_ENABLED" == "true" ]; then
             if [ "${{ needs.commit-lint.result }}" == "success" ]; then
               echo "| Commit Lint | Passed |" >> $GITHUB_STEP_SUMMARY
             elif [ "${{ needs.commit-lint.result }}" == "skipped" ]; then
