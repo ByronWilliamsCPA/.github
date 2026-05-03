@@ -40,6 +40,7 @@ are no numbered releases.
 
 ### Fixed
 
+- `python-publish-pypi.yml`: replace `uv run pip-audit` / `uv run bandit` with `uv run --with` invocations that pin tool versions (`pip-audit==2.10.0`, `bandit[toml]==1.9.4`); the previous form required both tools to be listed as project dev dependencies in every downstream caller's `uv.lock`, silently failing or auditing an empty environment when they were absent
 - Fix stale `williaby` org reference in usage example comments for `python-fuzzing.yml`, `python-performance-regression.yml`, and `python-qlty-coverage.yml`
 - Add `timeout-minutes: 5` to `build-matrix` and `compatibility-summary` jobs in `python-compatibility.yml`
 - Add `timeout-minutes: 5` to `check-configuration` jobs in `python-sonarcloud.yml` and `python-qlty-coverage.yml`
