@@ -1,0 +1,11 @@
+# REUSE Software Bill of Materials
+# https://reuse.software/
+version = 1
+SPDX-PackageName = ".github"
+SPDX-PackageSupplier = "Byron Williams"
+SPDX-PackageDownloadLocation = "https://github.com/ByronWilliamsCPA/.github"
+
+[[annotations]]
+path = ["**"]
+SPDX-License-Identifier = "MIT"
+SPDX-FileCopyrightText = "2025 Byron Williams"
