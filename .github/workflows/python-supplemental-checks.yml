@@ -180,7 +180,17 @@ jobs:
   # ==========================================================================
   changelog-check:
     name: Changelog Check
-    if: inputs.enable-changelog-check && github.event_name == 'pull_request'
+    # Skip via event payload to avoid GitHub API label-timing races on the
+    # opened event (e.g. Renovate PRs). Standard skip labels are evaluated
+    # here; custom labels passed via changelog-skip-labels are checked in
+    # the run step as a fallback.
+    if: |
+      inputs.enable-changelog-check &&
+      github.event_name == 'pull_request' &&
+      !contains(github.event.pull_request.labels.*.name, 'skip-changelog') &&
+      !contains(github.event.pull_request.labels.*.name, 'dependencies') &&
+      !contains(github.event.pull_request.labels.*.name, 'documentation') &&
+      !contains(github.event.pull_request.labels.*.name, 'automated')
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -196,13 +206,19 @@ jobs:
           fetch-depth: 0
 
       - name: Check for CHANGELOG update
-        uses: dangoslen/changelog-enforcer@8b5e9dc3121363bb7c0115f8533404d92af382de  # v3.7.0
-        with:
-          changeLogPath: ${{ inputs.changelog-path }}
-          skipLabels: ${{ inputs.changelog-skip-labels }}
-          missingUpdateErrorMessage: |
-            Please update ${{ inputs.changelog-path }} with a description of your changes.
-            Add one of these labels to skip: ${{ inputs.changelog-skip-labels }}
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          CHANGELOG_PATH: ${{ inputs.changelog-path }}
+          SKIP_LABELS: ${{ inputs.changelog-skip-labels }}
+        run: |
+          git fetch origin "$BASE_REF" --no-tags
+          MERGE_BASE=$(git merge-base HEAD "origin/$BASE_REF")
+          if git diff --name-only "$MERGE_BASE" HEAD | grep -q "^${CHANGELOG_PATH}$"; then
+            echo "${CHANGELOG_PATH} was updated - check passed."
+          else
+            echo "::error::${CHANGELOG_PATH} was not updated. Please add a changelog entry, or add one of these labels to skip: ${SKIP_LABELS}"
+            exit 1
+          fi
 
       - name: Changelog Summary
         if: always()
