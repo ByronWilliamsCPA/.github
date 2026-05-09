@@ -7,32 +7,39 @@
 
 ---
 
-> **Import note (2026-05-08):** This audit document is being imported from
-> branch `claude/security-audit-standards-repo-Y0qq7`, which was never merged.
-> The original commit proposed fixes for findings P2-01 through P2-05 (marked
-> "FIXED" in the body below), but those fixes are NOT in `main`. As of import
-> date, **all 15 findings remain open** and will be triaged via follow-up PRs.
-> Track open status in the table below; the body text preserves the original
-> audit author's wording for historical accuracy.
+> **Import note (2026-05-08):** This audit document was imported from branch
+> `claude/security-audit-standards-repo-Y0qq7`, which was never merged. The
+> original audit author proposed fixes for findings P2-01 through P2-05
+> alongside the audit doc (marked "FIXED" in the body below), but on a branch
+> that did not land.
+>
+> **Status reconciliation note (2026-05-08, second session):** A subsequent
+> verification pass against current `main` revealed that PR #46 (commit
+> `cbb86ee`, merged 2026-04-30 — one day before the audit ran) had already
+> independently landed equivalent fixes for several findings the audit
+> attempted to address. As a result, the **Current Status** table below
+> reflects verified-against-`main` state, not the original audit's open/closed
+> claims. The body text below the status table preserves the original audit
+> author's wording for historical accuracy; trust the table over the body.
 
-## Current Status (as of import, 2026-05-08)
+## Current Status (verified against `main`, 2026-05-08)
 
-| Finding | Severity | Status | Tracking PR |
+| Finding | Severity | Status | Tracking PR / Notes |
 | --- | --- | --- | --- |
-| P1-01 | MEDIUM | Open | — |
+| P1-01 | MEDIUM | Deferred | Pending decision on secondary owner identity |
 | P1-02 | MEDIUM | Open | — |
 | P1-03 | MEDIUM | Open | — |
-| P1-04 | LOW | Open | — |
+| P1-04 | LOW | Closed | Resolved by file separation: `.github/dependabot.yml` (active for this repo) lists only `github-actions`; root `dependabot.yml` is a template propagated to downstream repos by `sync_org_files.sh` and intentionally covers all common ecosystems |
 | P1-05 | LOW | Open | — |
-| P2-01 | CRITICAL | Open | — |
-| P2-02 | HIGH | Open | — |
-| P2-03 | HIGH | Open | — |
-| P2-04 | HIGH | Open | — |
+| P2-01 | CRITICAL | Closed | PR #46 (`cbb86ee`) removed `synthetic-data-script` input; current code calls hardcoded `scripts/generate_test_data.py` |
+| P2-02 | HIGH | Closed | PR #46 (`cbb86ee`) routed all caller inputs through `env:` blocks across `python-ci.yml`, `python-performance-regression.yml`, `python-security-analysis.yml` |
+| P2-03 | HIGH | Closed | Current `python-publish-pypi.yml` step uses `pip-audit --strict` and `bandit -ll` with no `\|\| echo` swallow — both hard-fail on findings |
+| P2-04 | HIGH | Closed | PR #46 (`cbb86ee`) reduced workflow-level `permissions:` in `python-release.yml` to `contents: read`; per-job permissions scoped narrowly |
 | P2-05 | MEDIUM | Open | — |
 | P2-06 | MEDIUM | Open | — |
-| P2-07 | MEDIUM | Open | — |
+| P2-07 | MEDIUM | Closed | `python-supplemental-checks.yml` now uses label-based detection (`version-update:semver-{major,minor,patch}` and `semver:*` aliases), replacing the original PR-title regex |
 | P2-08 | MEDIUM | Open | — |
-| P2-09 | LOW | Open | — |
+| P2-09 | LOW | Closed | `python-pr-validation.yml` carries an explicit DEPRECATED header with full migration guide to `python-ci.yml`. Sunset date still TBD but recommendation satisfied |
 | P2-10 | LOW | Open | — |
 
 ---
