@@ -63,7 +63,7 @@ on:
 
 jobs:
   publish:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-publish-pypi.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-publish-pypi.yml@v1
     with:
       package-name: 'image-preprocessing-detector'  # Your package name
       use-testpypi: ${{ inputs.use_testpypi || false }}
@@ -111,7 +111,7 @@ on:
 
 jobs:
   publish:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-publish-pypi.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-publish-pypi.yml@v1
     with:
       package-name: 'your-package-name'  # ← CHANGE THIS
       use-testpypi: ${{ inputs.use_testpypi || false }}
@@ -175,7 +175,7 @@ None - all inputs have sensible defaults!
 ```yaml
 jobs:
   publish:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-publish-pypi.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-publish-pypi.yml@v1
     with:
       package-name: 'my-package'
       python-version: '3.11'  # ← Use Python 3.11
@@ -189,7 +189,7 @@ jobs:
 ```yaml
 jobs:
   publish:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-publish-pypi.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-publish-pypi.yml@v1
     with:
       package-name: 'my-package'
       run-security-checks: false  # ← Skip security scans
@@ -203,7 +203,7 @@ jobs:
 ```yaml
 jobs:
   publish:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-publish-pypi.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-publish-pypi.yml@v1
     with:
       package-name: 'my-package'
       source-directory: 'lib'  # ← Scan lib/ instead of src/
@@ -311,7 +311,7 @@ on:
 
 jobs:
   publish:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-publish-pypi.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-publish-pypi.yml@v1
     with:
       package-name: 'image-preprocessing-detector'
       use-testpypi: ${{ inputs.use_testpypi || false }}

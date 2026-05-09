@@ -28,7 +28,7 @@
 | --- | --- | --- | --- |
 | P1-01 | MEDIUM | Deferred | Pending decision on secondary owner identity |
 | P1-02 | MEDIUM | Open | — |
-| P1-03 | MEDIUM | Open | — |
+| P1-03 | MEDIUM | Fixed | This PR — bulk replaces `.yml@main` with `.yml@v1` across 42 user-facing docs, workflow header comments, and templates; adds version-pinning strategy section to USAGE_EXAMPLES.md. Maintainer to push `v1.0.0` and `v1` tags after all 8 fix PRs merge |
 | P1-04 | LOW | Closed | Resolved by file separation: `.github/dependabot.yml` (active for this repo) lists only `github-actions`; root `dependabot.yml` is a template propagated to downstream repos by `sync_org_files.sh` and intentionally covers all common ecosystems |
 | P1-05 | LOW | Open | — |
 | P2-01 | CRITICAL | Closed | PR #46 (`cbb86ee`) removed `synthetic-data-script` input; current code calls hardcoded `scripts/generate_test_data.py` |

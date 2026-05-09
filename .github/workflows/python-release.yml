@@ -6,7 +6,7 @@
 # Usage from downstream repos:
 #   jobs:
 #     release:
-#       uses: ByronWilliamsCPA/.github/.github/workflows/python-release.yml@main
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-release.yml@v1
 #       with:
 #         python-version: '3.12'
 #         semantic-release: true

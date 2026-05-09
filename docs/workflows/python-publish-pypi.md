@@ -30,7 +30,7 @@ on:
 
 jobs:
   publish:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-publish-pypi.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-publish-pypi.yml@v1
     with:
       package-name: 'my-package'
     permissions:
@@ -55,7 +55,7 @@ on:
 
 jobs:
   publish:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-publish-pypi.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-publish-pypi.yml@v1
     with:
       package-name: 'my-package'
       use-testpypi: ${{ inputs.use_testpypi || false }}
@@ -69,7 +69,7 @@ jobs:
 ```yaml
 jobs:
   publish:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-publish-pypi.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-publish-pypi.yml@v1
     with:
       package-name: 'my-package'
       python-version: '3.11'

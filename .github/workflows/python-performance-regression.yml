@@ -6,7 +6,7 @@
 # Usage from downstream repos:
 #   jobs:
 #     performance:
-#       uses: ByronWilliamsCPA/.github/.github/workflows/python-performance-regression.yml@main
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-performance-regression.yml@v1
 #       with:
 #         benchmark-script: 'scripts/benchmarks/run_benchmark.py'
 #         regression-threshold: 10.0

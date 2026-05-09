@@ -14,7 +14,7 @@
 # Usage from downstream repos:
 #   jobs:
 #     publish:
-#       uses: ByronWilliamsCPA/.github/.github/workflows/python-publish-pypi.yml@main
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-publish-pypi.yml@v1
 #       with:
 #         package-name: 'my-package'
 #       permissions:
