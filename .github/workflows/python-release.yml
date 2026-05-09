@@ -6,7 +6,7 @@
 # Usage from downstream repos:
 #   jobs:
 #     release:
-#       uses: ByronWilliamsCPA/.github/.github/workflows/python-release.yml@main
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-release.yml@v1
 #       with:
 #         python-version: '3.12'
 #         semantic-release: true
@@ -23,6 +23,13 @@
 #   - PyPI publishing with OIDC trusted publishing
 #   - Sigstore artifact signing
 #   - SBOM generation
+#
+# Skipping pre-release tests:
+#   The `run-tests: false` input opts out of the pre-release test gate. To
+#   prevent accidental bypass, callers using `run-tests: false` MUST also
+#   supply a non-empty `skip-tests-reason` input documenting why the tests
+#   are safe to skip (e.g., "tests run in upstream pipeline X"). The release
+#   job will fail fast if `run-tests: false` is used without a reason.
 # ============================================================================
 
 name: Python Release (Reusable)
@@ -75,6 +82,11 @@ on:
         required: false
         type: boolean
         default: true
+      skip-tests-reason:
+        description: 'Reason for skipping pre-release tests (REQUIRED when run-tests is false; e.g., "tests run in upstream pipeline X")'
+        required: false
+        type: string
+        default: ''
       generate-sbom:
         description: 'Generate Software Bill of Materials'
         required: false
@@ -179,6 +191,18 @@ jobs:
         uses: step-security/harden-runner@a5ad31d6a139d249332a2605b85202e8c0b78450  # v2.19.1
         with:
           egress-policy: audit
+
+      - name: Validate skip-tests opt-out
+        if: ${{ !inputs.run-tests }}
+        env:
+          SKIP_TESTS_REASON: ${{ inputs.skip-tests-reason }}
+        run: |
+          if [ -z "$SKIP_TESTS_REASON" ]; then
+            echo "::error::run-tests is false but skip-tests-reason is empty."
+            echo "::error::Pre-release tests are a required quality gate. To opt out intentionally, supply a non-empty skip-tests-reason input documenting why (e.g., 'tests run in upstream pipeline X')."
+            exit 1
+          fi
+          echo "Pre-release tests skipped intentionally. Reason: $SKIP_TESTS_REASON"
 
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2

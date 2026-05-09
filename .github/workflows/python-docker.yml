@@ -7,7 +7,7 @@
 #   # For PR builds (build + optional push):
 #   jobs:
 #     docker:
-#       uses: ByronWilliamsCPA/.github/.github/workflows/python-docker.yml@main
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-docker.yml@v1
 #       with:
 #         push: true
 #         platforms: 'linux/amd64,linux/arm64'
@@ -15,7 +15,7 @@
 #   # For release builds:
 #   jobs:
 #     docker:
-#       uses: ByronWilliamsCPA/.github/.github/workflows/python-docker.yml@main
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-docker.yml@v1
 #       with:
 #         push: true
 #         tag-latest: true

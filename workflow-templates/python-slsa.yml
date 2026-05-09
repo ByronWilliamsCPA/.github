@@ -70,7 +70,7 @@ jobs:
   provenance:
     name: Generate Provenance
     needs: build
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-slsa.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-slsa.yml@v1
     with:
       base64-subjects: ${{ needs.build.outputs.hashes }}
       upload-assets: true

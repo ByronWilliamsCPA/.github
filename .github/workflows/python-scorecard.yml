@@ -6,7 +6,7 @@
 # Usage from downstream repos:
 #   jobs:
 #     scorecard:
-#       uses: ByronWilliamsCPA/.github/.github/workflows/python-scorecard.yml@main
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-scorecard.yml@v1
 #       permissions:
 #         security-events: write
 #         contents: read

@@ -18,7 +18,7 @@
 #   # Then call this workflow:
 #   upload-coverage:
 #     needs: test
-#     uses: ByronWilliamsCPA/.github/.github/workflows/python-codecov.yml@main
+#     uses: ByronWilliamsCPA/.github/.github/workflows/python-codecov.yml@v1
 #     with:
 #       artifact-name: 'coverage-reports'
 #     secrets:

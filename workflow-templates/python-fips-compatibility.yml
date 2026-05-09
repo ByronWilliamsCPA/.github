@@ -52,7 +52,7 @@ permissions:
 jobs:
   fips-check:
     name: FIPS Compliance Check
-    uses: ByronWilliamsCPA/.github/workflows/python-fips-compatibility.yml@main
+    uses: ByronWilliamsCPA/.github/workflows/python-fips-compatibility.yml@v1
     with:
       strict-mode: ${{ github.event.inputs.strict_mode || false }}
       include-tests: true

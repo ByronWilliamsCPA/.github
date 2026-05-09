@@ -6,7 +6,7 @@
 # Usage from downstream repos:
 #   jobs:
 #     container-security:
-#       uses: ByronWilliamsCPA/.github/.github/workflows/python-container-security.yml@main
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-container-security.yml@v1
 #       with:
 #         image-ref: 'myapp:latest'
 #         dockerfile-path: './Dockerfile'
