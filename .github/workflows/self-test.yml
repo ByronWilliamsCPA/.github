@@ -46,6 +46,12 @@ jobs:
     timeout-minutes: 5
     env:
       ACTIONLINT_VERSION: '1.7.7'
+      # SHELLCHECK_OPTS is read by shellcheck regardless of how it is
+      # invoked, including from inside actionlint's integration. It
+      # overrides any wrapper-imposed flags. .shellcheckrc on its own
+      # is not reliably honored by actionlint's stdin-fed invocation,
+      # so this env var is the authoritative severity filter for layer 2.
+      SHELLCHECK_OPTS: '--severity=warning'
 
     steps:
       - name: Harden Runner
@@ -66,7 +72,7 @@ jobs:
           actionlint -version
 
       # actionlint integrates shellcheck on every `run:` block. Severity is
-      # filtered to warning+ via the repo-root `.shellcheckrc`, so info and
+      # filtered to warning+ via the SHELLCHECK_OPTS env above, so info and
       # style nits do not block CI; real warnings and errors still do.
       - name: Run actionlint on .github/workflows/
         run: actionlint -color .github/workflows/*.yml
