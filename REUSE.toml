@@ -9,3 +9,14 @@ SPDX-PackageDownloadLocation = "https://github.com/ByronWilliamsCPA/.github"
 path = ["**"]
 SPDX-License-Identifier = "MIT"
 SPDX-FileCopyrightText = "2025 Byron Williams"
+
+
+# Pre-existing files (added 2026-05-08 to clear REUSE compliance backlog)
+# These files predate the centralized REUSE.toml coverage. Licensed CC0-1.0
+# (public domain dedication) consistent with other configuration files.
+[[annotations]]
+path = [
+    ".github/workflows/python-reuse.yml",
+]
+SPDX-License-Identifier = "CC0-1.0"
+SPDX-FileCopyrightText = "2025 Byron Williams"
