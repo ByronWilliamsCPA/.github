@@ -1,0 +1,11 @@
+# Shared shellcheck configuration for this repo.
+#
+# Applied automatically by both:
+#   - The standalone shellcheck job in .github/workflows/self-test.yml
+#   - actionlint's integrated shellcheck pass over `run:` blocks
+#
+# severity=warning silences info-level findings (SC2086 unquoted variables,
+# SC2012 ls parsing, SC2035 wildcard expansion) and style-level findings
+# (SC2129 redirect grouping, SC2126 grep+wc) which are mostly preference
+# rather than safety. Real warnings and errors still fire.
+severity=warning

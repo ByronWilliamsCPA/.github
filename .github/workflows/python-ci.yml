@@ -151,7 +151,7 @@ jobs:
         run: |
           echo "::group::Ruff Formatting"
           uv run ruff format --check "$SRC_DIR"/ "$TEST_DIR"/ || {
-            echo "::error::Code formatting issues detected. Run 'uv run ruff format "$SRC_DIR"/ "$TEST_DIR"/' to fix."
+            echo "::error::Code formatting issues detected. Run: uv run ruff format ${SRC_DIR}/ ${TEST_DIR}/"
             exit 1
           }
           echo "::endgroup::"

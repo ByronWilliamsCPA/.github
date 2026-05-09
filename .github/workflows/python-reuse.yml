@@ -63,14 +63,12 @@ jobs:
         run: |
           echo "Checking for required license files..."
 
-          LICENSE_FOUND="false"
           if [ -f "LICENSE" ] || [ -f "LICENSE.txt" ] || [ -f "LICENSE.md" ] || \
              [ -f "COPYING" ] || [ -d "LICENSES" ]; then
-            LICENSE_FOUND="true"
-            echo "license_found=true" >> $GITHUB_OUTPUT
+            echo "license_found=true" >> "$GITHUB_OUTPUT"
             echo "License file(s) found"
           else
-            echo "license_found=false" >> $GITHUB_OUTPUT
+            echo "license_found=false" >> "$GITHUB_OUTPUT"
             echo "::warning::No LICENSE file found in repository root"
           fi
 
