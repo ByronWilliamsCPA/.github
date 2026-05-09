@@ -27,7 +27,7 @@
 | Finding | Severity | Status | Tracking PR / Notes |
 | --- | --- | --- | --- |
 | P1-01 | MEDIUM | Deferred | Pending decision on secondary owner identity |
-| P1-02 | MEDIUM | Open | — |
+| P1-02 | MEDIUM | Fixed | This PR — `sync_org_files.sh` now fetches `checksums.txt` and verifies SHA256 of every file before writing; mismatches abort with non-zero exit. New `scripts/regenerate-checksums.sh` for maintainer use. Also drops three unreachable issue-template entries from the sync list |
 | P1-03 | MEDIUM | Open | — |
 | P1-04 | LOW | Closed | Resolved by file separation: `.github/dependabot.yml` (active for this repo) lists only `github-actions`; root `dependabot.yml` is a template propagated to downstream repos by `sync_org_files.sh` and intentionally covers all common ecosystems |
 | P1-05 | LOW | Open | — |
