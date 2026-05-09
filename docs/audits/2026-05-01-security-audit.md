@@ -35,7 +35,7 @@
 | P2-02 | HIGH | Closed | PR #46 (`cbb86ee`) routed all caller inputs through `env:` blocks across `python-ci.yml`, `python-performance-regression.yml`, `python-security-analysis.yml` |
 | P2-03 | HIGH | Closed | Current `python-publish-pypi.yml` step uses `pip-audit --strict` and `bandit -ll` with no `\|\| echo` swallow — both hard-fail on findings |
 | P2-04 | HIGH | Closed | PR #46 (`cbb86ee`) reduced workflow-level `permissions:` in `python-release.yml` to `contents: read`; per-job permissions scoped narrowly |
-| P2-05 | MEDIUM | Open | — |
+| P2-05 | MEDIUM | Fixed | This PR — `python-release.yml` adds required `skip-tests-reason` input and validates it is non-empty when `run-tests: false`; release job fails fast on accidental bypass |
 | P2-06 | MEDIUM | Open | — |
 | P2-07 | MEDIUM | Closed | `python-supplemental-checks.yml` now uses label-based detection (`version-update:semver-{major,minor,patch}` and `semver:*` aliases), replacing the original PR-title regex |
 | P2-08 | MEDIUM | Open | — |
