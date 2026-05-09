@@ -112,8 +112,10 @@ jobs:
             echo "### How to Fix" >> $GITHUB_STEP_SUMMARY
             echo "1. Add SPDX license identifiers to source files:" >> $GITHUB_STEP_SUMMARY
             echo '   ```' >> $GITHUB_STEP_SUMMARY
+            # REUSE-IgnoreStart
             echo '   # SPDX-FileCopyrightText: 2024 Your Name' >> $GITHUB_STEP_SUMMARY
             echo '   # SPDX-License-Identifier: MIT' >> $GITHUB_STEP_SUMMARY
+            # REUSE-IgnoreEnd
             echo '   ```' >> $GITHUB_STEP_SUMMARY
             echo "2. Or create a \`.reuse/dep5\` file for bulk declarations" >> $GITHUB_STEP_SUMMARY
             echo "3. Install reuse tool: \`pip install reuse\`" >> $GITHUB_STEP_SUMMARY
