@@ -202,6 +202,10 @@ jobs:
         if: runner.os == 'Linux' && inputs.system-deps-ubuntu != ''
         env:
           SYSTEM_DEPS_UBUNTU: ${{ inputs.system-deps-ubuntu }}
+        # shellcheck disable=SC1033,SC1050,SC1072,SC1073,SC1140
+        # The bracket-class regex `[a-zA-Z0-9_\-\. ]` confuses shellcheck's
+        # parser; the actual bash syntax is valid. Disable parser-confusion
+        # codes inline rather than globally.
         run: |
           PKGS="$SYSTEM_DEPS_UBUNTU"
           if [[ "$PKGS" =~ ^[a-zA-Z0-9_\-\. ]+$ ]]; then
@@ -218,6 +222,8 @@ jobs:
         if: runner.os == 'macOS' && inputs.system-deps-macos != ''
         env:
           SYSTEM_DEPS_MACOS: ${{ inputs.system-deps-macos }}
+        # shellcheck disable=SC1033,SC1050,SC1072,SC1073,SC1140
+        # See comment on the Ubuntu step above.
         run: |
           PKGS="$SYSTEM_DEPS_MACOS"
           if [[ "$PKGS" =~ ^[a-zA-Z0-9_\-\. ]+$ ]]; then
