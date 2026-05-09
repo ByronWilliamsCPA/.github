@@ -38,7 +38,7 @@
 | P2-05 | MEDIUM | Open | — |
 | P2-06 | MEDIUM | Open | — |
 | P2-07 | MEDIUM | Closed | `python-supplemental-checks.yml` now uses label-based detection (`version-update:semver-{major,minor,patch}` and `semver:*` aliases), replacing the original PR-title regex |
-| P2-08 | MEDIUM | Open | — |
+| P2-08 | MEDIUM | Fixed | This PR — `python-ci.yml` Bandit (`-lll` HIGH-severity filter) and `pip-audit` now hard-fail; new `fail-on-security-findings` input (default `true`) controls opt-out |
 | P2-09 | LOW | Closed | `python-pr-validation.yml` carries an explicit DEPRECATED header with full migration guide to `python-ci.yml`. Sunset date still TBD but recommendation satisfied |
 | P2-10 | LOW | Open | — |
 
