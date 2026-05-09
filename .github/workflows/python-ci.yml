@@ -6,7 +6,7 @@
 # Usage from downstream repos:
 #   jobs:
 #     ci:
-#       uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@main
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
 #       with:
 #         python-version: '3.12'
 #         coverage-threshold: 80
@@ -99,6 +99,11 @@ on:
         required: false
         type: boolean
         default: false
+      fail-on-security-findings:
+        description: 'Fail CI when Bandit detects HIGH-severity issues or pip-audit reports a vulnerability'
+        required: false
+        type: boolean
+        default: true
 permissions:
   contents: read
 
@@ -296,18 +301,30 @@ jobs:
       - name: Security scan with Bandit
         env:
           SRC_DIR: ${{ inputs.source-directory }}
+          FAIL_ON_FINDINGS: ${{ inputs.fail-on-security-findings }}
         run: |
           echo "::group::Bandit Security Scan"
-          uv run bandit -r "$SRC_DIR"/ -c pyproject.toml -f json -o bandit-report.json || {
-            echo "::warning::Security issues detected"
-            cat bandit-report.json
-          }
+          # -lll filters to HIGH severity only; non-zero exit on findings.
+          if [ "$FAIL_ON_FINDINGS" = "true" ]; then
+            uv run bandit -r "$SRC_DIR"/ -c pyproject.toml -lll -f json -o bandit-report.json
+          else
+            uv run bandit -r "$SRC_DIR"/ -c pyproject.toml -lll -f json -o bandit-report.json || {
+              echo "::warning::HIGH-severity security issues detected (fail-on-security-findings=false; not failing CI)"
+              cat bandit-report.json
+            }
+          fi
           echo "::endgroup::"
 
       - name: Dependency vulnerability scan
+        env:
+          FAIL_ON_FINDINGS: ${{ inputs.fail-on-security-findings }}
         run: |
           echo "::group::pip-audit Dependency Scan"
-          uv run pip-audit || echo "::warning::Vulnerable dependencies detected"
+          if [ "$FAIL_ON_FINDINGS" = "true" ]; then
+            uv run pip-audit
+          else
+            uv run pip-audit || echo "::warning::Vulnerable dependencies detected (fail-on-security-findings=false; not failing CI)"
+          fi
           echo "::endgroup::"
 
       - name: Upload coverage artifacts

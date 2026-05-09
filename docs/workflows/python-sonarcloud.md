@@ -36,7 +36,7 @@ on:
 
 jobs:
   sonarcloud:
-    uses: williaby/.github/.github/workflows/python-sonarcloud.yml@main
+    uses: williaby/.github/.github/workflows/python-sonarcloud.yml@v1
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     with:
@@ -96,7 +96,7 @@ on:
 
 jobs:
   sonarcloud:
-    uses: williaby/.github/.github/workflows/python-sonarcloud.yml@main
+    uses: williaby/.github/.github/workflows/python-sonarcloud.yml@v1
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     with:
@@ -109,7 +109,7 @@ jobs:
 ```yaml
 jobs:
   sonarcloud:
-    uses: williaby/.github/.github/workflows/python-sonarcloud.yml@main
+    uses: williaby/.github/.github/workflows/python-sonarcloud.yml@v1
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     with:
@@ -124,7 +124,7 @@ jobs:
 ```yaml
 jobs:
   sonarcloud:
-    uses: williaby/.github/.github/workflows/python-sonarcloud.yml@main
+    uses: williaby/.github/.github/workflows/python-sonarcloud.yml@v1
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     with:
@@ -138,7 +138,7 @@ jobs:
 ```yaml
 jobs:
   sonarcloud:
-    uses: williaby/.github/.github/workflows/python-sonarcloud.yml@main
+    uses: williaby/.github/.github/workflows/python-sonarcloud.yml@v1
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     with:
@@ -152,7 +152,7 @@ jobs:
 ```yaml
 jobs:
   sonarcloud:
-    uses: williaby/.github/.github/workflows/python-sonarcloud.yml@main
+    uses: williaby/.github/.github/workflows/python-sonarcloud.yml@v1
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     with:
@@ -167,7 +167,7 @@ jobs:
 ```yaml
 jobs:
   sonarcloud:
-    uses: williaby/.github/.github/workflows/python-sonarcloud.yml@main
+    uses: williaby/.github/.github/workflows/python-sonarcloud.yml@v1
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     with:
@@ -325,11 +325,11 @@ on: [push, pull_request]
 
 jobs:
   ci:
-    uses: williaby/.github/.github/workflows/python-ci.yml@main
+    uses: williaby/.github/.github/workflows/python-ci.yml@v1
 
   sonarcloud:
     needs: ci
-    uses: williaby/.github/.github/workflows/python-sonarcloud.yml@main
+    uses: williaby/.github/.github/workflows/python-sonarcloud.yml@v1
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     with:
@@ -342,10 +342,10 @@ jobs:
 ```yaml
 jobs:
   security:
-    uses: williaby/.github/.github/workflows/python-security-analysis.yml@main
+    uses: williaby/.github/.github/workflows/python-security-analysis.yml@v1
 
   sonarcloud:
-    uses: williaby/.github/.github/workflows/python-sonarcloud.yml@main
+    uses: williaby/.github/.github/workflows/python-sonarcloud.yml@v1
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     with:

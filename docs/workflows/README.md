@@ -30,7 +30,7 @@ on:
 
 jobs:
   my-job:
-    uses: ByronWilliamsCPA/.github/.github/workflows/WORKFLOW-NAME.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/WORKFLOW-NAME.yml@v1
     with:
       # Workflow-specific inputs
       input-name: 'value'
@@ -50,7 +50,7 @@ on:
 
 jobs:
   publish:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-publish-pypi.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-publish-pypi.yml@v1
     with:
       package-name: 'my-package'
     permissions:
@@ -70,7 +70,7 @@ See [examples/publish-pypi-caller.yml](../../examples/publish-pypi-caller.yml) f
 2. **Consistency** - Same behavior across all projects
 3. **Security** - Built-in security scanning and best practices
 4. **Reduced Boilerplate** - Less code in each repository
-5. **Version Pinning** - Use `@main` for latest or pin to specific tags
+5. **Version Pinning** - Pin to `@v1` (moving major tag, recommended), `@v1.0.0` (immutable), or `@<sha>` (most secure). See `USAGE_EXAMPLES.md` for details. Avoid `@main` for production callers.
 
 ## Workflow Development
 
@@ -80,7 +80,7 @@ See [examples/publish-pypi-caller.yml](../../examples/publish-pypi-caller.yml) f
 2. **Define inputs** using `inputs:` section
 3. **Document usage** in this directory
 4. **Create example** in `examples/` directory
-5. **Test thoroughly** before promoting to `@main`
+5. **Test thoroughly** before promoting to `@v1` (moving major tag) or cutting a new immutable `@v1.x.x` tag
 
 ### Workflow Naming Convention
 

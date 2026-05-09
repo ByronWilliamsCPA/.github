@@ -28,7 +28,7 @@
 | --- | --- | --- | --- |
 | P1-01 | MEDIUM | Deferred | Pending decision on secondary owner identity |
 | P1-02 | MEDIUM | Fixed | This PR — `sync_org_files.sh` now fetches `checksums.txt` and verifies SHA256 of every file before writing; mismatches abort with non-zero exit. New `scripts/regenerate-checksums.sh` for maintainer use. Also drops three unreachable issue-template entries from the sync list |
-| P1-03 | MEDIUM | Open | — |
+| P1-03 | MEDIUM | Fixed | PR #76 — bulk replaces `.yml@main` with `.yml@v1` across 42 user-facing docs, workflow header comments, and templates; adds version-pinning strategy section to USAGE_EXAMPLES.md. Maintainer to push `v1.0.0` and `v1` tags after all 8 fix PRs merge |
 | P1-04 | LOW | Closed | Resolved by file separation: `.github/dependabot.yml` (active for this repo) lists only `github-actions`; root `dependabot.yml` is a template propagated to downstream repos by `sync_org_files.sh` and intentionally covers all common ecosystems |
 | P1-05 | LOW | Open | — |
 | P2-01 | CRITICAL | Closed | PR #46 (`cbb86ee`) removed `synthetic-data-script` input; current code calls hardcoded `scripts/generate_test_data.py` |
@@ -36,11 +36,11 @@
 | P2-03 | HIGH | Closed | Current `python-publish-pypi.yml` step uses `pip-audit --strict` and `bandit -ll` with no `\|\| echo` swallow — both hard-fail on findings |
 | P2-04 | HIGH | Closed | PR #46 (`cbb86ee`) reduced workflow-level `permissions:` in `python-release.yml` to `contents: read`; per-job permissions scoped narrowly |
 | P2-05 | MEDIUM | Fixed | This PR — `python-release.yml` adds required `skip-tests-reason` input and validates it is non-empty when `run-tests: false`; release job fails fast on accidental bypass |
-| P2-06 | MEDIUM | Open | — |
+| P2-06 | MEDIUM | Deferred | This PR documents the migration plan. Per-workflow `allowed-endpoints` lists must be derived from real audit-mode CI logs before block-mode is safe to enable; no code change in this PR. See "Future Work — P2-06 Migration Plan" below |
 | P2-07 | MEDIUM | Closed | `python-supplemental-checks.yml` now uses label-based detection (`version-update:semver-{major,minor,patch}` and `semver:*` aliases), replacing the original PR-title regex |
-| P2-08 | MEDIUM | Open | — |
+| P2-08 | MEDIUM | Fixed | This PR — `python-ci.yml` Bandit (`-lll` HIGH-severity filter) and `pip-audit` now hard-fail; new `fail-on-security-findings` input (default `true`) controls opt-out |
 | P2-09 | LOW | Closed | `python-pr-validation.yml` carries an explicit DEPRECATED header with full migration guide to `python-ci.yml`. Sunset date still TBD but recommendation satisfied |
-| P2-10 | LOW | Open | — |
+| P2-10 | LOW | Fixed | This PR — `python-security-analysis.yml` codeql job now gates on `needs.detect-changes.outputs.security_files == 'true'` in addition to `inputs.run-codeql` |
 
 ---
 
@@ -316,3 +316,61 @@ The `detect-changes` job output (`security_files`) is computed but never referen
 | P4 | P1-04 · Dependabot unused ecosystems | Trivial |
 | P4 | P1-05 · Self-test CI workflow | Low |
 | P4 | P2-10 · CodeQL change-gating | Trivial |
+
+---
+
+## Future Work — P2-06 Migration Plan
+
+P2-06 (egress-policy `audit` → `block`) is **Deferred** rather than Fixed because correct implementation requires per-workflow `allowed-endpoints` lists that can only be derived safely from real CI traffic. Guessing the lists risks breaking workflow runs for every downstream consumer, which contradicts the audit's defence-in-depth goal.
+
+The migration sequence below describes the work required and the data inputs each step needs.
+
+### Step 1 — Harvest endpoint data from existing audit-mode runs
+
+`step-security/harden-runner` in `audit` mode logs every outbound network request to GitHub Step Summary and to the harden-runner dashboard (when configured). For each reusable workflow:
+
+1. Trigger a representative run (preferably from a downstream caller's repo to capture realistic traffic, not just the self-test path).
+2. Download the harden-runner outbound-traffic report from the run's summary.
+3. Record the unique `host:port` pairs observed.
+
+A minimum of 3–5 successful runs per workflow is recommended to capture cache-miss paths, transient endpoints (e.g., codecov uploader auto-update probes), and PR vs push divergence.
+
+### Step 2 — Categorise endpoints into baseline + per-workflow
+
+Build two tiers:
+
+- **Baseline** (every workflow): GitHub APIs, `raw.githubusercontent.com`, GHCR, harden-runner's own telemetry endpoint, runner-image package mirrors.
+- **Per-workflow add-ons**: PyPI + `files.pythonhosted.org` for `python-publish-pypi.yml`; `codecov.io` + `keybase.io` for `python-codecov.yml`; `sonarcloud.io` + binary download CDN for `python-sonarcloud.yml`; etc.
+
+Document the categorisation in `docs/security/egress-allowlist.md` (new file).
+
+### Step 3 — Migrate one workflow at a time
+
+For each workflow, in order from lowest-risk to highest-risk:
+
+1. Switch its `egress-policy: audit` to `egress-policy: block` and add the derived `allowed-endpoints:` list.
+2. Trigger a run. If it fails because of a missing endpoint, add the endpoint with a code comment recording the exact failure and link to the run that surfaced it.
+3. Repeat until the workflow runs cleanly. Lock in.
+
+Suggested order:
+
+1. `python-scorecard.yml` (only talks to github.com + ossf scorecard)
+2. `python-reuse.yml` (only github.com + reuse-tool's PyPI install)
+3. `python-ci.yml` (PyPI + github.com — well-trodden path)
+4. `python-security-analysis.yml` (PyPI + GitHub security APIs)
+5. `python-codecov.yml` (codecov.io added)
+6. `python-publish-pypi.yml` (PyPI write + Sigstore + OIDC)
+7. `python-release.yml` (largest endpoint set; do last)
+
+### Step 4 — Update workflow-templates and downstream guidance
+
+Once all reusable workflows are in block mode with documented allowed-endpoints, update the `workflow-templates/*.yml` patterns and add a "Network policy" section to USAGE_EXAMPLES.md so downstream callers understand the contract.
+
+### Effort estimate
+
+- Step 1 (harvest): ~30 min per workflow × ~22 workflows = ~10–11 hours
+- Step 2 (categorise): ~2–3 hours
+- Step 3 (migrate + test): ~30 min per workflow + iteration time = ~15–20 hours
+- Step 4 (docs): ~2 hours
+
+Total: roughly 30–40 hours of focused work. Best done as a dedicated initiative rather than slipping into normal feature work.

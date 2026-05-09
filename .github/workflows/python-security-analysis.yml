@@ -4,7 +4,7 @@
 # Usage from downstream repos:
 #   jobs:
 #     security:
-#       uses: ByronWilliamsCPA/.github/.github/workflows/python-security-analysis.yml@main
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-security-analysis.yml@v1
 #       with:
 #         source-directory: 'src'
 #         fail-on-high: true
@@ -107,9 +107,13 @@ jobs:
               - 'requirements*.txt'
 
   # CodeQL Analysis
+  # Gates on (a) caller opt-in via run-codeql AND (b) at least one security-
+  # relevant file changed in the diff. The detect-changes filter checks Python
+  # sources, workflow files, and dependency manifests; if none changed,
+  # CodeQL is skipped to save CI minutes.
   codeql:
     name: CodeQL Analysis
-    if: ${{ inputs.run-codeql }}
+    if: ${{ inputs.run-codeql && needs.detect-changes.outputs.security_files == 'true' }}
     runs-on: ubuntu-latest
     needs: detect-changes
     timeout-minutes: 20
