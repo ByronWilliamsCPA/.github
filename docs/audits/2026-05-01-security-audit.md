@@ -30,7 +30,7 @@
 | P1-02 | MEDIUM | Fixed | This PR — `sync_org_files.sh` now fetches `checksums.txt` and verifies SHA256 of every file before writing; mismatches abort with non-zero exit. New `scripts/regenerate-checksums.sh` for maintainer use. Also drops three unreachable issue-template entries from the sync list |
 | P1-03 | MEDIUM | Fixed | PR #76 — bulk replaces `.yml@main` with `.yml@v1` across 42 user-facing docs, workflow header comments, and templates; adds version-pinning strategy section to USAGE_EXAMPLES.md. Maintainer to push `v1.0.0` and `v1` tags after all 8 fix PRs merge |
 | P1-04 | LOW | Closed | Resolved by file separation: `.github/dependabot.yml` (active for this repo) lists only `github-actions`; root `dependabot.yml` is a template propagated to downstream repos by `sync_org_files.sh` and intentionally covers all common ecosystems |
-| P1-05 | LOW | Open | — |
+| P1-05 | LOW | Fixed | This PR — new `.github/workflows/self-test.yml` runs actionlint on workflow YAML and shellcheck on shell scripts on every PR + push to main, with path filters to skip unrelated changes |
 | P2-01 | CRITICAL | Closed | PR #46 (`cbb86ee`) removed `synthetic-data-script` input; current code calls hardcoded `scripts/generate_test_data.py` |
 | P2-02 | HIGH | Closed | PR #46 (`cbb86ee`) routed all caller inputs through `env:` blocks across `python-ci.yml`, `python-performance-regression.yml`, `python-security-analysis.yml` |
 | P2-03 | HIGH | Closed | Current `python-publish-pypi.yml` step uses `pip-audit --strict` and `bandit -ll` with no `\|\| echo` swallow — both hard-fail on findings |

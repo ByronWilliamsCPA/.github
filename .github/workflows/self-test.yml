@@ -1,0 +1,104 @@
+# ============================================================================
+# Self-Test CI for ByronWilliamsCPA/.github
+# ============================================================================
+# Runs static analysis on this repo's own workflow files and shell scripts.
+# Catches regressions in the org-level reusable workflows before they
+# propagate to every consumer.
+#
+# Tools:
+#   - actionlint  -- GitHub Actions workflow linter
+#   - shellcheck  -- shell script static analyzer (preinstalled on runner)
+#
+# Triggers on PRs and push to main. Uses path filters so unrelated docs-only
+# changes don't run the linters.
+# ============================================================================
+
+name: Self-Test (workflow + shell linting)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/**'
+      - 'workflow-templates/**'
+      - '**/*.sh'
+      - '**/*.bash'
+      - '.github/workflows/self-test.yml'
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+      - 'workflow-templates/**'
+      - '**/*.sh'
+      - '**/*.bash'
+      - '.github/workflows/self-test.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  actionlint:
+    name: Lint workflow files (actionlint)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      ACTIONLINT_VERSION: '1.7.7'
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@a5ad31d6a139d249332a2605b85202e8c0b78450  # v2.19.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Install actionlint
+        run: |
+          curl -fsSL \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" \
+            -o /tmp/actionlint.tar.gz
+          tar -xzf /tmp/actionlint.tar.gz -C /tmp actionlint
+          sudo mv /tmp/actionlint /usr/local/bin/actionlint
+          actionlint -version
+
+      - name: Run actionlint on .github/workflows/
+        run: actionlint -color .github/workflows/*.yml
+
+      - name: Run actionlint on workflow-templates/
+        run: actionlint -color workflow-templates/*.yml
+
+  shellcheck:
+    name: Lint shell scripts (shellcheck)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@a5ad31d6a139d249332a2605b85202e8c0b78450  # v2.19.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Run shellcheck
+        run: |
+          shellcheck --version
+          # Find every shell script except submodules and git internals.
+          mapfile -d '' files < <(find . \
+            \( -name '*.sh' -o -name '*.bash' \) \
+            -not -path './.git/*' \
+            -not -path './tests/libs/*' \
+            -not -path './node_modules/*' \
+            -print0)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No shell scripts found; nothing to lint."
+            exit 0
+          fi
+          echo "Linting ${#files[@]} shell script(s):"
+          printf '  %s\n' "${files[@]}"
+          shellcheck --color=always --severity=warning "${files[@]}"
