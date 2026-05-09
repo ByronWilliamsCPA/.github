@@ -6,7 +6,7 @@
 # Usage from downstream repos:
 #   jobs:
 #     reuse:
-#       uses: ByronWilliamsCPA/.github/.github/workflows/python-reuse.yml@main
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-reuse.yml@v1
 #       with:
 #         generate-spdx: true
 #

@@ -67,7 +67,7 @@ on:
 
 jobs:
   fuzzing:
-    uses: williaby/.github/.github/workflows/python-fuzzing.yml@main
+    uses: williaby/.github/.github/workflows/python-fuzzing.yml@v1
     with:
       fuzz-seconds: 1200  # 20 minutes
       sanitizer: 'address'
@@ -146,7 +146,7 @@ on:
 
 jobs:
   fuzzing:
-    uses: williaby/.github/.github/workflows/python-fuzzing.yml@main
+    uses: williaby/.github/.github/workflows/python-fuzzing.yml@v1
     with:
       fuzz-seconds: 1200  # Extended 20-minute run
       sanitizer: 'address'
@@ -166,7 +166,7 @@ on:
 
 jobs:
   fuzzing:
-    uses: williaby/.github/.github/workflows/python-fuzzing.yml@main
+    uses: williaby/.github/.github/workflows/python-fuzzing.yml@v1
     with:
       fuzz-seconds: 600  # Shorter 10-minute run
       sanitizer: 'address'
@@ -184,13 +184,13 @@ on:
 
 jobs:
   address-sanitizer:
-    uses: williaby/.github/.github/workflows/python-fuzzing.yml@main
+    uses: williaby/.github/.github/workflows/python-fuzzing.yml@v1
     with:
       fuzz-seconds: 900
       sanitizer: 'address'
 
   undefined-sanitizer:
-    uses: williaby/.github/.github/workflows/python-fuzzing.yml@main
+    uses: williaby/.github/.github/workflows/python-fuzzing.yml@v1
     with:
       fuzz-seconds: 900
       sanitizer: 'undefined'
@@ -201,7 +201,7 @@ jobs:
 ```yaml
 jobs:
   fuzzing:
-    uses: williaby/.github/.github/workflows/python-fuzzing.yml@main
+    uses: williaby/.github/.github/workflows/python-fuzzing.yml@v1
     with:
       fuzz-target-directory: 'tests/security/fuzz'
       fuzz-seconds: 1200
@@ -212,7 +212,7 @@ jobs:
 ```yaml
 jobs:
   fuzzing-build-test:
-    uses: williaby/.github/.github/workflows/python-fuzzing.yml@main
+    uses: williaby/.github/.github/workflows/python-fuzzing.yml@v1
     with:
       dry-run: true  # Only build, don't execute
 ```
@@ -487,12 +487,12 @@ Test across Python versions:
 ```yaml
 jobs:
   fuzzing-py311:
-    uses: williaby/.github/.github/workflows/python-fuzzing.yml@main
+    uses: williaby/.github/.github/workflows/python-fuzzing.yml@v1
     with:
       python-version: '3.11'
 
   fuzzing-py312:
-    uses: williaby/.github/.github/workflows/python-fuzzing.yml@main
+    uses: williaby/.github/.github/workflows/python-fuzzing.yml@v1
     with:
       python-version: '3.12'
 ```

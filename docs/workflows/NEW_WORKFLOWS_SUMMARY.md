@@ -28,10 +28,10 @@ This document summarizes the four new reusable workflows added to the organizati
 ```yaml
 jobs:
   security-static:
-    uses: williaby/.github/.github/workflows/python-security-analysis.yml@main
+    uses: williaby/.github/.github/workflows/python-security-analysis.yml@v1
 
   security-fuzzing:
-    uses: williaby/.github/.github/workflows/python-fuzzing.yml@main
+    uses: williaby/.github/.github/workflows/python-fuzzing.yml@v1
     with:
       fuzz-seconds: 600
 ```
@@ -53,18 +53,18 @@ jobs:
 # Option 1: Comprehensive (SonarCloud)
 jobs:
   sonarcloud:
-    uses: williaby/.github/.github/workflows/python-sonarcloud.yml@main
+    uses: williaby/.github/.github/workflows/python-sonarcloud.yml@v1
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
 # Option 2: Lightweight (Qlty)
 jobs:
   ci:
-    uses: williaby/.github/.github/workflows/python-ci.yml@main
+    uses: williaby/.github/.github/workflows/python-ci.yml@v1
 
   qlty:
     needs: ci
-    uses: williaby/.github/.github/workflows/python-qlty-coverage.yml@main
+    uses: williaby/.github/.github/workflows/python-qlty-coverage.yml@v1
     secrets:
       QLTY_COVERAGE_TOKEN: ${{ secrets.QLTY_COVERAGE_TOKEN }}
 ```
@@ -81,18 +81,18 @@ on: [push, pull_request]
 jobs:
   # Static analysis
   security-scan:
-    uses: williaby/.github/.github/workflows/python-security-analysis.yml@main
+    uses: williaby/.github/.github/workflows/python-security-analysis.yml@v1
 
   # Dynamic fuzzing (weekly)
   fuzzing:
     if: github.event_name == 'schedule'
-    uses: williaby/.github/.github/workflows/python-fuzzing.yml@main
+    uses: williaby/.github/.github/workflows/python-fuzzing.yml@v1
     with:
       fuzz-seconds: 1200
 
   # Code quality
   sonarcloud:
-    uses: williaby/.github/.github/workflows/python-sonarcloud.yml@main
+    uses: williaby/.github/.github/workflows/python-sonarcloud.yml@v1
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 ```
@@ -110,7 +110,7 @@ on:
 
 jobs:
   performance:
-    uses: williaby/.github/.github/workflows/python-performance-regression.yml@main
+    uses: williaby/.github/.github/workflows/python-performance-regression.yml@v1
     with:
       benchmark-script: 'scripts/benchmark.py'
       regression-threshold: 5.0  # Strict 5% threshold
@@ -126,11 +126,11 @@ on: [push, pull_request]
 
 jobs:
   ci:
-    uses: williaby/.github/.github/workflows/python-ci.yml@main
+    uses: williaby/.github/.github/workflows/python-ci.yml@v1
 
   sonarcloud:
     needs: ci
-    uses: williaby/.github/.github/workflows/python-sonarcloud.yml@main
+    uses: williaby/.github/.github/workflows/python-sonarcloud.yml@v1
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     with:
@@ -138,7 +138,7 @@ jobs:
 
   performance:
     needs: ci
-    uses: williaby/.github/.github/workflows/python-performance-regression.yml@main
+    uses: williaby/.github/.github/workflows/python-performance-regression.yml@v1
     with:
       benchmark-script: 'scripts/benchmark.py'
       fail-on-regression: true

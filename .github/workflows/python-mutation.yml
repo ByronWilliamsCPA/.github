@@ -20,7 +20,7 @@
 #       - cron: '0 2 * * 0'  # Weekly on Sunday at 2 AM
 #   jobs:
 #     mutation:
-#       uses: ByronWilliamsCPA/.github/.github/workflows/python-mutation.yml@main
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-mutation.yml@v1
 #       with:
 #         source-directory: 'src'
 #         mutation-threshold: 80

@@ -16,7 +16,7 @@ on:
 
 jobs:
   ci:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 ```
@@ -42,7 +42,7 @@ on: [push, pull_request]
 
 jobs:
   ci:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
     with:
       python-versions: '["3.11", "3.12"]'
     secrets:
@@ -60,7 +60,7 @@ on: [push, pull_request]
 
 jobs:
   ci:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
     with:
       coverage-threshold: 90
     secrets:
@@ -78,7 +78,7 @@ on: [push, pull_request]
 
 jobs:
   ci:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
     with:
       source-directory: 'app'
       test-directory: 'tests/unit'
@@ -97,7 +97,7 @@ on: [push, pull_request]
 
 jobs:
   ci:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
     with:
       run-mypy: false
     secrets:
@@ -115,7 +115,7 @@ on: [push, pull_request]
 
 jobs:
   ci:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
     with:
       run-ruff: false
       run-mypy: false
@@ -136,7 +136,7 @@ on:
 
 jobs:
   ci:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
     with:
       python-versions: '["3.10", "3.11", "3.12"]'
       source-directory: 'src/myapp'
@@ -163,7 +163,7 @@ on: [push, pull_request]
 jobs:
   # Testing and quality
   ci:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
     with:
       python-versions: '["3.11", "3.12"]'
       coverage-threshold: 85
@@ -172,12 +172,12 @@ jobs:
 
   # Security scanning
   security:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-security-analysis.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-security-analysis.yml@v1
     if: github.event_name == 'pull_request'
 
   # Documentation
   docs:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-docs.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-docs.yml@v1
     if: github.ref == 'refs/heads/main'
 ```
 
@@ -196,7 +196,7 @@ on:
 
 jobs:
   publish:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-publish-pypi.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-publish-pypi.yml@v1
     permissions:
       id-token: write  # Required for OIDC
       contents: read
@@ -213,42 +213,61 @@ jobs:
 
 ## Version Pinning
 
-### Use Specific Version (Recommended for Production)
+This repository publishes two kinds of tags so callers can choose the right
+trade-off between stability and security:
 
-Pin to a specific tag:
+- **`@v1`** — moving major-version tag, re-pointed when a backward-compatible
+  change lands on `main`. Recommended default for most production callers.
+- **`@v1.0.0`** — immutable patch tag for exact-version pinning.
+- **`@<sha>`** — full 40-character commit SHA. Most secure (immune to tag
+  rewrites), highest maintenance burden (must be rotated manually).
+
+`@main` is **not** recommended for any caller. A push to `main` takes effect
+in every consumer instantly, with no review and no rollback path. Use it only
+for short-lived workflow development on a fork or a feature branch in this
+repo.
+
+### Use Moving Major Tag (Recommended for Most Callers)
+
+Pin to the moving `@v1` tag for a balance of stability and continuous fixes:
+
+```yaml
+jobs:
+  ci:
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
+    #                                                         ^^ Tracks v1.x.x backwards-compatible updates
+```
+
+### Use Specific Version (Pin Once, Update Deliberately)
+
+Pin to an immutable patch tag:
 
 ```yaml
 jobs:
   ci:
     uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1.0.0
-    #                                                         ^^^^^^ Pin to tag
+    #                                                         ^^^^^^ Pin to exact patch version
 ```
 
 ### Use Commit SHA (Most Secure)
 
-Pin to exact commit:
+Pin to a full commit SHA. Renovate/Dependabot can auto-bump these:
 
 ```yaml
 jobs:
   ci:
     uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@abc123def456...
-    #                                                         ^^^^^^ Specific commit
+    #                                                         ^^^^^^ Full 40-char SHA
 ```
 
-### Use Branch (Always Latest - Risky)
+**Choosing a strategy:**
 
-Use main branch (always gets latest changes):
-
-```yaml
-jobs:
-  ci:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@main
-    #                                                         ^^^^ Always latest
-```
-
-**Recommendation**:
-- **Development**: Use `@main` to get latest features
-- **Production**: Use `@v1` or specific tag for stability
+| Caller profile | Recommended pin |
+| --- | --- |
+| Standard production project | `@v1` |
+| Compliance-sensitive / regulated | `@v1.0.0` or `@<sha>` |
+| Maximum supply-chain hardening | `@<sha>` (auto-managed by Renovate) |
+| Active workflow development on this repo | `@<feature-branch>` (temporary) |
 
 ---
 
@@ -266,7 +285,7 @@ on:
 
 jobs:
   ci:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
     with:
       python-versions: '["3.11", "3.12"]'
       source-directory: 'app'
@@ -278,7 +297,7 @@ jobs:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   security:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-security-analysis.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-security-analysis.yml@v1
     needs: ci
 ```
 
@@ -291,7 +310,7 @@ on: [push, pull_request]
 
 jobs:
   test:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
     with:
       # Test on multiple Python versions for CLI compatibility
       python-versions: '["3.9", "3.10", "3.11", "3.12", "3.13"]'
@@ -312,7 +331,7 @@ on:
 
 jobs:
   test:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
     with:
       python-versions: '["3.10", "3.11", "3.12"]'
       coverage-threshold: 95  # High coverage for library
@@ -321,7 +340,7 @@ jobs:
   publish:
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-publish-pypi.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-publish-pypi.yml@v1
     permissions:
       id-token: write
 ```
@@ -340,7 +359,7 @@ jobs:
     strategy:
       matrix:
         python-version: [3.11, 3.12]  # ❌ Don't do matrix in calling workflow
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
     with:
       python-versions: '["3.11", "3.12"]'
 ```
@@ -350,7 +369,7 @@ jobs:
 ```yaml
 jobs:
   test:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
     with:
       python-versions: '["3.11", "3.12"]'  # ✅ Pass array, workflow handles matrix
 ```
@@ -365,7 +384,7 @@ jobs:
 jobs:
   ci:
     if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
 ```
 
 ### Skip CI on Documentation Changes
@@ -379,7 +398,7 @@ on:
 
 jobs:
   ci:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
 ```
 
 ---
@@ -393,7 +412,7 @@ Workflow runs appear in **your repo's Actions tab**, not the `.github` repo.
 ### Common Issues
 
 **Issue**: "Workflow not found"
-**Fix**: Check path is exactly: `ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@main`
+**Fix**: Check path is exactly: `ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1`
 
 **Issue**: "permissions denied"
 **Fix**: Add `permissions:` block in calling workflow if needed
@@ -466,7 +485,7 @@ on: [push, pull_request]
 
 jobs:
   ci:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 ```

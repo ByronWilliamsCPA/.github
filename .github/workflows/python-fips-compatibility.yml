@@ -6,7 +6,7 @@
 # Usage from downstream repos:
 #   jobs:
 #     fips-check:
-#       uses: ByronWilliamsCPA/.github/.github/workflows/python-fips-compatibility.yml@main
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-fips-compatibility.yml@v1
 #       with:
 #         strict-mode: false
 #         include-tests: true
