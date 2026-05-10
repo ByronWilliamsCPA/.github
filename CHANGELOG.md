@@ -40,6 +40,8 @@ are no numbered releases.
 
 ### Fixed
 
+- `python-scorecard.yml`: hard-code `publish_results: false` in the `ossf/scorecard-action` step and remove `id-token: write` from the workflow permissions; the OIDC token `repository` claim resolves to the `.github` org repo when the workflow runs as a reusable callee, causing scorecard-action to publish to the wrong repository and error; the `publish-results` input is retained for backwards compatibility but is now deprecated and always treated as false; SARIF upload to the Security tab is unaffected
+- `scorecard.yml`: remove `publish-results: true` and `id-token: write` from the `.github` org repo's own scorecard caller to align with the reusable workflow fix
 - `python-publish-pypi.yml`: replace `uv run pip-audit` / `uv run bandit` with `uv run --with` invocations that pin tool versions (`pip-audit==2.10.0`, `bandit[toml]==1.9.4`); the previous form required both tools to be listed as project dev dependencies in every downstream caller's `uv.lock`, silently failing or auditing an empty environment when they were absent
 - Fix stale `williaby` org reference in usage example comments for `python-fuzzing.yml`, `python-performance-regression.yml`, and `python-qlty-coverage.yml`
 - Add `timeout-minutes: 5` to `build-matrix` and `compatibility-summary` jobs in `python-compatibility.yml`
