@@ -203,8 +203,6 @@ jobs:
         env:
           SYSTEM_DEPS_UBUNTU: ${{ inputs.system-deps-ubuntu }}
         run: |
-          # shellcheck disable=SC1033,SC1050,SC1072,SC1073,SC1140
-          # Bracket-class regex [a-zA-Z0-9_\-\. ] confuses shellcheck's parser; bash syntax is valid.
           PKGS="$SYSTEM_DEPS_UBUNTU"
           pkg_pattern='^[a-zA-Z0-9_. -]+$'
           if [[ "$PKGS" =~ $pkg_pattern ]]; then
@@ -222,8 +220,6 @@ jobs:
         env:
           SYSTEM_DEPS_MACOS: ${{ inputs.system-deps-macos }}
         run: |
-          # shellcheck disable=SC1033,SC1050,SC1072,SC1073,SC1140
-          # Bracket-class regex [a-zA-Z0-9_\-\. ] confuses shellcheck's parser; bash syntax is valid.
           PKGS="$SYSTEM_DEPS_MACOS"
           pkg_pattern='^[a-zA-Z0-9_. -]+$'
           if [[ "$PKGS" =~ $pkg_pattern ]]; then
