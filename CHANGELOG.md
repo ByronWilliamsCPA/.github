@@ -38,6 +38,7 @@ are no numbered releases.
 - Replace em-dash with semicolon in `SUPPORT.md`
 - Prose cleanup across 18 documentation files to remove AI-pattern language and improve plain-language clarity
 - `python-scorecard.yml`: add `Warn on deprecated publish-results input` step that emits a `::warning::` annotation when a caller passes `publish-results: true`; surfaces the deprecation in CI logs so callers know to remove the now-ignored input
+- `.github/workflows/pr-validation.yml`: add `Dependency & Standards Validation` job to satisfy the required branch protection check context that no workflow in this repo was previously reporting; gates on the same title-check and body-check results as `PR Validation Gate`
 
 ### Fixed
 
