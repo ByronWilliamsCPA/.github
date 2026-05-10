@@ -90,22 +90,3 @@ jobs:
           echo "- **Duration**: 600 seconds" >> $GITHUB_STEP_SUMMARY
           echo "- **Build Status**: ${{  steps.build.outcome  }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Run Status**: ${{  steps.run.outcome  }}" >> $GITHUB_STEP_SUMMARY
-
-name: Continuous Fuzzing (Disabled)
-
-on:
-  workflow_dispatch:
-
-permissions: read-all
-
-jobs:
-  info:
-    name: Fuzzing Disabled
-    runs-on: ubuntu-latest
-    steps:
-      - name: Fuzzing Info
-        run: |
-          echo "ℹ️  Continuous fuzzing is disabled for this project"
-          echo "To enable fuzzing, set include_fuzzing to 'yes' in cookiecutter.json"
-          echo "For more information, see: https://google.github.io/clusterfuzzlite/"
-

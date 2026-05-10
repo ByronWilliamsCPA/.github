@@ -37,9 +37,15 @@ are no numbered releases.
 - Align `workflow-templates/python-security-analysis.yml` job display names with renamed check context
 - Replace em-dash with semicolon in `SUPPORT.md`
 - Prose cleanup across 18 documentation files to remove AI-pattern language and improve plain-language clarity
+- `python-scorecard.yml`: add `Warn on deprecated publish-results input` step that emits a `::warning::` annotation when a caller passes `publish-results: true`; surfaces the deprecation in CI logs so callers know to remove the now-ignored input
+- `.github/workflows/pr-validation.yml`: add `Dependency & Standards Validation` job to satisfy the required branch protection check context that no workflow in this repo was previously reporting; gates on the same title-check and body-check results as `PR Validation Gate`
 
 ### Fixed
 
+- `python-scorecard.yml`: hard-code `publish_results: false` in the `ossf/scorecard-action` step and remove `id-token: write` from the workflow permissions; the OIDC token `repository` claim resolves to the `.github` org repo when the workflow runs as a reusable callee, causing scorecard-action to publish to the wrong repository and error; the `publish-results` input is retained for backwards compatibility but is now deprecated and always treated as false; SARIF upload to the Security tab is unaffected
+- `scorecard.yml`: remove `publish-results: true` and `id-token: write` from the `.github` org repo's own scorecard caller to align with the reusable workflow fix
+- `workflow-templates/python-scorecard.yml`: remove `id-token: write` from top-level and job-level permissions and remove `publish-results: true` from the `with:` block; aligns the starter template with the reusable workflow fix so new repos generated from this template get the correct permission set
+- `python-compatibility.yml`: extract package-name regex into a `pkg_pattern` variable for the Ubuntu and macOS system-deps steps; shellcheck cannot parse bracket-class regex (`[a-zA-Z0-9_\-\. ]`) inline in `[[ =~ ]]` expressions and reports SC1073/SC1033/SC1050/SC1072/SC1140; using an unquoted variable reference causes shellcheck to treat the value as an opaque string and skip regex parsing; fixes pre-existing self-test CI failure introduced in #77
 - `python-publish-pypi.yml`: replace `uv run pip-audit` / `uv run bandit` with `uv run --with` invocations that pin tool versions (`pip-audit==2.10.0`, `bandit[toml]==1.9.4`); the previous form required both tools to be listed as project dev dependencies in every downstream caller's `uv.lock`, silently failing or auditing an empty environment when they were absent
 - Fix stale `williaby` org reference in usage example comments for `python-fuzzing.yml`, `python-performance-regression.yml`, and `python-qlty-coverage.yml`
 - Add `timeout-minutes: 5` to `build-matrix` and `compatibility-summary` jobs in `python-compatibility.yml`

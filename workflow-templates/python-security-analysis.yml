@@ -425,7 +425,7 @@ jobs:
           fi
 
   # Minimal security gate when security scanning is disabled
-  security-gate:
+  security-gate-disabled:
     name: Security Gate Validation
     runs-on: ubuntu-latest
     steps:
@@ -433,4 +433,3 @@ jobs:
         run: |
           echo "ℹ️  Security scanning is disabled for this project"
           echo "To enable security scanning, set include_security_scanning to 'yes'"
-

@@ -127,7 +127,7 @@ jobs:
         run: uv run ruff check src/
         continue-on-error: true
 
-      - name: Check docstring coverage (target: {{ cookiecutter.docstring_coverage_target }}%)
+      - name: "Check docstring coverage (target: {{ cookiecutter.docstring_coverage_target }}%)"
         run: uv run interrogate -v src/
         continue-on-error: true
 
@@ -238,25 +238,3 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./site
-
-name: Documentation (Disabled)
-
-on:
-  pull_request:
-    paths:
-      - "docs/**"
-      - ".github/workflows/docs.yml"
-
-permissions: read-all
-
-jobs:
-  info:
-    name: Documentation Disabled
-    runs-on: ubuntu-latest
-    steps:
-      - name: Documentation Info
-        run: |
-          echo "ℹ️  Documentation pipeline is disabled for this project"
-          echo "To enable MkDocs documentation, set use_mkdocs to 'yes' in cookiecutter.json"
-          echo "For more information, see: https://www.mkdocs.org/"
-

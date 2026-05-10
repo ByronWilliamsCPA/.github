@@ -16,8 +16,8 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thank you for taking the time to report an issue! Please help us by 
-        ensuring you've followed the prerequisites below and providing as 
+        Thank you for taking the time to report an issue! Please help us by
+        ensuring you've followed the prerequisites below and providing as
         much detail as possible.
 
   - type: checkboxes
@@ -72,4 +72,3 @@ body:
     attributes:
       label: "Additional context"
       description: "Add any other context, logs, or screenshots"
-

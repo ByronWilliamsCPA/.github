@@ -3,8 +3,9 @@
 #
 # This workflow:
 #   - Runs OpenSSF Scorecard analysis
-#   - Publishes results to OpenSSF REST API
 #   - Uploads SARIF to GitHub Security tab
+# Note: publish-results is always treated as false by the reusable workflow.
+# See python-scorecard.yml Known Limitations for details.
 #
 # Triggered by:
 #   - Push to main branch
@@ -22,7 +23,6 @@ on:
 
 permissions:
   security-events: write
-  id-token: write
   contents: read
   actions: read
 
@@ -31,10 +31,8 @@ jobs:
     name: Scorecard Analysis
     uses: ByronWilliamsCPA/.github/.github/workflows/python-scorecard.yml@v1
     with:
-      publish-results: true
       upload-sarif: true
     permissions:
       security-events: write
-      id-token: write
       contents: read
       actions: read

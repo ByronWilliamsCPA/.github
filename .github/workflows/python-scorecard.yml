@@ -12,7 +12,6 @@
 #         contents: read
 #         actions: read
 #       with:
-#         publish-results: false   # REQUIRED -- see Known Limitations below
 #         min-score: 7             # Optional: gate fails if Branch-Protection, Code-Review,
 #                                  # Dangerous-Workflow, Token-Permissions, or Pinned-Dependencies
 #                                  # scores below this threshold (0 disables gate; default 0)
@@ -27,14 +26,15 @@
 #
 # Known Limitations
 # -----------------
-# publish-results MUST be set to false by all callers.
+# publish-results is always treated as false regardless of what callers pass.
 #
 # When this workflow runs as a reusable callee, the OIDC token's `repository`
 # claim resolves to the .github repo (where the workflow lives), not the
 # calling repository. The scorecard-action uses that claim to publish results
 # to securityscorecards.dev. With the wrong repo claim the publication fails
-# and the job errors. Setting publish-results: false skips the OIDC publish
-# step entirely; the SARIF upload to the Security tab still works correctly.
+# and the job errors. The reusable workflow hard-codes false to prevent this;
+# the publish-results input is accepted but ignored. SARIF upload to the
+# Security tab still works correctly.
 #
 # SCORECARD_TOKEN secret: pass SCORECARD_TOKEN via the secrets: block so the
 # Branch-Protection check can read admin-level branch protection fields
@@ -49,7 +49,7 @@ on:
   workflow_call:
     inputs:
       publish-results:
-        description: 'Publish results to OpenSSF REST API'
+        description: 'Deprecated: accepted for backwards compatibility but always treated as false. See Known Limitations.'
         type: boolean
         required: false
         default: false
@@ -80,8 +80,6 @@ on:
 permissions:
   # Needed to upload the results to code-scanning dashboard
   security-events: write
-  # Needed to publish results and get a badge
-  id-token: write
   # Required for all workflows
   contents: read
   # Required for workflow_run event
@@ -104,12 +102,17 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Warn on deprecated publish-results input
+        if: ${{ inputs.publish-results == true }}
+        run: |
+          echo "::warning::The 'publish-results' input is deprecated and always treated as false. Remove it from your workflow to suppress this warning. See python-scorecard.yml Known Limitations for details."
+
       - name: Run OpenSSF Scorecard
         uses: ossf/scorecard-action@4eaacf0543bb3f2c246792bd56e8cdeffafb205a  # v2.4.3
         with:
           results_file: scorecard-results.sarif
           results_format: sarif
-          publish_results: ${{ inputs.publish-results }}
+          publish_results: false
           repo_token: ${{ secrets.SCORECARD_TOKEN }}
 
       - name: Upload Scorecard SARIF to Security tab
@@ -183,6 +186,3 @@ jobs:
           echo "- Token permissions" >> $GITHUB_STEP_SUMMARY
           echo "- Vulnerability disclosure" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ inputs.publish-results }}" == "true" ]; then
-            echo "Results published to [OpenSSF Scorecard](https://securityscorecards.dev)" >> $GITHUB_STEP_SUMMARY
-          fi

@@ -9,27 +9,27 @@ This repository serves two purposes for the `ByronWilliamsCPA` GitHub organizati
 
 ## Included Files
 
-- [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md)  
+- [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md)
   Defines expected contributor behavior and enforcement procedures.
 
-- [`SECURITY.md`](./SECURITY.md)  
+- [`SECURITY.md`](./SECURITY.md)
   Describes our vulnerability-reporting process, supported versions, and
 - response timelines.
 
-- [`CONTRIBUTING.md`](./CONTRIBUTING.md)  
+- [`CONTRIBUTING.md`](./CONTRIBUTING.md)
   Guides contributors through issue filing, pull-request workflow, DCO sign-off,
    and local setup.
 
-- [`SUPPORT.md`](./SUPPORT.md)  
+- [`SUPPORT.md`](./SUPPORT.md)
   Outlines support channels, prerequisites, SLAs, and community contributions.
 
-- [`GOVERNANCE.md`](./GOVERNANCE.md)  
+- [`GOVERNANCE.md`](./GOVERNANCE.md)
   Describes project roles, decision-making processes, and how governance can evolve.
 
-- [`CODEOWNERS`](./CODEOWNERS)  
+- [`CODEOWNERS`](./CODEOWNERS)
   Assigns default and path-specific code owners organization-wide.
 
-- [`FUNDING.yml`](./FUNDING.yml)  
+- [`FUNDING.yml`](./FUNDING.yml)
   Indicates our solo-practitioner stance and points to non-financial
   contribution paths.
 
@@ -155,4 +155,4 @@ See [USAGE_EXAMPLES.md](USAGE_EXAMPLES.md) for full examples and all available i
 
 **To improve or extend the workflow templates or community health files**, open a pull request against this repository. Merged changes apply org-wide automatically.
 
-_Last updated: April 30, 2026_  
+_Last updated: April 30, 2026_

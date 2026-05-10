@@ -24,9 +24,6 @@ jobs:
     name: Scorecard Analysis
     permissions:
       security-events: write
-      id-token: write
       contents: read
       actions: read
     uses: ByronWilliamsCPA/.github/.github/workflows/python-scorecard.yml@cd0f5c28e964cdf62b54173e681105782d0831a2  # main
-    with:
-      publish-results: true
