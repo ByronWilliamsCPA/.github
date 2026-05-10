@@ -16,22 +16,22 @@ diverse, inclusive, and healthy community.
 
 ### Examples of Positive Behavior
 
-- Demonstrating empathy and kindness toward other people  
-- Engaging constructively with criticism  
-- Showing courtesy and respect in speech and actions  
-- Focusing on what is best for the community  
-- Being mindful of differing communication styles  
+- Demonstrating empathy and kindness toward other people
+- Engaging constructively with criticism
+- Showing courtesy and respect in speech and actions
+- Focusing on what is best for the community
+- Being mindful of differing communication styles
 
 ### Examples of Unacceptable Behavior
 
 - The use of sexualized language or imagery, and unwelcome sexual attention
-     or advances  
-- Trolling, insulting/derogatory comments, and personal or political attacks  
+     or advances
+- Trolling, insulting/derogatory comments, and personal or political attacks
 - Public or private harassment, including threats or sustained interruption
-     of discussion  
-- Discriminatory jokes and language, or other exclusionary behavior  
+     of discussion
+- Discriminatory jokes and language, or other exclusionary behavior
 - Publishing others’ private information (e.g., a physical or email address)
-     without permission  
+     without permission
 
 ## Scope
 
@@ -39,7 +39,7 @@ This Code of Conduct applies within all project spaces, and in public spaces
 when an individual is representing the project or its community. Examples of
 representing our project include using an official project e-mail address,
 posting via an official social media account, or acting as an appointed
-representative at an online or offline event.  
+representative at an online or offline event.
 
 ## Reporting Guidelines
 

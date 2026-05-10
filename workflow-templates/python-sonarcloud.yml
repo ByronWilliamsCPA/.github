@@ -120,4 +120,3 @@ jobs:
             coverage.xml
             .coverage
           retention-days: 7
-

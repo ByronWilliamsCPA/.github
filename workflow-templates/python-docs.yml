@@ -259,4 +259,3 @@ jobs:
           echo "ℹ️  Documentation pipeline is disabled for this project"
           echo "To enable MkDocs documentation, set use_mkdocs to 'yes' in cookiecutter.json"
           echo "For more information, see: https://www.mkdocs.org/"
-

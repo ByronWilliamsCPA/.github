@@ -5,12 +5,12 @@ help improve our code, documentation, and community processes.
 
 ## How to Contribute
 
-1. **Review the Code of Conduct**  
+1. **Review the Code of Conduct**
    Ensure your interactions align with our [Code of Conduct](CODE_OF_CONDUCT.md).
 
-2. **Find or File an Issue**  
-   - Search existing issues to avoid duplication.  
-   - To report a bug, use the [bug template](.github/ISSUE_TEMPLATE/bug.yml).  
+2. **Find or File an Issue**
+   - Search existing issues to avoid duplication.
+   - To report a bug, use the [bug template](.github/ISSUE_TEMPLATE/bug.yml).
    - To propose a feature, use the [feature template]
    (.github/ISSUE_TEMPLATE/feature.yml).
 
@@ -24,25 +24,25 @@ help improve our code, documentation, and community processes.
 
 ## Pull Request Guidelines
 
-- **Branch from main**  
+- **Branch from main**
 
   ```bash
   git checkout -b feature/<short-description>
   ```
-  
-- **Link your issue**  
+
+- **Link your issue**
   Include "Closes #ISSUE-NUMBER" in your PR description to auto-close the issue.
-- **Commit messages**  
+- **Commit messages**
   Use the format:
 
   ```text
   <type>(<scope>): <subject>
   ```
-  
+
   where `<type>` is one of `feat`, `fix`, `docs`, `style`, `refactor`, `test`,
-  or `chore`.  
+  or `chore`.
   _Example:_ `feat(api): add retry logic to request handler`
-- **DCO Sign-off Required**  
+- **DCO Sign-off Required**
   Every commit must include:
 
   ```text
@@ -57,18 +57,18 @@ help improve our code, documentation, and community processes.
 
 ## Code Style
 
-- **Language conventions**  
+- **Language conventions**
   - **Python:** follow [PEP 8](https://peps.python.org/pep-0008/) and
-    Google-style docstrings  
+    Google-style docstrings
   - **JavaScript/TypeScript:** follow
     [Airbnb style](https://github.com/airbnb/javascript)
-- **Linters & formatters**  
-  - Python: `ruff --fix`, `black`  
-  - JavaScript/TypeScript: `eslint --fix`, `prettier --write`  
-- **Imports**  
-  Group imports in this order, with a blank line between groups:  
-  1. Standard library  
-  2. Third-party  
+- **Linters & formatters**
+  - Python: `ruff --fix`, `black`
+  - JavaScript/TypeScript: `eslint --fix`, `prettier --write`
+- **Imports**
+  Group imports in this order, with a blank line between groups:
+  1. Standard library
+  2. Third-party
   3. Local application
 
 ## Local Development Setup
@@ -81,13 +81,13 @@ help improve our code, documentation, and community processes.
    pip install -r requirements.txt
    ```
 
-2. **Install dependencies** (Node example)  
+2. **Install dependencies** (Node example)
 
    ```bash
    npm install
    ```
 
-3. **Run tests**  
+3. **Run tests**
 
    ```bash
    pytest

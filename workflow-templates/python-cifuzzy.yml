@@ -108,4 +108,3 @@ jobs:
           echo "ℹ️  Continuous fuzzing is disabled for this project"
           echo "To enable fuzzing, set include_fuzzing to 'yes' in cookiecutter.json"
           echo "For more information, see: https://google.github.io/clusterfuzzlite/"
-
