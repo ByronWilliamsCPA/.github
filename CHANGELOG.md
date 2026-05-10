@@ -37,6 +37,7 @@ are no numbered releases.
 - Align `workflow-templates/python-security-analysis.yml` job display names with renamed check context
 - Replace em-dash with semicolon in `SUPPORT.md`
 - Prose cleanup across 18 documentation files to remove AI-pattern language and improve plain-language clarity
+- `python-scorecard.yml`: add `Warn on deprecated publish-results input` step that emits a `::warning::` annotation when a caller passes `publish-results: true`; surfaces the deprecation in CI logs so callers know to remove the now-ignored input
 
 ### Fixed
 

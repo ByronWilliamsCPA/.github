@@ -102,6 +102,11 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Warn on deprecated publish-results input
+        if: ${{ inputs.publish-results == true }}
+        run: |
+          echo "::warning::The 'publish-results' input is deprecated and always treated as false. Remove it from your workflow to suppress this warning. See python-scorecard.yml Known Limitations for details."
+
       - name: Run OpenSSF Scorecard
         uses: ossf/scorecard-action@4eaacf0543bb3f2c246792bd56e8cdeffafb205a  # v2.4.3
         with:
