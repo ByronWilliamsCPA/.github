@@ -320,10 +320,17 @@ jobs:
           FAIL_ON_FINDINGS: ${{ inputs.fail-on-security-findings }}
         run: |
           echo "::group::pip-audit Dependency Scan"
+          # Read [tool.pip-audit].ignore-vuln from pyproject.toml if present.
+          # Each listed ID is passed as --ignore-vuln to pip-audit, paired with
+          # a dated entry in docs/known-vulnerabilities.md per project policy.
+          IGNORE_ARGS=""
+          if [ -f "pyproject.toml" ]; then
+            IGNORE_ARGS=$(python3 -c "import tomllib; d=tomllib.load(open('pyproject.toml','rb')); ids=d.get('tool',{}).get('pip-audit',{}).get('ignore-vuln',[]); print(' '.join('--ignore-vuln '+i for i in ids))" 2>/dev/null || true)
+          fi
           if [ "$FAIL_ON_FINDINGS" = "true" ]; then
-            uv run pip-audit
+            uv run pip-audit $IGNORE_ARGS
           else
-            uv run pip-audit || echo "::warning::Vulnerable dependencies detected (fail-on-security-findings=false; not failing CI)"
+            uv run pip-audit $IGNORE_ARGS || echo "::warning::Vulnerable dependencies detected (fail-on-security-findings=false; not failing CI)"
           fi
           echo "::endgroup::"
 
