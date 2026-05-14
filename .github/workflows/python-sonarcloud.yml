@@ -231,8 +231,11 @@ jobs:
           if [ "$EXTRA_DEPENDENCIES" == "all" ]; then
             uv sync --all-extras --frozen --no-build
           elif [ -n "$EXTRA_DEPENDENCIES" ]; then
-            EXTRAS=$(echo "$EXTRA_DEPENDENCIES" | tr ' ' '\n' | sed 's/^/--extra /' | tr '\n' ' ')
-            uv sync $EXTRAS --frozen --no-build
+            EXTRA_ARGS=()
+            while IFS= read -r dep; do
+              [[ -n "$dep" ]] && EXTRA_ARGS+=("--extra" "$dep")
+            done < <(echo "$EXTRA_DEPENDENCIES" | tr ' ' '\n')
+            uv sync "${EXTRA_ARGS[@]}" --frozen --no-build
           else
             uv sync --frozen --no-build
           fi

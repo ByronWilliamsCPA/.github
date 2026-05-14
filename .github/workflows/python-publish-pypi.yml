@@ -102,7 +102,7 @@ jobs:
 
       - name: Verify package metadata
         run: |
-          pip install twine==6.2.0
+          pip install --only-binary :all: twine==6.2.0
           twine check dist/*
 
       - name: Upload distribution artifacts

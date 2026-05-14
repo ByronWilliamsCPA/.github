@@ -64,7 +64,7 @@ for f in "${FILES[@]}"; do
 
   # Download to temp file
   tmp_payload="${TMPDIR}/payload"
-  if ! curl --fail -s "$org_url" -o "$tmp_payload"; then
+  if ! curl --fail --proto '=https' --tlsv1.2 -s "$org_url" -o "$tmp_payload"; then
     echo "ERROR: Failed to download $f from $org_url" >&2
     exit 1
   fi
@@ -90,7 +90,7 @@ for f in "${FILES[@]}"; do
     exit 1
   fi
 
-  # Step 4: Verification passed — write final file with SPDX header
+  # Step 4: Verification passed; write final file with SPDX header
   mkdir -p "$(dirname "$f")"
   {
     printf "%s\n\n" "$HEADER" | sed "s|{{FILE_PATH}}|$f|g"

@@ -236,8 +236,9 @@ jobs:
           IMAGE_TAG: ${{ inputs.image-tag }}
           IMAGE_REF: ${{ inputs.image-ref }}
           BUILD_IMAGE: ${{ inputs.build-image }}
+          EXISTS: ${{ steps.check-dockerfile.outputs.exists }}
         run: |
-          if [ "$BUILD_IMAGE" == "true" ] && [ "${{ steps.check-dockerfile.outputs.exists }}" == "true" ]; then
+          if [ "$BUILD_IMAGE" == "true" ] && [ "$EXISTS" == "true" ]; then
             echo "ref=$IMAGE_TAG" >> $GITHUB_OUTPUT
           elif [ -n "$IMAGE_REF" ]; then
             echo "ref=$IMAGE_REF" >> $GITHUB_OUTPUT
