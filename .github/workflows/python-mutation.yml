@@ -139,13 +139,16 @@ jobs:
 
       - name: Run mutation testing
         id: mutmut
+        env:
+          SOURCE_DIRECTORY: ${{ inputs.source-directory }}
+          TEST_DIRECTORY: ${{ inputs.test-directory }}
         run: |
-          echo "Starting mutation testing on ${{ inputs.source-directory }}..."
+          echo "Starting mutation testing on $SOURCE_DIRECTORY..."
 
           # Run mutmut with configurable paths
           uv run mutmut run \
-            --paths-to-mutate=${{ inputs.source-directory }} \
-            --tests-dir=${{ inputs.test-directory }} \
+            --paths-to-mutate="$SOURCE_DIRECTORY" \
+            --tests-dir="$TEST_DIRECTORY" \
             --no-progress \
             || true
 
@@ -312,6 +315,8 @@ jobs:
 
       - name: Mutation Testing Summary
         if: always()
+        env:
+          THRESHOLD: ${{ inputs.mutation-threshold }}
         run: |
           echo "## Mutation Testing Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -331,7 +336,7 @@ jobs:
           echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| **Mutation Score** | ${{ steps.analyze.outputs.score }}% |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Threshold** | ${{ inputs.mutation-threshold }}% |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Threshold** | ${THRESHOLD}% |" >> $GITHUB_STEP_SUMMARY
 
           if [ "${{ steps.analyze.outputs.passed }}" == "true" ]; then
             echo "| **Status** | Passed |" >> $GITHUB_STEP_SUMMARY

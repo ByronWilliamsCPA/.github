@@ -177,14 +177,16 @@ jobs:
 
       - name: Check for trivyignore file
         id: trivyignore
+        env:
+          TRIVYIGNORE_PATH: ${{ inputs.trivyignore-path }}
         run: |
-          if [ -f "${{ inputs.trivyignore-path }}" ]; then
+          if [ -f "$TRIVYIGNORE_PATH" ]; then
             echo "exists=true" >> $GITHUB_OUTPUT
-            echo "Found trivyignore at: ${{ inputs.trivyignore-path }}"
-            cat "${{ inputs.trivyignore-path }}"
+            echo "Found trivyignore at: $TRIVYIGNORE_PATH"
+            cat "$TRIVYIGNORE_PATH"
           else
             echo "exists=false" >> $GITHUB_OUTPUT
-            echo "No trivyignore file found at: ${{ inputs.trivyignore-path }}"
+            echo "No trivyignore file found at: $TRIVYIGNORE_PATH"
           fi
 
       - name: Trivy SBOM scan (runtime)
@@ -276,6 +278,8 @@ jobs:
           "
 
       - name: License Summary
+        env:
+          FORBIDDEN_LICENSES: ${{ inputs.forbidden-licenses }}
         run: |
           echo "### License Compliance Check" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -283,5 +287,5 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Forbidden licenses checked:**" >> $GITHUB_STEP_SUMMARY
           echo '```json' >> $GITHUB_STEP_SUMMARY
-          echo '${{ inputs.forbidden-licenses }}' >> $GITHUB_STEP_SUMMARY
+          echo "$FORBIDDEN_LICENSES" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY

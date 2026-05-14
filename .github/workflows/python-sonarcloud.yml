@@ -173,6 +173,7 @@ jobs:
         id: check
         env:
           HAS_TOKEN: ${{ secrets.SONAR_TOKEN != '' }}
+          SKIP_IF_NO_TOKEN: ${{ inputs.skip-if-no-token }}
         run: |
           if [ "$HAS_TOKEN" = "true" ]; then
             echo "has-token=true" >> $GITHUB_OUTPUT
@@ -180,7 +181,7 @@ jobs:
           else
             echo "has-token=false" >> $GITHUB_OUTPUT
 
-            if [ "${{ inputs.skip-if-no-token }}" = "true" ]; then
+            if [ "$SKIP_IF_NO_TOKEN" = "true" ]; then
               echo "::warning::SONAR_TOKEN is not configured. Skipping SonarCloud analysis."
               echo ""
               echo "To enable SonarCloud:"
@@ -223,11 +224,13 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
+        env:
+          EXTRA_DEPENDENCIES: ${{ inputs.extra-dependencies }}
         run: |
-          if [ "${{ inputs.extra-dependencies }}" == "all" ]; then
+          if [ "$EXTRA_DEPENDENCIES" == "all" ]; then
             uv sync --all-extras
-          elif [ -n "${{ inputs.extra-dependencies }}" ]; then
-            EXTRAS=$(echo "${{ inputs.extra-dependencies }}" | tr ' ' '\n' | sed 's/^/--extra /' | tr '\n' ' ')
+          elif [ -n "$EXTRA_DEPENDENCIES" ]; then
+            EXTRAS=$(echo "$EXTRA_DEPENDENCIES" | tr ' ' '\n' | sed 's/^/--extra /' | tr '\n' ' ')
             uv sync $EXTRAS
           else
             uv sync
@@ -235,14 +238,17 @@ jobs:
 
       - name: Run tests with coverage
         id: coverage
+        env:
+          SOURCE_DIRECTORY: ${{ inputs.source-directory }}
+          PYTEST_ARGS: ${{ inputs.pytest-args }}
         run: |
           echo "🧪 Running tests with coverage..."
 
           # Determine coverage source path
-          if [ -d "${{ inputs.source-directory }}" ]; then
-            COV_SRC="${{ inputs.source-directory }}"
+          if [ -d "$SOURCE_DIRECTORY" ]; then
+            COV_SRC="$SOURCE_DIRECTORY"
           else
-            echo "::warning::Source directory '${{ inputs.source-directory }}' not found. Using project root."
+            echo "::warning::Source directory '$SOURCE_DIRECTORY' not found. Using project root."
             COV_SRC="."
           fi
 
@@ -253,7 +259,7 @@ jobs:
             --cov-report=term \
             --cov-branch \
             -v \
-            ${{ inputs.pytest-args }} || {
+            $PYTEST_ARGS || {
               echo "test_failed=true" >> $GITHUB_OUTPUT
               echo "::warning::Tests failed. Coverage may be incomplete."
             }
@@ -313,12 +319,14 @@ jobs:
 
       - name: Quality Gate Summary
         if: always()
+        env:
+          SONAR_PROJECT_KEY: ${{ inputs.sonar-project-key }}
         run: |
           echo "# 📊 SonarCloud Analysis Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          DASHBOARD_URL="https://sonarcloud.io/dashboard?id=${{ inputs.sonar-project-key }}"
-          echo "**Dashboard:** [${{ inputs.sonar-project-key }}]($DASHBOARD_URL)" >> $GITHUB_STEP_SUMMARY
+          DASHBOARD_URL="https://sonarcloud.io/dashboard?id=$SONAR_PROJECT_KEY"
+          echo "**Dashboard:** [$SONAR_PROJECT_KEY]($DASHBOARD_URL)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
           # Quality gate status
@@ -362,7 +370,9 @@ jobs:
 
       - name: Fail on Quality Gate
         if: inputs.fail-on-quality-gate && steps.quality_gate.outcome == 'failure'
+        env:
+          SONAR_PROJECT_KEY: ${{ inputs.sonar-project-key }}
         run: |
           echo "::error::SonarCloud Quality Gate failed"
-          echo "View issues at: https://sonarcloud.io/dashboard?id=${{ inputs.sonar-project-key }}"
+          echo "View issues at: https://sonarcloud.io/dashboard?id=$SONAR_PROJECT_KEY"
           exit 1

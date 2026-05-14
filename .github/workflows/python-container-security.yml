@@ -139,12 +139,14 @@ jobs:
 
       - name: Check Dockerfile exists
         id: check-dockerfile
+        env:
+          DOCKERFILE_PATH: ${{ inputs.dockerfile-path }}
         run: |
-          if [ -f "${{ inputs.dockerfile-path }}" ]; then
+          if [ -f "$DOCKERFILE_PATH" ]; then
             echo "exists=true" >> $GITHUB_OUTPUT
           else
             echo "exists=false" >> $GITHUB_OUTPUT
-            echo "::warning::Dockerfile not found at ${{ inputs.dockerfile-path }}"
+            echo "::warning::Dockerfile not found at $DOCKERFILE_PATH"
           fi
 
       - name: Run Hadolint
@@ -166,11 +168,14 @@ jobs:
 
       - name: Hadolint Summary
         if: always() && steps.check-dockerfile.outputs.exists == 'true'
+        env:
+          DOCKERFILE_PATH: ${{ inputs.dockerfile-path }}
+          HADOLINT_FAILURE_THRESHOLD: ${{ inputs.hadolint-failure-threshold }}
         run: |
           echo "## Hadolint Dockerfile Analysis" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Dockerfile:** \`${{ inputs.dockerfile-path }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Failure Threshold:** ${{ inputs.hadolint-failure-threshold }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Dockerfile:** \`$DOCKERFILE_PATH\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Failure Threshold:** $HADOLINT_FAILURE_THRESHOLD" >> $GITHUB_STEP_SUMMARY
 
   # Trivy container image scanning
   trivy-scan:
@@ -200,30 +205,40 @@ jobs:
       - name: Check Dockerfile exists
         if: ${{ inputs.build-image }}
         id: check-dockerfile
+        env:
+          DOCKERFILE_PATH: ${{ inputs.dockerfile-path }}
         run: |
-          if [ -f "${{ inputs.dockerfile-path }}" ]; then
+          if [ -f "$DOCKERFILE_PATH" ]; then
             echo "exists=true" >> $GITHUB_OUTPUT
           else
             echo "exists=false" >> $GITHUB_OUTPUT
-            echo "::warning::Dockerfile not found at ${{ inputs.dockerfile-path }}, skipping build"
+            echo "::warning::Dockerfile not found at $DOCKERFILE_PATH, skipping build"
           fi
 
       - name: Build container image
         if: ${{ inputs.build-image && steps.check-dockerfile.outputs.exists == 'true' }}
+        env:
+          DOCKERFILE_PATH: ${{ inputs.dockerfile-path }}
+          IMAGE_TAG: ${{ inputs.image-tag }}
+          BUILD_CONTEXT: ${{ inputs.build-context }}
         run: |
           echo "Building container image..."
           docker build \
-            -f ${{ inputs.dockerfile-path }} \
-            -t ${{ inputs.image-tag }} \
-            ${{ inputs.build-context }}
+            -f "$DOCKERFILE_PATH" \
+            -t "$IMAGE_TAG" \
+            "$BUILD_CONTEXT"
 
       - name: Determine image to scan
         id: image
+        env:
+          IMAGE_TAG: ${{ inputs.image-tag }}
+          IMAGE_REF: ${{ inputs.image-ref }}
+          BUILD_IMAGE: ${{ inputs.build-image }}
         run: |
-          if [ "${{ inputs.build-image }}" == "true" ] && [ "${{ steps.check-dockerfile.outputs.exists }}" == "true" ]; then
-            echo "ref=${{ inputs.image-tag }}" >> $GITHUB_OUTPUT
-          elif [ -n "${{ inputs.image-ref }}" ]; then
-            echo "ref=${{ inputs.image-ref }}" >> $GITHUB_OUTPUT
+          if [ "$BUILD_IMAGE" == "true" ] && [ "${{ steps.check-dockerfile.outputs.exists }}" == "true" ]; then
+            echo "ref=$IMAGE_TAG" >> $GITHUB_OUTPUT
+          elif [ -n "$IMAGE_REF" ]; then
+            echo "ref=$IMAGE_REF" >> $GITHUB_OUTPUT
           else
             echo "ref=" >> $GITHUB_OUTPUT
             echo "::warning::No image to scan"
@@ -277,16 +292,19 @@ jobs:
 
       - name: Container Security Summary
         if: always()
+        env:
+          SEVERITY_THRESHOLD: ${{ inputs.severity-threshold }}
+          GENERATE_SBOM: ${{ inputs.generate-sbom }}
         run: |
           echo "## Container Security Scan Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
           if [ -n "${{ steps.image.outputs.ref }}" ]; then
             echo "**Image:** \`${{ steps.image.outputs.ref }}\`" >> $GITHUB_STEP_SUMMARY
-            echo "**Severity Threshold:** ${{ inputs.severity-threshold }}" >> $GITHUB_STEP_SUMMARY
+            echo "**Severity Threshold:** $SEVERITY_THRESHOLD" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
 
-            if [ "${{ inputs.generate-sbom }}" == "true" ]; then
+            if [ "$GENERATE_SBOM" == "true" ]; then
               echo "Container SBOM generated (CycloneDX format)" >> $GITHUB_STEP_SUMMARY
             fi
           else

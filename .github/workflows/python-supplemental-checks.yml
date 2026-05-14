@@ -137,10 +137,12 @@ jobs:
 
       - name: Build exclude args
         id: exclude-args
+        env:
+          LINK_CHECK_EXCLUDE_PATTERNS: ${{ inputs.link-check-exclude-patterns }}
         run: |
           # Convert comma-separated patterns to --exclude args
           EXCLUDE_ARGS=""
-          IFS=',' read -ra PATTERNS <<< "${{ inputs.link-check-exclude-patterns }}"
+          IFS=',' read -ra PATTERNS <<< "$LINK_CHECK_EXCLUDE_PATTERNS"
           for pattern in "${PATTERNS[@]}"; do
             pattern=$(echo "$pattern" | xargs)  # Trim whitespace
             if [ -n "$pattern" ]; then
@@ -222,16 +224,19 @@ jobs:
 
       - name: Changelog Summary
         if: always()
+        env:
+          CHANGELOG_PATH: ${{ inputs.changelog-path }}
+          CHANGELOG_SKIP_LABELS: ${{ inputs.changelog-skip-labels }}
         run: |
           echo "## Changelog Enforcement" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           if [ "${{ job.status }}" == "success" ]; then
             echo "Changelog has been updated or check was skipped." >> $GITHUB_STEP_SUMMARY
           else
-            echo "Please update \`${{ inputs.changelog-path }}\` with your changes." >> $GITHUB_STEP_SUMMARY
+            echo "Please update \`$CHANGELOG_PATH\` with your changes." >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "To skip this check, add one of these labels:" >> $GITHUB_STEP_SUMMARY
-            echo "\`${{ inputs.changelog-skip-labels }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "\`$CHANGELOG_SKIP_LABELS\`" >> $GITHUB_STEP_SUMMARY
           fi
 
   # ==========================================================================
@@ -441,6 +446,9 @@ jobs:
 
       - name: Auto-merge Summary
         if: always()
+        env:
+          AUTOMERGE_ALLOWED_UPDATE_TYPES: ${{ inputs.automerge-allowed-update-types }}
+          AUTOMERGE_MERGE_METHOD: ${{ inputs.automerge-merge-method }}
         run: |
           echo "## Auto-Merge Status" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -450,9 +458,9 @@ jobs:
           elif [ "${{ steps.check-update-type.outputs.merge-allowed }}" != "true" ]; then
             echo "**Skipped**: Update type \`${{ steps.pr-metadata.outputs.update-type }}\` is not allowed for auto-merge." >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Allowed update types: \`${{ inputs.automerge-allowed-update-types }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "Allowed update types: \`$AUTOMERGE_ALLOWED_UPDATE_TYPES\`" >> $GITHUB_STEP_SUMMARY
           else
-            echo "**Enabled**: Auto-merge enabled with \`${{ inputs.automerge-merge-method }}\` method." >> $GITHUB_STEP_SUMMARY
+            echo "**Enabled**: Auto-merge enabled with \`$AUTOMERGE_MERGE_METHOD\` method." >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "The PR will be merged automatically once all required checks pass." >> $GITHUB_STEP_SUMMARY
           fi

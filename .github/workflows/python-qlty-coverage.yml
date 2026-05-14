@@ -119,6 +119,7 @@ jobs:
         id: check
         env:
           HAS_TOKEN: ${{ secrets.QLTY_COVERAGE_TOKEN != '' }}
+          SKIP_IF_NO_TOKEN: ${{ inputs.skip-if-no-token }}
         run: |
           if [ "$HAS_TOKEN" = "true" ]; then
             echo "has-token=true" >> $GITHUB_OUTPUT
@@ -126,7 +127,7 @@ jobs:
           else
             echo "has-token=false" >> $GITHUB_OUTPUT
 
-            if [ "${{ inputs.skip-if-no-token }}" = "true" ]; then
+            if [ "$SKIP_IF_NO_TOKEN" = "true" ]; then
               echo "::warning::QLTY_COVERAGE_TOKEN is not configured. Skipping coverage upload."
               echo ""
               echo "To enable Qlty coverage tracking:"
@@ -162,9 +163,12 @@ jobs:
 
       - name: Verify Coverage Files
         id: verify
+        env:
+          COVERAGE_FILE_PATH: ${{ inputs.coverage-file-path }}
+          ADDITIONAL_FILES: ${{ inputs.additional-files }}
         run: |
           echo "📊 Verifying coverage files..."
-          PRIMARY_FILE="${{ inputs.coverage-file-path }}"
+          PRIMARY_FILE="$COVERAGE_FILE_PATH"
 
           if [ -f "$PRIMARY_FILE" ]; then
             echo "✅ Primary coverage file found: $PRIMARY_FILE"
@@ -185,10 +189,10 @@ jobs:
           fi
 
           # Check additional files if specified
-          if [ -n "${{ inputs.additional-files }}" ]; then
+          if [ -n "$ADDITIONAL_FILES" ]; then
             echo ""
             echo "Checking additional coverage files..."
-            IFS=',' read -ra FILES <<< "${{ inputs.additional-files }}"
+            IFS=',' read -ra FILES <<< "$ADDITIONAL_FILES"
             ADDITIONAL_COUNT=0
             for file in "${FILES[@]}"; do
               file=$(echo "$file" | xargs)  # Trim whitespace
@@ -212,6 +216,9 @@ jobs:
 
       - name: Coverage Upload Summary
         if: always()
+        env:
+          COVERAGE_FILE_PATH: ${{ inputs.coverage-file-path }}
+          ADDITIONAL_FILES: ${{ inputs.additional-files }}
         run: |
           echo "# 📊 Qlty Coverage Upload" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -220,9 +227,9 @@ jobs:
             echo "## ✅ Coverage Uploaded Successfully" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "**Files Uploaded:**" >> $GITHUB_STEP_SUMMARY
-            echo "- Primary: \`${{ inputs.coverage-file-path }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- Primary: \`$COVERAGE_FILE_PATH\`" >> $GITHUB_STEP_SUMMARY
 
-            if [ -n "${{ inputs.additional-files }}" ]; then
+            if [ -n "$ADDITIONAL_FILES" ]; then
               echo "- Additional: ${{ steps.verify.outputs.additional_count }} file(s)" >> $GITHUB_STEP_SUMMARY
             fi
 
@@ -231,7 +238,7 @@ jobs:
           else
             echo "## ⚠️ Coverage Upload Skipped" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Coverage file not found: \`${{ inputs.coverage-file-path }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "Coverage file not found: \`$COVERAGE_FILE_PATH\`" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "**Possible causes:**" >> $GITHUB_STEP_SUMMARY
             echo "- Test suite did not run or failed" >> $GITHUB_STEP_SUMMARY
@@ -242,6 +249,8 @@ jobs:
 
       - name: Fail on Upload Error
         if: inputs.fail-on-upload-error && steps.verify.outputs.primary_exists != 'true'
+        env:
+          COVERAGE_FILE_PATH: ${{ inputs.coverage-file-path }}
         run: |
-          echo "::error::Coverage file not found: ${{ inputs.coverage-file-path }}"
+          echo "::error::Coverage file not found: $COVERAGE_FILE_PATH"
           exit 1

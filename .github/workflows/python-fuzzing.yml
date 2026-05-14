@@ -124,6 +124,8 @@ jobs:
 
       - name: Detect Fuzzing Configuration
         id: detect
+        env:
+          FUZZ_TARGET_DIRECTORY: ${{ inputs.fuzz-target-directory }}
         run: |
           echo "🔍 Detecting fuzzing configuration..."
 
@@ -137,9 +139,9 @@ jobs:
           elif [ -d "fuzzing" ]; then
             echo "fuzz_dir=fuzzing" >> $GITHUB_OUTPUT
             echo "✅ Found fuzzing targets in: fuzzing/"
-          elif [ -n "${{ inputs.fuzz-target-directory }}" ]; then
-            echo "fuzz_dir=${{ inputs.fuzz-target-directory }}" >> $GITHUB_OUTPUT
-            echo "✅ Using custom fuzzing directory: ${{ inputs.fuzz-target-directory }}"
+          elif [ -n "$FUZZ_TARGET_DIRECTORY" ]; then
+            echo "fuzz_dir=$FUZZ_TARGET_DIRECTORY" >> $GITHUB_OUTPUT
+            echo "✅ Using custom fuzzing directory: $FUZZ_TARGET_DIRECTORY"
           else
             echo "⚠️  No fuzzing directory found"
             echo "   Expected: fuzz/, tests/fuzz/, or fuzzing/"
@@ -235,6 +237,8 @@ jobs:
       - name: Check for Crashes
         if: always() && steps.build.outcome == 'success' && !inputs.dry-run
         id: check_crashes
+        env:
+          FAIL_ON_CRASH: ${{ inputs.fail-on-crash }}
         run: |
           if [ -d "out/artifacts" ] && [ "$(ls -A out/artifacts 2>/dev/null)" ]; then
             echo "crash_found=true" >> $GITHUB_OUTPUT
@@ -245,7 +249,7 @@ jobs:
             echo "📋 Crash artifacts:"
             find out/artifacts -type f -exec basename {} \; | sort
 
-            if [ "${{ inputs.fail-on-crash }}" == "true" ]; then
+            if [ "$FAIL_ON_CRASH" == "true" ]; then
               exit 1
             fi
           else
@@ -270,15 +274,19 @@ jobs:
 
       - name: Fuzzing Summary
         if: always()
+        env:
+          SANITIZER: ${{ inputs.sanitizer }}
+          PYTHON_VERSION: ${{ inputs.python-version }}
+          FUZZ_SECONDS: ${{ inputs.fuzz-seconds }}
         run: |
           echo "# 🔍 ClusterFuzzLite Fuzzing Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| Build Status | ${{ steps.build.outcome }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Fuzzing Duration | ${{ inputs.fuzz-seconds }}s |" >> $GITHUB_STEP_SUMMARY
-          echo "| Sanitizer | ${{ inputs.sanitizer }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Python Version | ${{ inputs.python-version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Fuzzing Duration | ${FUZZ_SECONDS}s |" >> $GITHUB_STEP_SUMMARY
+          echo "| Sanitizer | $SANITIZER |" >> $GITHUB_STEP_SUMMARY
+          echo "| Python Version | $PYTHON_VERSION |" >> $GITHUB_STEP_SUMMARY
           echo "| Fuzzer Count | ${{ steps.detect.outputs.fuzzer_count }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Crashes Found | ${{ steps.check_crashes.outputs.crash_found || 'N/A' }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -286,8 +294,8 @@ jobs:
           if [ "${{ steps.build.outcome }}" == "success" ]; then
             echo "## ✅ Fuzzing Completed Successfully" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "- Fuzzers executed for ${{ inputs.fuzz-seconds }} seconds" >> $GITHUB_STEP_SUMMARY
-            echo "- Sanitizer: ${{ inputs.sanitizer }}" >> $GITHUB_STEP_SUMMARY
+            echo "- Fuzzers executed for ${FUZZ_SECONDS} seconds" >> $GITHUB_STEP_SUMMARY
+            echo "- Sanitizer: $SANITIZER" >> $GITHUB_STEP_SUMMARY
             echo "- Security analysis: Active" >> $GITHUB_STEP_SUMMARY
 
             if [ "${{ steps.check_crashes.outputs.crash_found }}" == "true" ]; then
@@ -314,8 +322,8 @@ jobs:
           echo "🔍 ClusterFuzzLite Fuzzing Analysis Complete"
           echo "Build Status: ${{ steps.build.outcome }}"
           echo "Fuzzer Count: ${{ steps.detect.outputs.fuzzer_count }}"
-          echo "Duration: ${{ inputs.fuzz-seconds }}s"
-          echo "Sanitizer: ${{ inputs.sanitizer }}"
+          echo "Duration: ${FUZZ_SECONDS}s"
+          echo "Sanitizer: $SANITIZER"
 
           if [ "${{ steps.check_crashes.outputs.crash_found }}" == "true" ]; then
             echo "⚠️  Crashes detected - review artifacts"
