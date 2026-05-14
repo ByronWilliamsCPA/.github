@@ -13,7 +13,6 @@ updates:
       - "ByronWilliamsCPA"
     commit-message:
       prefix: "ci(actions):"
-      include: "scope"
     pull-request-branch-name:
       separator: "/"
     allow:
