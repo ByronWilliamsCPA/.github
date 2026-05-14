@@ -267,7 +267,7 @@ jobs:
           python-version: ${{ inputs.python-version }}
 
       - name: Install cruft
-        run: pip install cruft
+        run: pip install --only-binary :all: 'cruft>=2.15'
 
       - name: Check for .cruft.json
         id: cruft-exists

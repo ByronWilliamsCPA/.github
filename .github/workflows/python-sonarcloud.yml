@@ -229,12 +229,12 @@ jobs:
           EXTRA_DEPENDENCIES: ${{ inputs.extra-dependencies }}
         run: |
           if [ "$EXTRA_DEPENDENCIES" == "all" ]; then
-            uv sync --all-extras
+            uv sync --all-extras --frozen --no-build
           elif [ -n "$EXTRA_DEPENDENCIES" ]; then
             EXTRAS=$(echo "$EXTRA_DEPENDENCIES" | tr ' ' '\n' | sed 's/^/--extra /' | tr '\n' ' ')
-            uv sync $EXTRAS
+            uv sync $EXTRAS --frozen --no-build
           else
-            uv sync
+            uv sync --frozen --no-build
           fi
 
       - name: Run tests with coverage
@@ -254,7 +254,7 @@ jobs:
           fi
 
           # Run pytest with coverage
-          uv run pytest \
+          uv run --frozen --no-build pytest \
             --cov="$COV_SRC" \
             --cov-report=xml:coverage.xml \
             --cov-report=term \

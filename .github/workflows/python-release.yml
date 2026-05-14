@@ -141,14 +141,14 @@ jobs:
         run: uv python install "$PYTHON_VERSION"
 
       - name: Install dependencies
-        run: uv sync --all-extras
+        run: uv sync --all-extras --frozen --no-build
 
       - name: Run tests
         env:
           SRC_DIR: ${{ inputs.source-directory }}
           COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold }}
         run: |
-          uv run pytest \
+          uv run --frozen --no-build pytest \
             --cov="$SRC_DIR" \
             --cov-report=term-missing \
             --cov-fail-under="$COVERAGE_THRESHOLD" \
@@ -157,12 +157,12 @@ jobs:
       - name: Run type checker
         env:
           SRC_DIR: ${{ inputs.source-directory }}
-        run: uv run basedpyright "$SRC_DIR/"
+        run: uv run --frozen --no-build basedpyright "$SRC_DIR/"
 
       - name: Run linter
         env:
           SRC_DIR: ${{ inputs.source-directory }}
-        run: uv run ruff check "$SRC_DIR/"
+        run: uv run --frozen --no-build ruff check "$SRC_DIR/"
 
   # ============================================================================
   # Job 2: Build and Create Release
@@ -220,7 +220,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --all-extras
+        run: uv sync --all-extras --frozen --no-build
 
       - name: Build package
         run: |
@@ -232,7 +232,7 @@ jobs:
         if: ${{ inputs.generate-sbom }}
         run: |
           echo "Generating Software Bill of Materials..."
-          pip install cyclonedx-bom==7.3.0
+          pip install --only-binary :all: cyclonedx-bom==7.3.0
           uv export --format requirements-txt --output-file requirements-all.txt --no-hashes
           cyclonedx-py requirements requirements-all.txt --of json --output-file dist/sbom.json
           rm -f requirements-all.txt

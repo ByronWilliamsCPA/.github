@@ -176,9 +176,9 @@ jobs:
           if [ -n "$EXTRA_DEPENDENCIES" ]; then
             EXTRAS=$(echo "$EXTRA_DEPENDENCIES" | tr ' ' '\n' | sed 's/^/--extra /' | tr '\n' ' ')
             # shellcheck disable=SC2086
-            uv sync $EXTRAS
+            uv sync $EXTRAS --frozen --no-build
           else
-            uv sync
+            uv sync --frozen --no-build
           fi
 
       - name: Generate Synthetic Test Data
@@ -187,7 +187,7 @@ jobs:
           TEST_DATA_DIR: ${{ inputs.test-data-directory }}
         run: |
           mkdir -p "$TEST_DATA_DIR"
-          uv run python scripts/generate_test_data.py
+          uv run --frozen --no-build python scripts/generate_test_data.py
           echo "Synthetic test data generated in $TEST_DATA_DIR"
           ls -lh "$TEST_DATA_DIR" | head -20
 
@@ -218,14 +218,14 @@ jobs:
 
           # Check if script supports --output argument
           SUPPORTS_OUTPUT=false
-          if uv run python "$BENCHMARK_SCRIPT" --help 2>&1 | grep -q -- '--output'; then
+          if uv run --frozen --no-build python "$BENCHMARK_SCRIPT" --help 2>&1 | grep -q -- '--output'; then
             SUPPORTS_OUTPUT=true
             echo "ℹ️  Script supports --output argument"
           fi
 
           # Check if script supports --warmup/--iterations arguments
           SUPPORTS_ITERATIONS=false
-          if uv run python "$BENCHMARK_SCRIPT" --help 2>&1 | grep -q -- '--iterations'; then
+          if uv run --frozen --no-build python "$BENCHMARK_SCRIPT" --help 2>&1 | grep -q -- '--iterations'; then
             SUPPORTS_ITERATIONS=true
             echo "ℹ️  Script supports --warmup/--iterations arguments"
           fi
@@ -234,7 +234,7 @@ jobs:
           if [ "$SUPPORTS_OUTPUT" = "true" ] && [ "$SUPPORTS_ITERATIONS" = "true" ]; then
             # Full interface support
             # shellcheck disable=SC2086
-            uv run python "$BENCHMARK_SCRIPT" \
+            uv run --frozen --no-build python "$BENCHMARK_SCRIPT" \
               --warmup "$WARMUP_ITERATIONS" \
               --iterations "$BENCHMARK_ITERATIONS" \
               --output /tmp/pr_benchmark.json \
@@ -245,7 +245,7 @@ jobs:
           elif [ "$SUPPORTS_OUTPUT" = "true" ]; then
             # Only --output supported
             # shellcheck disable=SC2086
-            uv run python "$BENCHMARK_SCRIPT" \
+            uv run --frozen --no-build python "$BENCHMARK_SCRIPT" \
               --output /tmp/pr_benchmark.json \
               $BENCHMARK_ARGS || {
                 echo "⚠️ Benchmark execution failed, creating fallback results"
@@ -255,7 +255,7 @@ jobs:
             # Minimal interface - capture stdout as JSON
             echo "ℹ️  Script uses stdout for output (no --output flag)"
             # shellcheck disable=SC2086
-            uv run python "$BENCHMARK_SCRIPT" \
+            uv run --frozen --no-build python "$BENCHMARK_SCRIPT" \
               $BENCHMARK_ARGS > /tmp/pr_benchmark.json 2>&1 || {
                 echo "⚠️ Benchmark execution failed, creating fallback results"
                 echo "{\"$PRIMARY_METRIC\": 0, \"status\": \"failed\"}" > /tmp/pr_benchmark.json
@@ -304,27 +304,27 @@ jobs:
           if [ -n "$EXTRA_DEPENDENCIES" ]; then
             EXTRAS=$(echo "$EXTRA_DEPENDENCIES" | tr ' ' '\n' | sed 's/^/--extra /' | tr '\n' ' ')
             # shellcheck disable=SC2086
-            uv sync $EXTRAS
+            uv sync $EXTRAS --frozen --no-build
           else
-            uv sync
+            uv sync --frozen --no-build
           fi
 
           # Check if script supports --output argument
           SUPPORTS_OUTPUT=false
-          if uv run python "$BENCHMARK_SCRIPT" --help 2>&1 | grep -q -- '--output'; then
+          if uv run --frozen --no-build python "$BENCHMARK_SCRIPT" --help 2>&1 | grep -q -- '--output'; then
             SUPPORTS_OUTPUT=true
           fi
 
           # Check if script supports --warmup/--iterations arguments
           SUPPORTS_ITERATIONS=false
-          if uv run python "$BENCHMARK_SCRIPT" --help 2>&1 | grep -q -- '--iterations'; then
+          if uv run --frozen --no-build python "$BENCHMARK_SCRIPT" --help 2>&1 | grep -q -- '--iterations'; then
             SUPPORTS_ITERATIONS=true
           fi
 
           # Run benchmark with detected capabilities
           if [ "$SUPPORTS_OUTPUT" = "true" ] && [ "$SUPPORTS_ITERATIONS" = "true" ]; then
             # shellcheck disable=SC2086
-            uv run python "$BENCHMARK_SCRIPT" \
+            uv run --frozen --no-build python "$BENCHMARK_SCRIPT" \
               --warmup "$WARMUP_ITERATIONS" \
               --iterations "$BENCHMARK_ITERATIONS" \
               --output /tmp/baseline_benchmark.json \
@@ -334,7 +334,7 @@ jobs:
               }
           elif [ "$SUPPORTS_OUTPUT" = "true" ]; then
             # shellcheck disable=SC2086
-            uv run python "$BENCHMARK_SCRIPT" \
+            uv run --frozen --no-build python "$BENCHMARK_SCRIPT" \
               --output /tmp/baseline_benchmark.json \
               $BENCHMARK_ARGS || {
                 echo "⚠️ Baseline benchmark failed, using fallback"
@@ -342,7 +342,7 @@ jobs:
               }
           else
             # shellcheck disable=SC2086
-            uv run python "$BENCHMARK_SCRIPT" \
+            uv run --frozen --no-build python "$BENCHMARK_SCRIPT" \
               $BENCHMARK_ARGS > /tmp/baseline_benchmark.json 2>&1 || {
                 echo "⚠️ Baseline benchmark failed, using fallback"
                 echo "{\"$PRIMARY_METRIC\": 0, \"status\": \"failed\"}" > /tmp/baseline_benchmark.json
@@ -371,7 +371,7 @@ jobs:
           IMPROVEMENT_THRESHOLD: ${{ inputs.improvement-threshold }}
           FAIL_ON_REGRESSION: ${{ inputs.fail-on-regression }}
         run: |
-          uv run python - <<'EOF'
+          uv run --frozen --no-build python - <<'EOF'
           import json
           import os
           import sys
@@ -541,7 +541,7 @@ jobs:
 
             To reproduce locally:
             \`\`\`bash
-            uv run python ${benchmarkScript} --iterations 1000 ${benchmarkArgs}
+            uv run --frozen --no-build python ${benchmarkScript} --iterations 1000 ${benchmarkArgs}
             \`\`\`
             </details>
             `;

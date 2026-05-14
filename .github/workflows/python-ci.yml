@@ -141,7 +141,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --all-extras
+          uv sync --all-extras --frozen --no-build
 
       - name: Run Ruff formatter check
         env:
@@ -149,7 +149,7 @@ jobs:
           TEST_DIR: ${{ inputs.test-directory }}
         run: |
           echo "::group::Ruff Formatting"
-          uv run ruff format --check "$SRC_DIR"/ "$TEST_DIR"/ || {
+          uv run --frozen --no-build ruff format --check "$SRC_DIR"/ "$TEST_DIR"/ || {
             echo "::error::Code formatting issues detected. Run: uv run ruff format ${SRC_DIR}/ ${TEST_DIR}/"
             exit 1
           }
@@ -161,7 +161,7 @@ jobs:
           TEST_DIR: ${{ inputs.test-directory }}
         run: |
           echo "::group::Ruff Linting"
-          uv run ruff check "$SRC_DIR"/ "$TEST_DIR"/ --output-format=github
+          uv run --frozen --no-build ruff check "$SRC_DIR"/ "$TEST_DIR"/ --output-format=github
           echo "::endgroup::"
 
       - name: Run BasedPyright type checker
@@ -169,7 +169,7 @@ jobs:
           SRC_DIR: ${{ inputs.source-directory }}
         run: |
           echo "::group::BasedPyright Type Checking"
-          uv run basedpyright "$SRC_DIR"/ || {
+          uv run --frozen --no-build basedpyright "$SRC_DIR"/ || {
             echo "::warning::Type checking found issues"
           }
           echo "::endgroup::"
@@ -184,13 +184,13 @@ jobs:
           echo "::group::Vulture Dead Code Detection"
 
           # Install vulture if not in dev dependencies
-          uv pip install vulture 2>/dev/null || true
+          uv pip install --no-build 'vulture>=2.14' 2>/dev/null || true
 
           # Run vulture with configurable confidence threshold
           echo "Scanning for dead code (min confidence: $DEAD_CODE_CONFIDENCE%)..."
 
           # Capture output for reporting
-          VULTURE_OUTPUT=$(uv run vulture "$SRC_DIR"/ --min-confidence "$DEAD_CODE_CONFIDENCE" 2>&1) || true
+          VULTURE_OUTPUT=$(uv run --frozen --no-build vulture "$SRC_DIR"/ --min-confidence "$DEAD_CODE_CONFIDENCE" 2>&1) || true
 
           if [ -n "$VULTURE_OUTPUT" ]; then
             echo "$VULTURE_OUTPUT"
@@ -231,7 +231,7 @@ jobs:
           SRC_DIR: ${{ inputs.source-directory }}
         run: |
           echo "::group::Unit Test Execution"
-          uv run pytest \
+          uv run --frozen --no-build pytest \
             -m "unit or not (integration or security or slow)" \
             --cov="$SRC_DIR" \
             --cov-report=xml:coverage-unit.xml \
@@ -249,7 +249,7 @@ jobs:
         run: |
           echo "::group::Integration Test Execution"
           set +e
-          uv run pytest \
+          uv run --frozen --no-build pytest \
             -m "integration" \
             --cov="$SRC_DIR" \
             --cov-report=xml:coverage-integration.xml \
@@ -271,7 +271,7 @@ jobs:
         run: |
           echo "::group::Security Test Execution"
           set +e
-          uv run pytest \
+          uv run --frozen --no-build pytest \
             -m "security" \
             --cov="$SRC_DIR" \
             --cov-report=xml:coverage-security.xml \
@@ -291,10 +291,10 @@ jobs:
           COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold }}
         run: |
           echo "::group::Combined Coverage"
-          uv run coverage combine --keep || true
-          uv run coverage xml -o coverage.xml
-          uv run coverage html
-          uv run coverage report --fail-under="$COVERAGE_THRESHOLD"
+          uv run --frozen --no-build coverage combine --keep || true
+          uv run --frozen --no-build coverage xml -o coverage.xml
+          uv run --frozen --no-build coverage html
+          uv run --frozen --no-build coverage report --fail-under="$COVERAGE_THRESHOLD"
           echo "::endgroup::"
 
       - name: Security scan with Bandit
@@ -305,9 +305,9 @@ jobs:
           echo "::group::Bandit Security Scan"
           # -lll filters to HIGH severity only; non-zero exit on findings.
           if [ "$FAIL_ON_FINDINGS" = "true" ]; then
-            uv run bandit -r "$SRC_DIR"/ -c pyproject.toml -lll -f json -o bandit-report.json
+            uv run --frozen --no-build bandit -r "$SRC_DIR"/ -c pyproject.toml -lll -f json -o bandit-report.json
           else
-            uv run bandit -r "$SRC_DIR"/ -c pyproject.toml -lll -f json -o bandit-report.json || {
+            uv run --frozen --no-build bandit -r "$SRC_DIR"/ -c pyproject.toml -lll -f json -o bandit-report.json || {
               echo "::warning::HIGH-severity security issues detected (fail-on-security-findings=false; not failing CI)"
               cat bandit-report.json
             }
@@ -327,9 +327,9 @@ jobs:
             IGNORE_ARGS=$(python3 -c "import tomllib; d=tomllib.load(open('pyproject.toml','rb')); ids=d.get('tool',{}).get('pip-audit',{}).get('ignore-vuln',[]); print(' '.join('--ignore-vuln '+i for i in ids))" 2>/dev/null || true)
           fi
           if [ "$FAIL_ON_FINDINGS" = "true" ]; then
-            uv run pip-audit $IGNORE_ARGS
+            uv run --frozen --no-build pip-audit $IGNORE_ARGS
           else
-            uv run pip-audit $IGNORE_ARGS || echo "::warning::Vulnerable dependencies detected (fail-on-security-findings=false; not failing CI)"
+            uv run --frozen --no-build pip-audit $IGNORE_ARGS || echo "::warning::Vulnerable dependencies detected (fail-on-security-findings=false; not failing CI)"
           fi
           echo "::endgroup::"
 
@@ -530,7 +530,7 @@ jobs:
         run: uv python install "$PYTHON_VERSION"
 
       - name: Install dependencies
-        run: uv sync --all-extras
+        run: uv sync --all-extras --frozen --no-build
 
       - name: Run tests
         env:
@@ -538,7 +538,7 @@ jobs:
           PYTHON_VERSION: ${{ matrix.python-version }}
         run: |
           echo "::group::Testing on Python $PYTHON_VERSION"
-          uv run pytest \
+          uv run --frozen --no-build pytest \
             --cov="$SRC_DIR" \
             --cov-report=term-missing \
             -v

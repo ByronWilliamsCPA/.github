@@ -134,8 +134,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --all-extras
-          uv pip install mutmut
+          uv sync --all-extras --frozen --no-build
+          uv pip install --no-build 'mutmut>=2.0.0'
 
       - name: Run mutation testing
         id: mutmut
@@ -146,15 +146,15 @@ jobs:
           echo "Starting mutation testing on $SOURCE_DIRECTORY..."
 
           # Run mutmut with configurable paths
-          uv run mutmut run \
+          uv run --frozen --no-build mutmut run \
             --paths-to-mutate="$SOURCE_DIRECTORY" \
             --tests-dir="$TEST_DIRECTORY" \
             --no-progress \
             || true
 
           # Generate reports
-          uv run mutmut results > mutmut-results.txt || true
-          uv run mutmut html || true
+          uv run --frozen --no-build mutmut results > mutmut-results.txt || true
+          uv run --frozen --no-build mutmut html || true
 
       - name: Analyze mutation results
         id: analyze

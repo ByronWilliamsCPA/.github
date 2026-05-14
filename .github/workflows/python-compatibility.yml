@@ -248,7 +248,7 @@ jobs:
         shell: pwsh
 
       - name: Install dependencies
-        run: uv sync --all-extras
+        run: uv sync --all-extras --frozen --no-build
 
       - name: Run tests
         id: tests
@@ -263,13 +263,13 @@ jobs:
 
           if [ "$COVERAGE_REPORT" == "true" ]; then
             # shellcheck disable=SC2086
-            uv run $TEST_COMMAND \
+            uv run --frozen --no-build $TEST_COMMAND \
               --cov="$SRC_DIR" \
               --cov-report=xml:coverage-${MATRIX_PYTHON}-${MATRIX_OS}.xml \
               --cov-report=term-missing
           else
             # shellcheck disable=SC2086
-            uv run $TEST_COMMAND
+            uv run --frozen --no-build $TEST_COMMAND
           fi
         shell: bash
 
