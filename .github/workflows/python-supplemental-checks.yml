@@ -268,7 +268,7 @@ jobs:
 
       - name: Install cruft
         run: |
-          pip install --only-binary :all: 'cruft>=2.15'
+          pip install --only-binary :all: 'cruft==2.15.0'
 
       - name: Check for .cruft.json
         id: cruft-exists

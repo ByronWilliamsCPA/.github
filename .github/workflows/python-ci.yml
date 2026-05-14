@@ -184,7 +184,7 @@ jobs:
           echo "::group::Vulture Dead Code Detection"
 
           # Install vulture if not in dev dependencies
-          uv pip install --no-build 'vulture>=2.14' 2>/dev/null || true
+          uv pip install --no-build 'vulture==2.14' 2>/dev/null || true
 
           # Run vulture with configurable confidence threshold
           echo "Scanning for dead code (min confidence: $DEAD_CODE_CONFIDENCE%)..."
