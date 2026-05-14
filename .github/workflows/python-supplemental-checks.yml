@@ -441,6 +441,10 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           MERGE_METHOD: ${{ inputs.automerge-merge-method }}
         run: |
+          case "$MERGE_METHOD" in
+            merge|squash|rebase) ;;
+            *) echo "::error::Invalid automerge-merge-method: $MERGE_METHOD"; exit 1 ;;
+          esac
           echo "Enabling auto-merge for PR #$PR_NUMBER with $MERGE_METHOD method"
           gh pr merge "$PR_NUMBER" --auto --$MERGE_METHOD
 
