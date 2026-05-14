@@ -266,9 +266,11 @@ jobs:
         with:
           python-version: ${{ inputs.python-version }}
 
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
+
       - name: Install cruft
-        run: |
-          pip install --only-binary :all: 'cruft==2.15.0'
+        run: uv pip install --no-build 'cruft==2.15.0'
 
       - name: Check for .cruft.json
         id: cruft-exists
