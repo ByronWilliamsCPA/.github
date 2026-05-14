@@ -242,7 +242,7 @@ jobs:
         id: hash
         working-directory: dist
         run: |
-          echo "hashes=$(sha256sum * | base64 -w0)" >> "$GITHUB_OUTPUT"
+          echo "hashes=$(sha256sum ./* | base64 -w0)" >> "$GITHUB_OUTPUT"
 
       # Semantic Release Mode
       - name: Python Semantic Release

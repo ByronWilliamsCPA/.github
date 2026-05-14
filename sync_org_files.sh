@@ -49,7 +49,7 @@ trap 'rm -rf "$TMPDIR"' EXIT
 # Step 2: Fetch authoritative checksum manifest
 CHECKSUMS_FILE="${TMPDIR}/checksums.txt"
 echo ">>> Fetching ${RAW_BASE}/checksums.txt"
-if ! curl --fail -sL "${RAW_BASE}/checksums.txt" -o "${CHECKSUMS_FILE}"; then
+if ! curl --fail --proto '=https' --tlsv1.2 -sL "${RAW_BASE}/checksums.txt" -o "${CHECKSUMS_FILE}"; then
   echo "ERROR: Failed to fetch checksums.txt from ${RAW_BASE}" >&2
   echo "       The org repo must publish a checksums.txt manifest at its root" >&2
   echo "       before downstream repos can sync files. See sync_org_files.sh" >&2
