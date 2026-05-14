@@ -75,10 +75,6 @@ on:
         description: 'Docker Hardened Images registry personal access token (optional, for future use)'
         required: false
 
-permissions:
-  contents: read
-  security-events: write
-
 jobs:
   # ============================================================================
   # Job 1: Generate SBOMs
@@ -86,6 +82,8 @@ jobs:
   generate-sbom:
     name: Generate SBOMs
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 10
     steps:
       - name: Harden Runner
@@ -224,6 +222,8 @@ jobs:
     name: License Compliance Check
     needs: generate-sbom
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 10
     steps:
       - name: Harden Runner

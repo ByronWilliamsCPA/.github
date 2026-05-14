@@ -68,11 +68,6 @@ on:
         required: false
         default: true
 
-permissions:
-  contents: read
-  security-events: write
-  pull-requests: write
-
 jobs:
   # Detect security-relevant changes
   detect-changes:

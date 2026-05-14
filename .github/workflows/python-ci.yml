@@ -104,9 +104,6 @@ on:
         required: false
         type: boolean
         default: true
-permissions:
-  contents: read
-
 jobs:
   # ============================================================================
   # Job 1: Standard Quality Checks
@@ -114,6 +111,8 @@ jobs:
   quality-checks:
     name: Code Quality Checks
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 15
 
     outputs:
@@ -351,6 +350,8 @@ jobs:
   llm-governance:
     name: LLM Governance & Assumption Verification
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 15
 
     outputs:
@@ -500,6 +501,8 @@ jobs:
     name: Matrix Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     if: inputs.enable-matrix-testing
+    permissions:
+      contents: read
     timeout-minutes: 15
 
     strategy:
@@ -549,6 +552,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [quality-checks, llm-governance, matrix-testing]
     if: always()
+    permissions:
+      contents: read
 
     steps:
       - name: Check CI results

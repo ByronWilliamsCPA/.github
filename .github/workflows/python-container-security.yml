@@ -116,16 +116,15 @@ on:
         description: 'Docker Hardened Images registry personal access token'
         required: false
 
-permissions:
-  contents: read
-  security-events: write
-
 jobs:
   # Hadolint Dockerfile linting
   hadolint:
     name: Dockerfile Lint (Hadolint)
     if: ${{ inputs.run-hadolint }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     timeout-minutes: 10
 
     steps:
@@ -181,6 +180,9 @@ jobs:
   trivy-scan:
     name: Container Vulnerability Scan (Trivy)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     timeout-minutes: 20
 
     steps:
@@ -317,6 +319,8 @@ jobs:
     needs: [hadolint, trivy-scan]
     runs-on: ubuntu-latest
     if: always()
+    permissions:
+      contents: read
 
     steps:
       - name: Overall security summary

@@ -56,10 +56,6 @@ on:
         required: false
         default: 'src'
 
-permissions:
-  contents: read
-  id-token: write  # Required for OIDC
-
 jobs:
   build:
     name: Build Distribution Packages

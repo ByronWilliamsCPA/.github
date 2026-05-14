@@ -108,9 +108,6 @@ on:
         description: 'The release tag'
         value: ${{ jobs.release.outputs.tag }}
 
-permissions:
-  contents: read
-
 jobs:
   # ============================================================================
   # Job 1: Run Tests Before Release
@@ -119,6 +116,8 @@ jobs:
     name: Pre-Release Tests
     runs-on: ubuntu-latest
     if: ${{ inputs.run-tests }}
+    permissions:
+      contents: read
     timeout-minutes: 15
     steps:
       - name: Harden Runner

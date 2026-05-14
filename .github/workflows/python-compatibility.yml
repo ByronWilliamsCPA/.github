@@ -125,14 +125,13 @@ on:
         description: 'Overall matrix test result'
         value: ${{ jobs.compatibility-summary.outputs.result }}
 
-permissions:
-  contents: read
-
 jobs:
   # Build dynamic matrix based on inputs
   build-matrix:
     name: Build Test Matrix
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 5
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -172,6 +171,8 @@ jobs:
     needs: build-matrix
     runs-on: ${{ matrix.os }}
     timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: read
     # Skip expensive matrix on draft PRs unless explicitly disabled
     if: ${{ !(inputs.skip-on-draft && github.event.pull_request.draft) }}
 
@@ -287,6 +288,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     if: always()
+    permissions:
+      contents: read
     outputs:
       result: ${{ steps.result.outputs.result }}
 

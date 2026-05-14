@@ -97,14 +97,12 @@ on:
         description: 'Qlty Cloud coverage upload token'
         required: false
 
-permissions:
-  contents: read
-  actions: read
-
 jobs:
   check-configuration:
     name: Check Qlty Configuration
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 5
     outputs:
       has-token: ${{ steps.check.outputs.has-token }}
@@ -146,6 +144,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: check-configuration
     if: needs.check-configuration.outputs.has-token == 'true'
+    permissions:
+      contents: read
+      actions: read
     timeout-minutes: ${{ inputs.timeout-minutes }}
 
     steps:
