@@ -3,9 +3,6 @@
 # Analyzes shell scripts, YAML workflow templates, and configuration files.
 # SonarCloud auto-detects languages; no Python configuration required.
 #
-# Prerequisites:
-#   - Project registered at https://sonarcloud.io (see sonar-project.properties)
-#   - SONAR_TOKEN secret configured in repository settings
 name: SonarCloud Analysis
 
 on:
