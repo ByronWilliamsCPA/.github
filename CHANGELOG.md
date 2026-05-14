@@ -55,6 +55,14 @@ are no numbered releases.
 
 ### Security
 
+- Remediate SonarCloud S7630 script injection in 9 workflow files: move all `${{ inputs.* }}` references used in `run:` shell bodies to `env:` blocks; affects `python-ci.yml`, `python-compatibility.yml`, `python-docs.yml`, `python-mutation.yml`, `python-publish-pypi.yml`, `python-release.yml`, `python-sbom.yml`, `python-sonarcloud.yml`, `python-performance-regression.yml`
+- Remediate SonarCloud S8233/S8264 permission over-grant in 14 workflow files: move workflow-level `permissions:` blocks to per-job scope to enforce least-privilege; `id-token: write` and `pages: write` grants preserved at per-job level where required
+- Remediate SonarCloud S8541/S8544 in 7 workflow files: add `--frozen --no-build` to `uv sync` and `uv pip install` commands; add `--only-binary :all:` to `pip install cyclonedx-bom==7.3.0` (`python-sbom.yml`, `python-release.yml`) and `pip install twine==6.2.0` (`python-publish-pypi.yml`)
+- Remediate SonarCloud S6506 TLS enforcement: add `--proto '=https' --tlsv1.2` to all `curl` invocations in `sync_org_files.sh` (including the per-file download loop at line 67 that was missed in the initial remediation) and `self-test.yml`
+- Remediate SonarCloud S6573 glob safety: replace `sha256sum *` with `sha256sum ./*` in `self-test.yml`
+- Fix CodeQL code injection in `python-container-security.yml`: move `${{ steps.check-dockerfile.outputs.exists }}` from `run:` shell body to `env:` block as `EXISTS`
+- Fix shell injection via unquoted `$EXTRAS` expansion in `python-sonarcloud.yml` and `python-performance-regression.yml`: replace string-splitting pattern with bash array (`EXTRA_ARGS=()` / `"${EXTRA_ARGS[@]}"`) so each extra name is a distinct quoted argument
+- Pin loose version constraints: `mutmut>=2.0.0` to `mutmut==2.5.1` in `python-mutation.yml`; `reuse>=5.0` to `reuse==5.0.2` in `python-reuse.yml`
 - Fix script injection vulnerability in `python-codecov.yml`: move `inputs.coverage-files` to env var before shell use (SonarCloud S7630)
 - Pin `slsa-framework/slsa-github-generator` to full commit SHA in `python-slsa.yml` (SonarCloud S7637)
 

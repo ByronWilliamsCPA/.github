@@ -66,7 +66,7 @@ jobs:
           cache-dependency-glob: "uv.lock"
 
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync --frozen --no-build
 
       - name: Run pre-commit hooks
         env:
@@ -74,9 +74,9 @@ jobs:
           FAIL_FAST: ${{ inputs.fail-fast }}
         run: |
           if [ "$FAIL_FAST" = "true" ]; then
-            uv run pre-commit run --all-files --config "$CONFIG_PATH" --show-diff-on-failure
+            uv run --frozen --no-build pre-commit run --all-files --config "$CONFIG_PATH" --show-diff-on-failure
           else
-            uv run pre-commit run --all-files --config "$CONFIG_PATH"
+            uv run --frozen --no-build pre-commit run --all-files --config "$CONFIG_PATH"
           fi
 
       - name: Pre-Commit Summary
@@ -89,5 +89,5 @@ jobs:
           else
             echo "One or more pre-commit hooks failed. Review the output above." >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "To run locally: \`uv run pre-commit run --all-files\`" >> $GITHUB_STEP_SUMMARY
+            echo "To run locally: \`uv run --frozen --no-build pre-commit run --all-files\`" >> $GITHUB_STEP_SUMMARY
           fi

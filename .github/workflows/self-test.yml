@@ -64,9 +64,10 @@ jobs:
 
       - name: Install actionlint
         run: |
-          curl -fsSL \
+          curl --proto '=https' --tlsv1.2 -fsSL \
             "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" \
             -o /tmp/actionlint.tar.gz
+          echo "023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757  /tmp/actionlint.tar.gz" | sha256sum --check
           tar -xzf /tmp/actionlint.tar.gz -C /tmp actionlint
           sudo mv /tmp/actionlint /usr/local/bin/actionlint
           actionlint -version

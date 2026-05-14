@@ -73,14 +73,13 @@ on:
         required: false
         default: false
 
-permissions:
-  contents: read
-  pull-requests: write
-
 jobs:
   fips-check:
     name: FIPS Compliance Check
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     timeout-minutes: 15
 
     steps:
@@ -98,42 +97,51 @@ jobs:
           enable-cache: true
 
       - name: Set up Python
-        run: uv python install ${{ inputs.python-version }}
+        env:
+          PYTHON_VERSION: ${{ inputs.python-version }}
+        run: uv python install "$PYTHON_VERSION"
 
       - name: Verify FIPS check script exists
         id: script-check
+        env:
+          SCRIPT_PATH: ${{ inputs.script-path }}
         run: |
-          if [ -f "${{ inputs.script-path }}" ]; then
+          if [ -f "$SCRIPT_PATH" ]; then
             echo "script_exists=true" >> $GITHUB_OUTPUT
-            echo "FIPS check script found at ${{ inputs.script-path }}"
+            echo "FIPS check script found at $SCRIPT_PATH"
           else
             echo "script_exists=false" >> $GITHUB_OUTPUT
-            echo "::warning::FIPS check script not found at ${{ inputs.script-path }}"
+            echo "::warning::FIPS check script not found at $SCRIPT_PATH"
           fi
 
       - name: Run FIPS compatibility check
         if: steps.script-check.outputs.script_exists == 'true'
         id: fips-check
+        env:
+          SCRIPT_PATH: ${{ inputs.script-path }}
+          STRICT_MODE: ${{ inputs.strict-mode }}
+          FIX_HINTS: ${{ inputs.fix-hints }}
+          INCLUDE_TESTS: ${{ inputs.include-tests }}
         run: |
           # Build command arguments
           STRICT_FLAG=""
-          if [[ "${{ inputs.strict-mode }}" == "true" ]]; then
+          if [[ "$STRICT_MODE" == "true" ]]; then
             STRICT_FLAG="--strict"
           fi
 
           FIX_HINTS_FLAG=""
-          if [[ "${{ inputs.fix-hints }}" == "true" ]]; then
+          if [[ "$FIX_HINTS" == "true" ]]; then
             FIX_HINTS_FLAG="--fix-hints"
           fi
 
           INCLUDE_TESTS_FLAG=""
-          if [[ "${{ inputs.include-tests }}" == "true" ]]; then
+          if [[ "$INCLUDE_TESTS" == "true" ]]; then
             INCLUDE_TESTS_FLAG="--include-tests"
           fi
 
           # Run check and capture output
           set +e
-          uv run python ${{ inputs.script-path }} \
+          uv run --frozen --no-build python "$SCRIPT_PATH" \
             $FIX_HINTS_FLAG \
             $INCLUDE_TESTS_FLAG \
             $STRICT_FLAG \
@@ -142,7 +150,7 @@ jobs:
           set -e
 
           # Also generate JSON report
-          uv run python ${{ inputs.script-path }} \
+          uv run --frozen --no-build python "$SCRIPT_PATH" \
             --json \
             $INCLUDE_TESTS_FLAG \
             > fips-report.json 2>/dev/null || true
@@ -263,6 +271,8 @@ jobs:
 
       - name: FIPS Compliance Summary
         if: always()
+        env:
+          SCRIPT_PATH: ${{ inputs.script-path }}
         run: |
           echo "## FIPS Compatibility Check" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -270,7 +280,7 @@ jobs:
           if [ "${{ steps.script-check.outputs.script_exists }}" != "true" ]; then
             echo "**Status:** ⚠️ Skipped" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "FIPS check script not found at \`${{ inputs.script-path }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "FIPS check script not found at \`$SCRIPT_PATH\`" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "To enable FIPS checking:" >> $GITHUB_STEP_SUMMARY
             echo "1. Ensure the FIPS compatibility script exists in your repository" >> $GITHUB_STEP_SUMMARY
@@ -323,6 +333,8 @@ jobs:
     runs-on: ubuntu-latest
     if: inputs.enable-runtime-test
     needs: fips-check
+    permissions:
+      contents: read
     timeout-minutes: 10
 
     steps:
@@ -340,16 +352,18 @@ jobs:
           enable-cache: true
 
       - name: Set up Python
-        run: uv python install ${{ inputs.python-version }}
+        env:
+          PYTHON_VERSION: ${{ inputs.python-version }}
+        run: uv python install "$PYTHON_VERSION"
 
       - name: Install dependencies
-        run: uv sync --all-extras
+        run: uv sync --all-extras --frozen --no-build
 
       - name: Test crypto imports in simulated FIPS mode
         run: |
           # This tests if the code can import without using non-FIPS algorithms
           # Note: Full FIPS testing requires an actual FIPS-enabled kernel
-          uv run python -c "
+          uv run --frozen --no-build python -c "
           import os
           import sys
 

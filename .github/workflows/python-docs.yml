@@ -47,10 +47,6 @@ on:
         required: false
         default: 80
 
-permissions:
-  contents: read
-  pages: write
-
 jobs:
   build:
     name: Build Documentation
@@ -82,7 +78,7 @@ jobs:
           cache-dependency-glob: "uv.lock"
 
       - name: Install dependencies
-        run: uv sync --all-extras
+        run: uv sync --all-extras --frozen --no-build
 
       - name: Check docstring coverage
         env:
@@ -90,14 +86,14 @@ jobs:
           DOCSTRING_THRESHOLD: ${{ inputs.docstring-threshold }}
         run: |
           echo "📝 Checking docstring coverage..."
-          uv run interrogate "$SRC_DIR" \
+          uv run --frozen --no-build interrogate "$SRC_DIR" \
             --fail-under="$DOCSTRING_THRESHOLD" \
             --verbose || echo "⚠️  Docstring coverage below threshold"
 
       - name: Build MkDocs site
         run: |
           echo "🏗️  Building documentation site..."
-          uv run mkdocs build --strict --verbose
+          uv run --frozen --no-build mkdocs build --strict --verbose
 
       - name: Upload documentation artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1

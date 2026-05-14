@@ -81,7 +81,7 @@ jobs:
         if: ${{ inputs.generate-spdx }}
         run: |
           echo "Generating SPDX SBOM..."
-          pip install reuse
+          pip install --only-binary :all: 'reuse==5.0.2'
           reuse spdx -o reuse-spdx.spdx || echo "SPDX generation completed with warnings"
 
       - name: Upload SPDX artifact
@@ -94,6 +94,8 @@ jobs:
 
       - name: REUSE Compliance Summary
         if: always()
+        env:
+          GENERATE_SPDX: ${{ inputs.generate-spdx }}
         run: |
           echo "## REUSE Compliance Check" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -126,7 +128,7 @@ jobs:
           echo "- [REUSE Tutorial](https://reuse.software/tutorial/)" >> $GITHUB_STEP_SUMMARY
           echo "- [SPDX License List](https://spdx.org/licenses/)" >> $GITHUB_STEP_SUMMARY
 
-          if [ "${{ inputs.generate-spdx }}" == "true" ]; then
+          if [ "$GENERATE_SPDX" == "true" ]; then
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "SPDX SBOM generated and uploaded as artifact." >> $GITHUB_STEP_SUMMARY
           fi

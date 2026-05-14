@@ -56,10 +56,6 @@ on:
         required: false
         default: 'src'
 
-permissions:
-  contents: read
-  id-token: write  # Required for OIDC
-
 jobs:
   build:
     name: Build Distribution Packages
@@ -106,7 +102,7 @@ jobs:
 
       - name: Verify package metadata
         run: |
-          pip install twine==6.2.0
+          uv pip install --no-build 'twine==6.2.0'
           twine check dist/*
 
       - name: Upload distribution artifacts

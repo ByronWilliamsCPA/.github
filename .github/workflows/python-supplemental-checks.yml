@@ -112,10 +112,6 @@ on:
         required: false
         default: false
 
-permissions:
-  contents: read
-  pull-requests: write
-
 jobs:
   # ==========================================================================
   # Documentation Link Check
@@ -124,6 +120,8 @@ jobs:
     name: Documentation Links
     if: inputs.enable-link-check
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 10
 
     steps:
@@ -137,10 +135,12 @@ jobs:
 
       - name: Build exclude args
         id: exclude-args
+        env:
+          LINK_CHECK_EXCLUDE_PATTERNS: ${{ inputs.link-check-exclude-patterns }}
         run: |
           # Convert comma-separated patterns to --exclude args
           EXCLUDE_ARGS=""
-          IFS=',' read -ra PATTERNS <<< "${{ inputs.link-check-exclude-patterns }}"
+          IFS=',' read -ra PATTERNS <<< "$LINK_CHECK_EXCLUDE_PATTERNS"
           for pattern in "${PATTERNS[@]}"; do
             pattern=$(echo "$pattern" | xargs)  # Trim whitespace
             if [ -n "$pattern" ]; then
@@ -192,6 +192,8 @@ jobs:
       !contains(github.event.pull_request.labels.*.name, 'documentation') &&
       !contains(github.event.pull_request.labels.*.name, 'automated')
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 5
 
     steps:
@@ -222,16 +224,19 @@ jobs:
 
       - name: Changelog Summary
         if: always()
+        env:
+          CHANGELOG_PATH: ${{ inputs.changelog-path }}
+          CHANGELOG_SKIP_LABELS: ${{ inputs.changelog-skip-labels }}
         run: |
           echo "## Changelog Enforcement" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           if [ "${{ job.status }}" == "success" ]; then
             echo "Changelog has been updated or check was skipped." >> $GITHUB_STEP_SUMMARY
           else
-            echo "Please update \`${{ inputs.changelog-path }}\` with your changes." >> $GITHUB_STEP_SUMMARY
+            echo "Please update \`$CHANGELOG_PATH\` with your changes." >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "To skip this check, add one of these labels:" >> $GITHUB_STEP_SUMMARY
-            echo "\`${{ inputs.changelog-skip-labels }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "\`$CHANGELOG_SKIP_LABELS\`" >> $GITHUB_STEP_SUMMARY
           fi
 
   # ==========================================================================
@@ -241,6 +246,8 @@ jobs:
     name: Template Sync (Cruft)
     if: inputs.enable-cruft-check
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 10
 
     steps:
@@ -259,8 +266,11 @@ jobs:
         with:
           python-version: ${{ inputs.python-version }}
 
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
+
       - name: Install cruft
-        run: pip install cruft
+        run: uv pip install --no-build 'cruft==2.15.0'
 
       - name: Check for .cruft.json
         id: cruft-exists
@@ -340,6 +350,9 @@ jobs:
     name: Auto-Merge Dependencies
     if: inputs.enable-automerge && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     timeout-minutes: 5
 
     steps:
@@ -436,11 +449,18 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           MERGE_METHOD: ${{ inputs.automerge-merge-method }}
         run: |
+          case "$MERGE_METHOD" in
+            merge|squash|rebase) ;;
+            *) echo "::error::Invalid automerge-merge-method: $MERGE_METHOD"; exit 1 ;;
+          esac
           echo "Enabling auto-merge for PR #$PR_NUMBER with $MERGE_METHOD method"
           gh pr merge "$PR_NUMBER" --auto --$MERGE_METHOD
 
       - name: Auto-merge Summary
         if: always()
+        env:
+          AUTOMERGE_ALLOWED_UPDATE_TYPES: ${{ inputs.automerge-allowed-update-types }}
+          AUTOMERGE_MERGE_METHOD: ${{ inputs.automerge-merge-method }}
         run: |
           echo "## Auto-Merge Status" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -450,9 +470,9 @@ jobs:
           elif [ "${{ steps.check-update-type.outputs.merge-allowed }}" != "true" ]; then
             echo "**Skipped**: Update type \`${{ steps.pr-metadata.outputs.update-type }}\` is not allowed for auto-merge." >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Allowed update types: \`${{ inputs.automerge-allowed-update-types }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "Allowed update types: \`$AUTOMERGE_ALLOWED_UPDATE_TYPES\`" >> $GITHUB_STEP_SUMMARY
           else
-            echo "**Enabled**: Auto-merge enabled with \`${{ inputs.automerge-merge-method }}\` method." >> $GITHUB_STEP_SUMMARY
+            echo "**Enabled**: Auto-merge enabled with \`$AUTOMERGE_MERGE_METHOD\` method." >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "The PR will be merged automatically once all required checks pass." >> $GITHUB_STEP_SUMMARY
           fi
@@ -501,6 +521,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [link-check, changelog-check, cruft-check, automerge, commit-lint]
     if: always()
+    permissions:
+      contents: read
 
     steps:
       - name: Generate summary

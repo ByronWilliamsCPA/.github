@@ -125,14 +125,13 @@ on:
         description: 'Overall matrix test result'
         value: ${{ jobs.compatibility-summary.outputs.result }}
 
-permissions:
-  contents: read
-
 jobs:
   # Build dynamic matrix based on inputs
   build-matrix:
     name: Build Test Matrix
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 5
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -172,6 +171,8 @@ jobs:
     needs: build-matrix
     runs-on: ${{ matrix.os }}
     timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: read
     # Skip expensive matrix on draft PRs unless explicitly disabled
     if: ${{ !(inputs.skip-on-draft && github.event.pull_request.draft) }}
 
@@ -247,7 +248,7 @@ jobs:
         shell: pwsh
 
       - name: Install dependencies
-        run: uv sync --all-extras
+        run: uv sync --all-extras --frozen --no-build
 
       - name: Run tests
         id: tests
@@ -262,13 +263,13 @@ jobs:
 
           if [ "$COVERAGE_REPORT" == "true" ]; then
             # shellcheck disable=SC2086
-            uv run $TEST_COMMAND \
+            uv run --frozen --no-build $TEST_COMMAND \
               --cov="$SRC_DIR" \
               --cov-report=xml:coverage-${MATRIX_PYTHON}-${MATRIX_OS}.xml \
               --cov-report=term-missing
           else
             # shellcheck disable=SC2086
-            uv run $TEST_COMMAND
+            uv run --frozen --no-build $TEST_COMMAND
           fi
         shell: bash
 
@@ -287,6 +288,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     if: always()
+    permissions:
+      contents: read
     outputs:
       result: ${{ steps.result.outputs.result }}
 

@@ -68,11 +68,6 @@ on:
         required: false
         default: true
 
-permissions:
-  contents: read
-  security-events: write
-  pull-requests: write
-
 jobs:
   # Detect security-relevant changes
   detect-changes:
@@ -142,7 +137,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --no-dev
+        run: uv sync --no-dev --frozen --no-build
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@68bde559dea0fdcac2102bfdf6230c5f70eb485e  # v4.35.4
@@ -224,7 +219,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --all-extras
+        run: uv sync --all-extras --frozen --no-build
 
       - name: Bandit Static Analysis
         if: ${{ inputs.run-bandit }}
@@ -232,20 +227,20 @@ jobs:
           SRC_DIR: ${{ inputs.source-directory }}
         run: |
           echo "🔒 Running Bandit security analysis..."
-          uv run bandit -r "$SRC_DIR" \
+          uv run --frozen --no-build bandit -r "$SRC_DIR" \
             -f json -o bandit-report.json \
             -c pyproject.toml || true
-          uv run bandit -r "$SRC_DIR" -c pyproject.toml
+          uv run --frozen --no-build bandit -r "$SRC_DIR" -c pyproject.toml
 
       - name: Safety Vulnerability Scan
         if: ${{ inputs.run-safety }}
         run: |
           echo "🛡️ Scanning dependencies for vulnerabilities..."
           uv export --format requirements-txt --no-hashes --output-file requirements-scan.txt
-          uv run safety check \
+          uv run --frozen --no-build safety check \
             --file requirements-scan.txt \
             --json --output safety-report.json || true
-          uv run safety check --file requirements-scan.txt
+          uv run --frozen --no-build safety check --file requirements-scan.txt
 
       - name: Upload Security Reports
         if: always()

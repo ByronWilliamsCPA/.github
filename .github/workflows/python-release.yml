@@ -108,9 +108,6 @@ on:
         description: 'The release tag'
         value: ${{ jobs.release.outputs.tag }}
 
-permissions:
-  contents: read
-
 jobs:
   # ============================================================================
   # Job 1: Run Tests Before Release
@@ -119,6 +116,8 @@ jobs:
     name: Pre-Release Tests
     runs-on: ubuntu-latest
     if: ${{ inputs.run-tests }}
+    permissions:
+      contents: read
     timeout-minutes: 15
     steps:
       - name: Harden Runner
@@ -142,14 +141,14 @@ jobs:
         run: uv python install "$PYTHON_VERSION"
 
       - name: Install dependencies
-        run: uv sync --all-extras
+        run: uv sync --all-extras --frozen --no-build
 
       - name: Run tests
         env:
           SRC_DIR: ${{ inputs.source-directory }}
           COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold }}
         run: |
-          uv run pytest \
+          uv run --frozen --no-build pytest \
             --cov="$SRC_DIR" \
             --cov-report=term-missing \
             --cov-fail-under="$COVERAGE_THRESHOLD" \
@@ -158,12 +157,12 @@ jobs:
       - name: Run type checker
         env:
           SRC_DIR: ${{ inputs.source-directory }}
-        run: uv run basedpyright "$SRC_DIR/"
+        run: uv run --frozen --no-build basedpyright "$SRC_DIR/"
 
       - name: Run linter
         env:
           SRC_DIR: ${{ inputs.source-directory }}
-        run: uv run ruff check "$SRC_DIR/"
+        run: uv run --frozen --no-build ruff check "$SRC_DIR/"
 
   # ============================================================================
   # Job 2: Build and Create Release
@@ -221,7 +220,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --all-extras
+        run: uv sync --all-extras --frozen --no-build
 
       - name: Build package
         run: |
@@ -233,7 +232,7 @@ jobs:
         if: ${{ inputs.generate-sbom }}
         run: |
           echo "Generating Software Bill of Materials..."
-          pip install cyclonedx-bom==7.3.0
+          uv pip install --no-build 'cyclonedx-bom==7.3.0'
           uv export --format requirements-txt --output-file requirements-all.txt --no-hashes
           cyclonedx-py requirements requirements-all.txt --of json --output-file dist/sbom.json
           rm -f requirements-all.txt
@@ -243,7 +242,7 @@ jobs:
         id: hash
         working-directory: dist
         run: |
-          echo "hashes=$(sha256sum * | base64 -w0)" >> "$GITHUB_OUTPUT"
+          echo "hashes=$(sha256sum ./* | base64 -w0)" >> "$GITHUB_OUTPUT"
 
       # Semantic Release Mode
       - name: Python Semantic Release
