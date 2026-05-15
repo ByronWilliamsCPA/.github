@@ -35,5 +35,5 @@ features, improving documentation, or sharing ideas, your input is valued.
 ## Security
 
 We take security seriously. If you discover a vulnerability, please use the
-[GitHub Security Advisories](https://github.com/ByronWilliamsCPA/.github/security/advisories)
+[GitHub Security Advisory form](https://github.com/ByronWilliamsCPA/.github/security/advisories/new)
 to report it privately.
