@@ -32,27 +32,29 @@ from this org, please name the consumer repo as well.
 ## Supported Versions
 
 This repository is a community health and reusable workflow library with
-continuous deployment on `main`. The `CHANGELOG.md` uses date-based version
-headers (for example, `[2025-01-07]`); there are no numbered releases or
-semver branches.
+continuous deployment on `main`. The `CHANGELOG.md` uses date-based
+version headers (for example, `[2025-01-07]`); there are no maintenance
+branches.
 
-| Version                                               | Supported |
-|-------------------------------------------------------|-----------|
-| `main` (latest commit)                                | Yes       |
-| Most recent dated release tag                         | Yes       |
-| Earlier dated tags / older pinned SHAs                | No        |
+| Version                                | Supported |
+|----------------------------------------|-----------|
+| `main` (latest commit)                 | Yes       |
+| `v1` moving major tag                  | Yes       |
+| Specific pinned SHAs                   | Only the latest SHA on `main` or on `v1` |
+| Older pinned SHAs and earlier tags     | No        |
 
 If you pin a workflow to a specific commit SHA, bump the pin to pick up
 security fixes. Older SHAs do not receive backports.
 
 ## Response Timeline
 
-| Stage                          | Target                  |
-|--------------------------------|-------------------------|
-| Acknowledgement of report      | 5 business days         |
-| Initial triage and severity    | 10 business days        |
-| Fix or mitigation for critical | 14 calendar days        |
-| Fix released (other severities)| 30 calendar days        |
+| Stage                                  | Target                  |
+|----------------------------------------|-------------------------|
+| Acknowledgement of report              | 5 business days         |
+| Triage and severity (non-critical)     | 10 business days        |
+| Triage and severity (critical)         | 2 business days         |
+| Fix or mitigation for critical reports | 14 calendar days from acknowledgement |
+| Fix released for other severities      | 30 calendar days from acknowledgement |
 
 These are targets, not guarantees. The maintainer will keep the reporter
 updated if a fix needs longer.
@@ -64,13 +66,15 @@ tool runs in every repo; the list reflects what is wired up in this
 repository's workflows and pre-commit hooks, which downstream repos
 inherit via the reusable workflows.
 
-- Static analysis: CodeQL (org-wide), Semgrep (via SonarCloud), Ruff and
-  Bandit (Python reusable workflows)
+- Static analysis: CodeQL (org-wide) and SonarCloud Quality Gate
+  (configured in `sonarcloud.yml` and the `python-sonarcloud.yml`
+  reusable workflow)
+- Python-specific static analysis: Ruff and Bandit (in the
+  `python-ci.yml` reusable workflow)
 - Dependency pinning and Renovate-driven updates
 - Container scanning with Trivy (Docker and SBOM workflows)
 - SBOM generation for tagged releases
-- Secret scanning: `detect-secrets` and TruffleHog as `pre-commit` hooks,
-  GitGuardian on PRs
+- Secret scanning: `detect-secrets` and TruffleHog as `pre-commit` hooks
 - Least-privilege workflow tokens and SHA-pinned third-party actions
 
 ## CVE and Advisory Workflow

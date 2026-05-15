@@ -21,11 +21,19 @@ docs repos, so there is no single setup recipe.
 What is consistent across the org:
 
 ```bash
-git clone https://github.com/ByronWilliamsCPA/<repo>.git
+# 1. Fork the repo on GitHub, then clone YOUR fork.
+git clone https://github.com/<your-user>/<repo>.git
 cd <repo>
+
+# 2. Point "upstream" at the org repo so you can pull updates.
 git remote add upstream https://github.com/ByronWilliamsCPA/<repo>.git
-pre-commit install       # required: installs commit and commit-msg hooks
+
+# 3. Install pre-commit hooks (required).
+pre-commit install       # installs commit and commit-msg hooks
 ```
+
+Maintainers with push access to the org repository can clone the org URL
+directly and skip the fork step.
 
 `pre-commit` hooks must pass before a commit lands. Run
 `pre-commit run --all-files` if you touch many files at once.
@@ -56,9 +64,15 @@ Branch from `main` using one of these prefixes:
 | `fix/`      | Bug fixes                                        |
 | `chore/`    | Tooling, build, dependency, and CI changes       |
 | `docs/`     | Documentation only                               |
+| `claude/`   | Reserved for automated agent commits             |
 
 Examples: `feature/retry-handler`, `fix/timeout-on-empty-payload`,
-`chore/bump-actions-checkout`, `docs/contributing-clarify-gpg`.
+`chore/bump-actions-checkout`, `docs/contributing-clarify-gpg`,
+`claude/review-security-policy-aasG1`.
+
+`claude/` is reserved for branches pushed by Claude Code agents working
+on this repository; human contributors should pick one of the other four
+prefixes.
 
 ## Commit Messages
 
@@ -90,9 +104,10 @@ Keep the subject under 72 characters and in the imperative mood.
 
 ## GPG-Signed Commits Required
 
-Every commit on every PR must be GPG-signed (or SSH-signed) and show as
-**Verified** on GitHub. Unsigned commits will be rejected by branch
-protection.
+Every commit that reaches `main` must be GPG-signed (or SSH-signed) and
+show as **Verified** on GitHub. Branch protection enforces this at merge
+time, so unsigned commits on a feature branch will block the PR from
+merging until they are re-signed.
 
 To set this up once:
 

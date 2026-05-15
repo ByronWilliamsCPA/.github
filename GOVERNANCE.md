@@ -28,18 +28,20 @@ open an issue or comment on the PR.
 
 ## How to Propose a Change
 
-1. Open an issue using the appropriate template. For
-   non-trivial changes, describe the problem, the proposed solution, and any
-   alternatives considered.
-2. Wait for a maintainer response or for the seven-day comment window on
-   larger changes.
+1. Open an issue. If the repository provides issue templates, use the
+   one that matches your change; otherwise open a plain issue. For
+   non-trivial changes, describe the problem, the proposed solution,
+   and any alternatives considered.
+2. Wait for a maintainer response, or for the seven-day comment window
+   on larger changes.
 3. Submit a pull request that references the issue. Follow
-   [CONTRIBUTING.md](CONTRIBUTING.md), including the GPG-signing requirement
-   and PR checklist.
+   [CONTRIBUTING.md](CONTRIBUTING.md), including the GPG-signing
+   requirement and PR checklist.
 
-Proposals that would change governance itself (for example, adding new roles
-or changing the decision process) should be opened as an issue labeled
-`governance` and discussed publicly before any PR is filed.
+Proposals that would change governance itself (for example, adding new
+roles or changing the decision process) should be opened as an issue
+with `governance` in the title and discussed publicly before any PR is
+filed.
 
 ## Succession
 
