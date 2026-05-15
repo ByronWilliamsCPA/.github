@@ -81,4 +81,5 @@ repos:
         entry: scripts/check-no-em-dash.sh
         language: script
         pass_filenames: false
+        types: [text]
         stages: [pre-commit]
