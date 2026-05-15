@@ -255,7 +255,7 @@ jobs:
         shell: pwsh
 
       - name: Install dependencies
-        run: uv sync --all-extras --frozen --no-build
+        run: uv sync --all-extras --frozen
 
       - name: Run tests
         id: tests

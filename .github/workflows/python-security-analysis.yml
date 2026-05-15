@@ -140,7 +140,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --no-dev --frozen --no-build
+        run: uv sync --no-dev --frozen
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@68bde559dea0fdcac2102bfdf6230c5f70eb485e  # v4.35.4
@@ -223,7 +223,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --all-extras --frozen --no-build
+        run: uv sync --all-extras --frozen
 
       - name: Bandit Static Analysis
         if: ${{ inputs.run-bandit }}

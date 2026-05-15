@@ -179,9 +179,9 @@ jobs:
             while IFS= read -r dep; do
               [[ -n "$dep" ]] && EXTRA_ARGS+=("--extra" "$dep")
             done < <(echo "$EXTRA_DEPENDENCIES" | tr ' ' '\n')
-            uv sync "${EXTRA_ARGS[@]}" --frozen --no-build
+            uv sync "${EXTRA_ARGS[@]}" --frozen
           else
-            uv sync --frozen --no-build
+            uv sync --frozen
           fi
 
       - name: Generate Synthetic Test Data
@@ -309,9 +309,9 @@ jobs:
             while IFS= read -r dep; do
               [[ -n "$dep" ]] && EXTRA_ARGS+=("--extra" "$dep")
             done < <(echo "$EXTRA_DEPENDENCIES" | tr ' ' '\n')
-            uv sync "${EXTRA_ARGS[@]}" --frozen --no-build
+            uv sync "${EXTRA_ARGS[@]}" --frozen
           else
-            uv sync --frozen --no-build
+            uv sync --frozen
           fi
 
           # Check if script supports --output argument
