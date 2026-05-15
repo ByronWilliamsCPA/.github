@@ -13,18 +13,18 @@ Each check is disabled by default; enable only what your project needs.
 | Auto-merge | `enable-automerge` | Auto-merges Dependabot/Renovate PRs |
 | Commit lint | `enable-commit-lint` | Validates Conventional Commits format |
 
-## Key inputs
+## Inputs
 
-| Input | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enable-link-check` | boolean | `false` | Enable documentation link checking |
-| `link-check-paths` | string | `./docs/**/*.md` | Paths to check |
-| `enable-changelog-check` | boolean | `false` | Require CHANGELOG update on PRs |
-| `changelog-skip-labels` | string | `skip-changelog` | PR labels that skip the requirement |
-| `enable-automerge` | boolean | `false` | Enable auto-merge for bots |
-| `automerge-allowed-update-types` | string | `patch,minor` | Update types to auto-merge |
-| `enable-commit-lint` | boolean | `false` | Validate PR title format |
-| `python-version` | string | `3.12` | Python version for cruft check |
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `enable-link-check` | boolean | no | `false` | Enable documentation link checking |
+| `link-check-paths` | string | no | `./docs/**/*.md` | Paths to check |
+| `enable-changelog-check` | boolean | no | `false` | Require CHANGELOG update on PRs |
+| `changelog-skip-labels` | string | no | `skip-changelog` | PR labels that skip the requirement |
+| `enable-automerge` | boolean | no | `false` | Enable auto-merge for bots |
+| `automerge-allowed-update-types` | string | no | `patch,minor` | Update types to auto-merge |
+| `enable-commit-lint` | boolean | no | `false` | Validate PR title format |
+| `python-version` | string | no | `3.12` | Python version for cruft check |
 
 ## Usage
 

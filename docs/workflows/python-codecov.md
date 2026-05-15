@@ -13,6 +13,9 @@ as a separate job after the main CI job uploads a coverage artifact.
 | `flags` | string | no | | Codecov flags (comma-separated) |
 | `name` | string | no | `coverage` | Name for the coverage upload |
 | `fail-ci-if-error` | boolean | no | `false` | Fail the workflow if Codecov upload fails |
+| `verbose` | boolean | no | `false` | Enable verbose output |
+| `workflow-run-id` | string | no | | Workflow run ID to download artifacts from (for `workflow_run` trigger) |
+| `commit-sha` | string | no | | Commit SHA override for `workflow_run` trigger; associates upload with the triggering commit |
 
 ## Secrets
 

@@ -17,6 +17,12 @@ outputs JSON with performance metrics.
 | `benchmark-iterations` | number | no | `100` | Benchmark iterations for measurement |
 | `fail-on-regression` | boolean | no | `true` | Fail workflow if regression detected |
 | `comment-on-pr` | boolean | no | `true` | Post performance results as PR comment |
+| `benchmark-args` | string | no | | Additional arguments for the benchmark script |
+| `baseline-file` | string | no | | Path to a committed baseline file for comparison |
+| `generate-synthetic-data` | boolean | no | `false` | Generate synthetic test data via `scripts/generate_test_data.py` |
+| `test-data-directory` | string | no | `/tmp/perf_test_data` | Directory for generated test data |
+| `extra-dependencies` | string | no | `dev` | Additional uv sync extras (e.g., `dev ml`) |
+| `timeout-minutes` | number | no | `30` | Job timeout in minutes |
 
 ## Benchmark script contract
 
