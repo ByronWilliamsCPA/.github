@@ -59,6 +59,13 @@ are no numbered releases.
 - Add `timeout-minutes: 5` to `build-matrix` and `compatibility-summary` jobs in `python-compatibility.yml`
 - Add `timeout-minutes: 5` to `check-configuration` jobs in `python-sonarcloud.yml` and `python-qlty-coverage.yml`
 - `scripts/update-pinned-actions.sh`: `usage()` function now exits with code 1 instead of 0 on invalid usage
+- `.claude/settings.json`: replace broad `Bash(git *)` allow entry with 21 explicit subcommand entries (`git status`, `git diff`, `git add`, `git commit`, `git log`, `git fetch`, `git pull`, `git branch`, `git stash`, `git show`, `git rev-parse`, `git merge-base`, `git worktree`, `git tag`, `git describe`, `git blame`, `git ls-files`, `git remote`, `git config`, `git rebase`, `git apply`) to eliminate allow/deny ordering ambiguity reported in Claude Code bug #26276
+- `.claude/settings.json`: replace broad `Bash(gh pr *)` allow entry with four read-only subcommands (`gh pr view*`, `gh pr list*`, `gh pr checks*`, `gh pr diff*`) to prevent unintended `gh pr merge`, `gh pr close`, and `gh pr create` operations
+- `.claude/settings.json`: remove unbounded `Write(*.json)` and `Edit(*.json)` allow entries; all legitimate JSON write targets are already covered by the path-scoped `.github/**`, `docs/**`, and `.claude/**` patterns
+- `.claude/settings.json`: add wildcard-middle deny patterns for mutating HTTP methods (`Bash(gh api * -X POST*)`, `Bash(gh api * --method POST*)`, `Bash(gh api * -X PUT*)`, `Bash(gh api * --method PUT*)`, `Bash(gh api * -X DELETE*)`, `Bash(gh api * --method DELETE*)`, `Bash(gh api * -X PATCH*)`, `Bash(gh api * --method PATCH*)`) to block flag orderings where the method flag appears after the endpoint URL; existing prefix-only patterns (e.g. `Bash(gh api -X POST*)`) are retained to cover the flag-first ordering
+- `.claude/settings.json`: add `Bash(rm -fr*)` deny entry to block the `-fr` flag-order variant not covered by the existing `Bash(rm -r*)` and `Bash(rm -f*)` entries
+- `.claude/settings.json`: `Write(.claude/**)` and `Edit(.claude/**)` intentionally kept broad to allow transient writes to gitignore'd subdirectories (worktree state, tool caches); these paths are excluded from the repo via `.gitignore`
+- `.gitignore`: replace 8 enumerated `.claude/<subdir>/` exclusion entries with a catch-all `.claude/*` plus negations for `!.claude/CLAUDE.md` and `!.claude/settings.json`; new repos and new transient subdirs are excluded automatically without requiring manual `.gitignore` updates
 
 ### Security
 
