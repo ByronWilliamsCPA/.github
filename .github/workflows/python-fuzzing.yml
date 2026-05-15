@@ -95,9 +95,7 @@ on:
         required: false
         default: false
 
-permissions:
-  contents: read
-  security-events: write
+permissions: {}
 
 jobs:
   fuzzing:

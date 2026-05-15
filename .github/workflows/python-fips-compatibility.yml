@@ -73,6 +73,8 @@ on:
         required: false
         default: false
 
+permissions: {}
+
 jobs:
   fips-check:
     name: FIPS Compliance Check

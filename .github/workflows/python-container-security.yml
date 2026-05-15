@@ -116,6 +116,8 @@ on:
         description: 'Docker Hardened Images registry personal access token'
         required: false
 
+permissions: {}
+
 jobs:
   # Hadolint Dockerfile linting
   hadolint:

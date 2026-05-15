@@ -47,6 +47,8 @@ on:
         required: false
         default: 80
 
+permissions: {}
+
 jobs:
   build:
     name: Build Documentation

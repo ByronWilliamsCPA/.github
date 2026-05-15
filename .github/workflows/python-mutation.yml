@@ -100,9 +100,7 @@ on:
         description: 'Whether the mutation threshold was met'
         value: ${{ jobs.mutation-testing.outputs.passed }}
 
-permissions:
-  contents: read
-  pull-requests: write
+permissions: {}
 
 jobs:
   mutation-testing:

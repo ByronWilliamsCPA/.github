@@ -140,9 +140,7 @@ on:
         required: false
         default: true
 
-permissions:
-  contents: read
-  pull-requests: write
+permissions: {}
 
 jobs:
   performance-regression:

@@ -125,6 +125,8 @@ on:
         description: 'Overall matrix test result'
         value: ${{ jobs.compatibility-summary.outputs.result }}
 
+permissions: {}
+
 jobs:
   # Build dynamic matrix based on inputs
   build-matrix:

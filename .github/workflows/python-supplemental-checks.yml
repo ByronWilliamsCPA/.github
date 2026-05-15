@@ -112,6 +112,8 @@ on:
         required: false
         default: false
 
+permissions: {}
+
 jobs:
   # ==========================================================================
   # Documentation Link Check

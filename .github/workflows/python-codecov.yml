@@ -95,9 +95,7 @@ on:
         description: 'Codecov upload token'
         required: true
 
-permissions:
-  contents: read
-  actions: read
+permissions: {}
 
 jobs:
   upload-coverage:

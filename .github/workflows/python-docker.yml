@@ -170,11 +170,7 @@ on:
         description: 'Image digest'
         value: ${{ jobs.build.outputs.digest }}
 
-permissions:
-  contents: read
-  packages: write
-  pull-requests: write
-  security-events: write
+permissions: {}
 
 jobs:
   build:
