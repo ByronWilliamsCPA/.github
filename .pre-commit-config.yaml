@@ -58,7 +58,14 @@ repos:
   # ============================================================================
   # Secret Detection - TruffleHog
   # ============================================================================
-  - repo: local
+  # Scan staged files only. The git-history mode also traverses fetched remote
+  # branches in the local object store, producing false positives from unmerged
+  # branches. Staged-file scanning is the correct scope for a pre-commit hook;
+  # full git history scanning belongs in CI.
+  # --results=verified,unknown: report only credentials that are confirmed live
+  # or indeterminate; skip detector-level false positives.
+  - repo: https://github.com/trufflesecurity/trufflehog
+    rev: 05cccb53bc9e13bc6d17997db5a6bcc3df44bf2f  # v3.92.3 # pragma: allowlist secret
     hooks:
       - id: trufflehog
         name: TruffleHog Secret Scanner
