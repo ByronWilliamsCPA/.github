@@ -1,18 +1,17 @@
 # ADR-001: Scorecard publish_results: false in Reusable Workflow
 
-**Status:** Accepted
+**Status:** Proposed
 **Date:** 2026-05-14
 
 ## Context
 
 The `python-scorecard.yml` reusable workflow hard-codes `publish_results: false`.
 When a reusable workflow calls `ossf/scorecard-action`, the OIDC token `repository`
-claim resolves to the calling repo (e.g., `ByronWilliamsCPA/some-python-project`),
-which is correct. However, Scorecard's API lookup uses this claim to attribute results.
-When the reusable workflow itself is tested in the `.github` repo via `self-test.yml`,
-the OIDC token resolves to `ByronWilliamsCPA/.github`, which does match the repo we
-want to score. The constraint is `publish_results: true` in the reusable workflow would
-expose results for every calling repo under a single API entry.
+claim resolves to the `.github` repo (where the workflow file lives), not the calling
+repository. The scorecard-action uses that claim to publish results to
+securityscorecards.dev. With the wrong repo claim, publication fails and the job
+errors. The reusable workflow keeps `publish_results: false` to prevent this; SARIF
+upload to the calling repo's Security tab continues to work correctly.
 
 ## Decision
 
@@ -21,6 +20,8 @@ Add a direct, non-reusable `self-scorecard` job to `scorecard.yml` in this repo
 that uses `publish_results: true`. This job runs the scorecard action directly
 (not via the reusable), so the OIDC token `repository` claim correctly resolves to
 `ByronWilliamsCPA/.github`.
+
+**Implementation deferred to Task 5 (OSSF/Scorecard PR).**
 
 ## Consequences
 

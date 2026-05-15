@@ -32,7 +32,7 @@ See: [docs/response-aware-development.md](https://github.com/ByronWilliamsCPA/.g
 ## Writing Rules
 
 Never use em-dashes in any output (documentation, YAML run steps, commit messages).
-Replace with comma, semicolon, or colon.
+The `no-em-dash` pre-commit hook enforces this. Replace with comma, semicolon, or colon.
 
 ## Git Workflow
 
