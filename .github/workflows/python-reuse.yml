@@ -78,6 +78,12 @@ jobs:
         id: reuse
         continue-on-error: ${{ !inputs.fail-on-missing }}
 
+      - name: Install UV for SPDX generation
+        if: ${{ inputs.generate-spdx }}
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
+        with:
+          enable-cache: true
+
       - name: Generate SPDX SBOM
         if: ${{ inputs.generate-spdx }}
         run: |
