@@ -1,7 +1,7 @@
-# OpenSSF Scorecard for Claude Code Configuration
+# OpenSSF Scorecard for ByronWilliamsCPA/.github
 # Delegates to the org-level reusable Scorecard workflow.
 #
-# Dashboard: https://securityscorecards.dev/viewer/?uri=github.com/ByronWilliamsCPA/.claude
+# Dashboard: https://securityscorecards.dev/viewer/?uri=github.com/ByronWilliamsCPA/.github
 # Documentation: https://github.com/ossf/scorecard
 name: OpenSSF Scorecard
 
