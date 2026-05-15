@@ -2,7 +2,7 @@
 
 ## Purpose & Scope
 
-This document describes the governance model for the williaby organization and
+This document describes the governance model for the ByronWilliamsCPA organization and
 its repositories. It applies to all project spaces, including code,
 documentation, and community forums.
 
@@ -41,7 +41,7 @@ Decision Process above.
 ## Contact
 
 For questions about governance or to nominate yourself for a role,
-email [**governance@williaby.com**](mailto:governance@williaby.com).
+open an issue in this repository or use GitHub Discussions.
 
 ## Last Updated
 

@@ -3,15 +3,15 @@
 # For repository-specific overrides, add a CODEOWNERS file in that repo's root or docs/ folder.
 
 # Default owner for all files
-* @williaby
+* @ByronWilliamsCPA
 
 # Examples: Uncomment and customize as needed
 # Docs directory owned by documentation team
-# docs/ @williaby
+# docs/ @ByronWilliamsCPA
 # Source code owned by development team
-# src/ @williaby
+# src/ @ByronWilliamsCPA
 # Configuration files owned by DevOps
-# *.yml @williaby
+# *.yml @ByronWilliamsCPA
 
 # Annotation: Doc A - Code-Review & Branch-Protection scorecard requirement.
 

@@ -15,8 +15,8 @@ contributions of knowledge, bug reports, and fixes are highly appreciated.
   Use Discussions for conceptual questions, best practices, or general
   community chat.
 
-- **Email Support**
-  For non-sensitive or longer-form inquiries, email [**support@williaby.com**](mailto:support@williaby.com).
+- **Contact**
+  Use GitHub Issues or Discussions for all inquiries.
 
 ## Before Submitting an Issue
 

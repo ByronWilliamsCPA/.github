@@ -121,8 +121,6 @@ jobs:
 ### Documentation
 
 - **[USAGE_EXAMPLES.md](USAGE_EXAMPLES.md)** - Detailed usage examples
-- **[CONVERSION_ACTION_PLAN.md](CONVERSION_ACTION_PLAN.md)** - Step-by-step guide for migrating a repo from standalone workflow definitions to these centralized ones
-- **[ACTION_SHA_REFERENCE.md](ACTION_SHA_REFERENCE.md)** - Action commit SHAs
 - **[QLTY_INTEGRATION.md](QLTY_INTEGRATION.md)** - Qlty Cloud integration guide
 - **[PYPI_WORKFLOW_ANALYSIS.md](PYPI_WORKFLOW_ANALYSIS.md)** - PyPI workflow analysis & migration
 - **[docs/workflows/](docs/workflows/)** - Workflow-specific documentation

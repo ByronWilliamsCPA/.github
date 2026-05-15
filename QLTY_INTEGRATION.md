@@ -78,13 +78,13 @@ gh auth login
 # Add QLTY_TOKEN to all Python repos
 for repo in $(gh repo list --limit 100 --json name,primaryLanguage -q '.[] | select(.primaryLanguage.name == "Python") | .name'); do
   echo "Adding QLTY_TOKEN to $repo..."
-  gh secret set QLTY_TOKEN --repo "williaby/$repo" --body "your-qlty-token-here"
+  gh secret set QLTY_TOKEN --repo "ByronWilliamsCPA/$repo" --body "your-qlty-token-here"
 done
 ```
 
 **Option B: Manual Setup**
 
-1. Go to each repo: `https://github.com/williaby/REPO-NAME/settings/secrets/actions`
+1. Go to each repo: `https://github.com/ByronWilliamsCPA/REPO-NAME/settings/secrets/actions`
 2. Click "New repository secret"
 3. Name: `QLTY_TOKEN`
 4. Value: Paste the token from Step 2
@@ -182,7 +182,7 @@ jobs:
 ```yaml
 jobs:
   ci:
-    uses: williaby/.github/.github/workflows/python-ci.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@main
     with:
       python-versions: '["3.11", "3.12"]'
       run-qlty: true  # Enable Qlty checks
@@ -275,7 +275,7 @@ jobs:
 # Separate Qlty workflow
 jobs:
   qlty:
-    uses: williaby/.github/.github/workflows/qlty-check.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/qlty-check.yml@main
     secrets:
       QLTY_TOKEN: ${{ secrets.QLTY_TOKEN }}
 ```
@@ -393,7 +393,7 @@ Qlty GitHub App needs:
 
 ### `.qlty.yaml` in Org Repo
 
-Create `.qlty.yaml` in `williaby/.github` for org-wide config:
+Create `.qlty.yaml` in `ByronWilliamsCPA/.github` for org-wide config:
 
 ```yaml
 # Qlty Organization Configuration
@@ -456,7 +456,7 @@ on: [push, pull_request]
 jobs:
   # Standard CI (includes Ruff, MyPy, tests)
   ci:
-    uses: williaby/.github/.github/workflows/python-ci.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@main
     with:
       python-versions: '["3.11", "3.12"]'
     secrets:
@@ -465,7 +465,7 @@ jobs:
   # Qlty aggregates and reports
   qlty:
     needs: ci
-    uses: williaby/.github/.github/workflows/qlty-check.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/qlty-check.yml@main
     secrets:
       QLTY_TOKEN: ${{ secrets.QLTY_TOKEN }}
 ```
@@ -481,7 +481,7 @@ on:
 
 jobs:
   quality-gate:
-    uses: williaby/.github/.github/workflows/qlty-check.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/qlty-check.yml@main
     with:
       fail-on-violations: true  # Block merge on violations
     secrets:
@@ -595,5 +595,5 @@ jobs:
 ---
 
 **Last Updated**: 2025-11-18
-**Maintained by**: williaby organization
+**Maintained by**: ByronWilliamsCPA organization
 **Questions?**: Contact Qlty support or open issue in this repo

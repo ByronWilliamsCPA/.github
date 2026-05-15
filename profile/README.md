@@ -1,55 +1,39 @@
-# Welcome to williaby 👋
+# Welcome to ByronWilliamsCPA
 
-[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](https://github.com/williaby/.github/blob/main/CODE_OF_CONDUCT.md)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/williaby/.github/blob/main/LICENSE)
+[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](https://github.com/ByronWilliamsCPA/.github/blob/main/CODE_OF_CONDUCT.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/ByronWilliamsCPA/.github/blob/main/LICENSE)
 
 ## About
 
-This organization is maintained by Byron Williams, a solo practitioner focused on building quality software and fostering open collaboration.
+This organization is maintained by Byron Williams, a solo practitioner focused on
+building quality software and fostering open collaboration.
 
-## 🚀 Our Projects
+## Projects
 
-Browse our repositories to find projects spanning Python, shell scripting, and GitHub Actions. Each project is built with care, following best practices for code quality, security, and maintainability.
+Browse our repositories to find projects spanning Python, shell scripting, and GitHub
+Actions. Each project is built with care, following best practices for code quality,
+security, and maintainability.
 
-## 🤝 Contributing
+## Contributing
 
-We welcome contributions from the community! Whether you're fixing bugs, adding features, improving documentation, or sharing ideas, your input is valued.
+We welcome contributions from the community. Whether you are fixing bugs, adding
+features, improving documentation, or sharing ideas, your input is valued.
 
 **Get started:**
-- Read our [Contributing Guide](https://github.com/williaby/.github/blob/main/CONTRIBUTING.md)
-- Check out our [Code of Conduct](https://github.com/williaby/.github/blob/main/CODE_OF_CONDUCT.md)
-- Browse [open issues](https://github.com/search?q=org%3Awilliaby+is%3Aissue+is%3Aopen&type=issues) across our repositories
 
-## 📚 Resources
+- Read our [Contributing Guide](https://github.com/ByronWilliamsCPA/.github/blob/main/CONTRIBUTING.md)
+- Check out our [Code of Conduct](https://github.com/ByronWilliamsCPA/.github/blob/main/CODE_OF_CONDUCT.md)
+- Browse [open issues](https://github.com/search?q=org%3AByronWilliamsCPA+is%3Aissue+is%3Aopen&type=issues) across our repositories
 
-- **[Code of Conduct](https://github.com/williaby/.github/blob/main/CODE_OF_CONDUCT.md)** - Our community standards
-- **[Security Policy](https://github.com/williaby/.github/blob/main/SECURITY.md)** - How to report vulnerabilities
-- **[Support](https://github.com/williaby/.github/blob/main/SUPPORT.md)** - Getting help
-- **[Governance](https://github.com/williaby/.github/blob/main/GOVERNANCE.md)** - How we make decisions
+## Resources
 
-## 🔒 Security
+- [Code of Conduct](https://github.com/ByronWilliamsCPA/.github/blob/main/CODE_OF_CONDUCT.md)
+- [Security Policy](https://github.com/ByronWilliamsCPA/.github/blob/main/SECURITY.md)
+- [Support](https://github.com/ByronWilliamsCPA/.github/blob/main/SUPPORT.md)
+- [Governance](https://github.com/ByronWilliamsCPA/.github/blob/main/GOVERNANCE.md)
 
-Security is a top priority. If you discover a security vulnerability, please report it privately through GitHub's Security Advisory feature. See our [Security Policy](https://github.com/williaby/.github/blob/main/SECURITY.md) for details.
+## Security
 
-## 📫 Contact
-
-- **General inquiries:** [support@williaby.com](mailto:support@williaby.com)
-- **Security issues:** Use GitHub Security Advisories
-- **Code of Conduct concerns:** [conduct@williaby.com](mailto:conduct@williaby.com)
-- **Governance questions:** [governance@williaby.com](mailto:governance@williaby.com)
-
-## 💡 Philosophy
-
-We believe in:
-- **Quality over quantity** - Thoughtful, well-tested code
-- **Security by default** - Proactive security practices
-- **Open collaboration** - Transparent processes and welcoming community
-- **Continuous improvement** - Always learning and evolving
-
-## 📊 Stats
-
-![Organization Stats](https://github-readme-stats.vercel.app/api?username=williaby&show_icons=true&theme=default)
-
----
-
-_Last updated: November 16, 2025_
+We take security seriously. If you discover a vulnerability, please use the
+[GitHub Security Advisories](https://github.com/ByronWilliamsCPA/.github/security/advisories)
+to report it privately.
