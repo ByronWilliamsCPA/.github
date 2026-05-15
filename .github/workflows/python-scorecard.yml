@@ -77,19 +77,17 @@ on:
         description: 'Fine-grained PAT with Administration:Read for Branch-Protection check'
         required: false
 
-permissions:
-  # Needed to upload the results to code-scanning dashboard
-  security-events: write
-  # Required for all workflows
-  contents: read
-  # Required for workflow_run event
-  actions: read
+permissions: {}
 
 jobs:
   scorecard:
     name: OpenSSF Scorecard Analysis
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
 
     steps:
       - name: Harden Runner

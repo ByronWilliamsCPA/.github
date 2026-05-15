@@ -97,6 +97,8 @@ on:
         description: 'Qlty Cloud coverage upload token'
         required: false
 
+permissions: {}
+
 jobs:
   check-configuration:
     name: Check Qlty Configuration

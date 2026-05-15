@@ -58,14 +58,12 @@ on:
 
 # Workflow-level permissions are the ceiling for all jobs in this workflow.
 # Each job below declares only what it actually needs.
-permissions:
-  contents: read
-  pull-requests: write
-  security-events: write
+permissions: {}
 
 jobs:
   ci:
     name: CI
+    timeout-minutes: 60
     uses: ./.github/workflows/python-ci.yml
     permissions:
       contents: read
@@ -77,6 +75,7 @@ jobs:
 
   security:
     name: Security Analysis
+    timeout-minutes: 30
     needs: [ci]
     uses: ./.github/workflows/python-security-analysis.yml
     permissions:
@@ -90,6 +89,7 @@ jobs:
 
   sbom:
     name: SBOM
+    timeout-minutes: 20
     needs: [ci]
     uses: ./.github/workflows/python-sbom.yml
     permissions:

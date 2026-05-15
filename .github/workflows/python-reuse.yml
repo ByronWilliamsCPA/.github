@@ -40,14 +40,15 @@ on:
         required: false
         default: 30
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   reuse-compliance:
     name: REUSE Compliance Check
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
 
     steps:
       - name: Harden Runner
