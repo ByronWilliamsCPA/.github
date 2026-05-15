@@ -36,14 +36,15 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   actionlint:
     name: Lint workflow files (actionlint)
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
     env:
       ACTIONLINT_VERSION: '1.7.7'
       # SHELLCHECK_OPTS is read by shellcheck regardless of how it is
@@ -85,6 +86,8 @@ jobs:
     name: Lint shell scripts (shellcheck)
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
 
     steps:
       - name: Harden Runner
