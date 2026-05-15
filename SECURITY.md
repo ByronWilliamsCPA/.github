@@ -33,6 +33,32 @@ Our standard practices include:
 - **Secrets Detection** integrated in CI pipelines
 - **Hardened CI Runners** with minimal privileges
 
+## Security Surface Areas
+
+This repository is a GitHub Actions workflow library. Its security surface differs from
+application repos; there is no deployed service, but the workflows run with elevated
+permissions in every downstream repo that calls them.
+
+Primary attack surfaces and mitigations:
+
+- **Script injection via workflow inputs**: reusable workflows that interpolate
+  `${{ inputs.* }}` directly into `run:` blocks are vulnerable to injection if a caller
+  passes adversarial input. Mitigation: route all inputs through `env:` variables before
+  using in shell commands. Tracked with SonarCloud (githubactions:S7630).
+
+- **Overly broad token permissions**: workflows using `permissions: write-all` or setting
+  write grants at the workflow level rather than the job level violate least-privilege.
+  Mitigation: scope `permissions:` to the job level; request only the specific write
+  permission needed for each job. Tracked via OpenSSF Scorecard Token-Permissions check.
+
+- **Mutable action and workflow refs**: `uses:` fields referencing `@main`, `@v1`, or other
+  mutable tags allow upstream supply chain compromise. Mitigation: pin all external `uses:`
+  to a 40-character commit SHA. Renovate is configured to open SHA-bump PRs automatically.
+
+- **Unchecked caller inputs**: inputs from calling repos are not sanitized before use.
+  Mitigation: treat all inputs as untrusted; validate ranges and expected values in the
+  workflow before acting on them.
+
 ## CVE & Advisory Workflow
 
 We track and publish advisories for all confirmed vulnerabilities:

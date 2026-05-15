@@ -72,6 +72,11 @@ on:
         type: boolean
         required: false
         default: false
+      no-build:
+        description: 'Pass --no-build to uv sync/run commands (disable for projects with a build backend like hatchling)'
+        required: false
+        type: boolean
+        default: true
 
 permissions: {}
 
@@ -83,6 +88,8 @@ jobs:
       contents: read
       pull-requests: write
     timeout-minutes: 15
+    env:
+      NO_BUILD_FLAG: ${{ inputs.no-build && '--no-build' || '' }}
 
     steps:
       - name: Harden Runner
@@ -143,7 +150,7 @@ jobs:
 
           # Run check and capture output
           set +e
-          uv run --frozen --no-build python "$SCRIPT_PATH" \
+          uv run --frozen $NO_BUILD_FLAG python "$SCRIPT_PATH" \
             $FIX_HINTS_FLAG \
             $INCLUDE_TESTS_FLAG \
             $STRICT_FLAG \
@@ -152,7 +159,7 @@ jobs:
           set -e
 
           # Also generate JSON report
-          uv run --frozen --no-build python "$SCRIPT_PATH" \
+          uv run --frozen $NO_BUILD_FLAG python "$SCRIPT_PATH" \
             --json \
             $INCLUDE_TESTS_FLAG \
             > fips-report.json 2>/dev/null || true
@@ -338,6 +345,8 @@ jobs:
     permissions:
       contents: read
     timeout-minutes: 10
+    env:
+      NO_BUILD_FLAG: ${{ inputs.no-build && '--no-build' || '' }}
 
     steps:
       - name: Harden Runner
@@ -359,13 +368,13 @@ jobs:
         run: uv python install "$PYTHON_VERSION"
 
       - name: Install dependencies
-        run: uv sync --all-extras --frozen
+        run: uv sync --all-extras --frozen $NO_BUILD_FLAG
 
       - name: Test crypto imports in simulated FIPS mode
         run: |
           # This tests if the code can import without using non-FIPS algorithms
           # Note: Full FIPS testing requires an actual FIPS-enabled kernel
-          uv run --frozen --no-build python -c "
+          uv run --frozen $NO_BUILD_FLAG python -c "
           import os
           import sys
 

@@ -144,6 +144,11 @@ on:
         type: number
         required: false
         default: 7
+      no-build:
+        description: 'Pass --no-build to uv sync/run commands (disable for projects with a build backend like hatchling)'
+        required: false
+        type: boolean
+        default: true
 
     secrets:
       SONAR_TOKEN:
@@ -204,6 +209,8 @@ jobs:
       contents: read
       pull-requests: write
     timeout-minutes: ${{ inputs.timeout-minutes }}
+    env:
+      NO_BUILD_FLAG: ${{ inputs.no-build && '--no-build' || '' }}
 
     steps:
       - name: Harden Runner
@@ -231,15 +238,15 @@ jobs:
           EXTRA_DEPENDENCIES: ${{ inputs.extra-dependencies }}
         run: |
           if [ "$EXTRA_DEPENDENCIES" == "all" ]; then
-            uv sync --all-extras --frozen
+            uv sync --all-extras --frozen $NO_BUILD_FLAG
           elif [ -n "$EXTRA_DEPENDENCIES" ]; then
             EXTRA_ARGS=()
             while IFS= read -r dep; do
               [[ -n "$dep" ]] && EXTRA_ARGS+=("--extra" "$dep")
             done < <(echo "$EXTRA_DEPENDENCIES" | tr ' ' '\n')
-            uv sync "${EXTRA_ARGS[@]}" --frozen
+            uv sync "${EXTRA_ARGS[@]}" --frozen $NO_BUILD_FLAG
           else
-            uv sync --frozen
+            uv sync --frozen $NO_BUILD_FLAG
           fi
 
       - name: Run tests with coverage
@@ -259,7 +266,7 @@ jobs:
           fi
 
           # Run pytest with coverage
-          uv run --frozen --no-build pytest \
+          uv run --frozen $NO_BUILD_FLAG pytest \
             --cov="$COV_SRC" \
             --cov-report=xml:coverage.xml \
             --cov-report=term \

@@ -119,6 +119,11 @@ on:
         type: string
         required: false
         default: ''
+      no-build:
+        description: 'Pass --no-build to uv sync/run commands (disable for projects with a build backend like hatchling)'
+        required: false
+        type: boolean
+        default: true
 
     outputs:
       matrix-result:
@@ -178,6 +183,8 @@ jobs:
     needs: build-matrix
     runs-on: ${{ matrix.os }}
     timeout-minutes: ${{ inputs.timeout-minutes }}
+    env:
+      NO_BUILD_FLAG: ${{ inputs.no-build && '--no-build' || '' }}
     permissions:
       contents: read
     # Skip expensive matrix on draft PRs unless explicitly disabled
@@ -255,7 +262,8 @@ jobs:
         shell: pwsh
 
       - name: Install dependencies
-        run: uv sync --all-extras --frozen
+        run: uv sync --all-extras --frozen $NO_BUILD_FLAG
+        shell: bash
 
       - name: Run tests
         id: tests
@@ -270,13 +278,13 @@ jobs:
 
           if [ "$COVERAGE_REPORT" == "true" ]; then
             # shellcheck disable=SC2086
-            uv run --frozen --no-build $TEST_COMMAND \
+            uv run --frozen $NO_BUILD_FLAG $TEST_COMMAND \
               --cov="$SRC_DIR" \
               --cov-report=xml:coverage-${MATRIX_PYTHON}-${MATRIX_OS}.xml \
               --cov-report=term-missing
           else
             # shellcheck disable=SC2086
-            uv run --frozen --no-build $TEST_COMMAND
+            uv run --frozen $NO_BUILD_FLAG $TEST_COMMAND
           fi
         shell: bash
 

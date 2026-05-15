@@ -12,6 +12,8 @@ are no numbered releases.
 
 ### Added
 
+- All 11 reusable Python workflows: `no-build` boolean input (default `true`) controls whether `--no-build` is passed to `uv sync`/`uv run` commands; allows repos with a build backend (hatchling, setuptools) to opt out of the flag that prevented local package installation; routed through a job-level `NO_BUILD_FLAG` env var so callers need only set `no-build: false` in their `with:` block
+- `SECURITY.md`: Security Surface Areas section documenting the threat model for this workflow library
 - `python-precommit.yml`: new reusable workflow that runs `pre-commit run --all-files` in the project virtualenv via `uv run`; inputs `config-path`, `python-version`, `fail-fast`; all inputs via env vars; SHA-pinned actions
 - `python-standard-stack.yml`: new composite reusable workflow chaining `python-ci.yml`, `python-security-analysis.yml`, and `python-sbom.yml` via `needs:`; recommended quickstart for new repos; exposes `python-version`, `source-directory`, `coverage-threshold`, `fail-on-high`; optional `SONAR_TOKEN`/`CODECOV_TOKEN` passthroughs
 - `python-supplemental-checks.yml`: `enable-commit-lint` input (default false) that validates PR titles against Conventional Commits format via SHA-pinned `amannn/action-semantic-pull-request`; commit-lint status added to supplemental summary
@@ -57,6 +59,9 @@ are no numbered releases.
 
 ### Fixed
 
+- `python-performance-regression.yml`: fix `$NO_BUILD_FLAG` reference in the `Post PR Comment` step; the flag appeared as a literal string in the PR body because the step uses `actions/github-script` (JavaScript), not bash; add `NO_BUILD_FLAG` to the step `env:` block and use `${noBuildFlag}` (via `process.env.NO_BUILD_FLAG`) in the template literal
+- `python-scorecard.yml`: replace `if: ${{ secrets.SCORECARD_TOKEN == '' }}` guard with an env-var + shell check pattern (`[ -z "$HAS_SCORECARD_TOKEN" ]`); direct secret comparison in `if:` expressions is unreliable in GitHub Actions (runner issue #520) because secrets are redacted before expression evaluation
+- `python-compatibility.yml`: add `shell: bash` to the `Install dependencies` step to prevent silent failure on Windows matrix legs where the default shell is PowerShell and `$NO_BUILD_FLAG` expands to nothing
 - `python-slsa.yml`, `python-standard-stack.yml`, `scorecard.yml`, `security-analysis.yml`: remove `timeout-minutes` from 6 reusable-workflow-call jobs (`provenance`, `ci`, `security`, `sbom`, `scorecard`); GitHub Actions disallows `timeout-minutes` on jobs that use `uses:`, causing actionlint CI failure
 - `python-scorecard.yml`: hard-code `publish_results: false` in the `ossf/scorecard-action` step and remove `id-token: write` from the workflow permissions; the OIDC token `repository` claim resolves to the `.github` org repo when the workflow runs as a reusable callee, causing scorecard-action to publish to the wrong repository and error; the `publish-results` input is retained for backwards compatibility but is now deprecated and always treated as false; SARIF upload to the Security tab is unaffected
 - `scorecard.yml`: remove `publish-results: true` and `id-token: write` from the `.github` org repo's own scorecard caller to align with the reusable workflow fix
@@ -80,6 +85,7 @@ are no numbered releases.
 
 ### Security
 
+- `.pre-commit-config.yaml`: upgrade TruffleHog from `repo: local` with a pinned system binary to `repo: https://github.com/trufflesecurity/trufflehog` at SHA `05cccb53bc9e13bc6d17997db5a6bcc3df44bf2f` (v3.92.3); upstream repo is the recommended distribution channel; adds `scorecard.yml` warning about the `SCORECARD_TOKEN` scope requirement
 - Remediate SonarCloud S7630 script injection in 9 workflow files: move all `${{ inputs.* }}` references used in `run:` shell bodies to `env:` blocks; affects `python-ci.yml`, `python-compatibility.yml`, `python-docs.yml`, `python-mutation.yml`, `python-publish-pypi.yml`, `python-release.yml`, `python-sbom.yml`, `python-sonarcloud.yml`, `python-performance-regression.yml`
 - Remediate SonarCloud S8233/S8264 permission over-grant in 14 workflow files: move workflow-level `permissions:` blocks to per-job scope to enforce least-privilege; `id-token: write` and `pages: write` grants preserved at per-job level where required
 - Remediate SonarCloud S8541/S8544 in 7 workflow files: add `--frozen --no-build` to `uv sync` and `uv pip install` commands; add `--only-binary :all:` to `pip install cyclonedx-bom==7.3.0` (`python-sbom.yml`, `python-release.yml`) and `pip install twine==6.2.0` (`python-publish-pypi.yml`)
