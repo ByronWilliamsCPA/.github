@@ -21,8 +21,8 @@ docs repos, so there is no single setup recipe.
 What is consistent across the org:
 
 ```bash
-# 1. Fork the repo on GitHub, then clone YOUR fork.
-git clone https://github.com/<your-user>/<repo>.git
+# 1. Fork the repository on GitHub first (https://github.com/ByronWilliamsCPA/<repo>)
+git clone https://github.com/<your-username>/<repo>.git
 cd <repo>
 
 # 2. Point "upstream" at the org repo so you can pull updates.
@@ -104,10 +104,10 @@ Keep the subject under 72 characters and in the imperative mood.
 
 ## GPG-Signed Commits Required
 
-Every commit that reaches `main` must be GPG-signed (or SSH-signed) and
-show as **Verified** on GitHub. Branch protection enforces this at merge
-time, so unsigned commits on a feature branch will block the PR from
-merging until they are re-signed.
+Every commit on every PR must be GPG-signed (or SSH-signed) and show as
+**Verified** on GitHub. Branch protection on `main` enforces this at merge
+time; unsigned commits pushed to a feature branch are not rejected at push,
+but they cannot be merged.
 
 To set this up once:
 

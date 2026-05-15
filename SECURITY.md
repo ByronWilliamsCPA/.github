@@ -32,16 +32,15 @@ from this org, please name the consumer repo as well.
 ## Supported Versions
 
 This repository is a community health and reusable workflow library with
-continuous deployment on `main`. The `CHANGELOG.md` uses date-based
-version headers (for example, `[2025-01-07]`); there are no maintenance
-branches.
+continuous deployment on `main`. The `CHANGELOG.md` uses date-based section
+headers (for example, `[2025-01-07]`). Release tags follow semver; there are
+no long-term support branches.
 
-| Version                                | Supported |
-|----------------------------------------|-----------|
-| `main` (latest commit)                 | Yes       |
-| `v1` moving major tag                  | Yes       |
-| Specific pinned SHAs                   | Only the latest SHA on `main` or on `v1` |
-| Older pinned SHAs and earlier tags     | No        |
+| Version                                               | Supported |
+|-------------------------------------------------------|-----------|
+| `main` (latest commit)                                | Yes       |
+| Most recent release tag                               | Yes       |
+| Earlier release tags and older pinned SHAs            | No        |
 
 If you pin a workflow to a specific commit SHA, bump the pin to pick up
 security fixes. Older SHAs do not receive backports.
@@ -56,8 +55,9 @@ security fixes. Older SHAs do not receive backports.
 | Fix or mitigation for critical reports | 14 calendar days from acknowledgement |
 | Fix released for other severities      | 30 calendar days from acknowledgement |
 
-These are targets, not guarantees. The maintainer will keep the reporter
-updated if a fix needs longer.
+These are targets, not guarantees. The fix windows run from triage
+completion, not from the initial report date. The maintainer will keep the
+reporter updated if a fix needs longer.
 
 ## Security Practices
 
@@ -66,15 +66,13 @@ tool runs in every repo; the list reflects what is wired up in this
 repository's workflows and pre-commit hooks, which downstream repos
 inherit via the reusable workflows.
 
-- Static analysis: CodeQL (org-wide) and SonarCloud Quality Gate
-  (configured in `sonarcloud.yml` and the `python-sonarcloud.yml`
-  reusable workflow)
-- Python-specific static analysis: Ruff and Bandit (in the
-  `python-ci.yml` reusable workflow)
+- Static analysis: CodeQL (org-wide), SonarCloud (incorporates Semgrep rule
+  patterns), Ruff and Bandit (Python reusable workflows)
 - Dependency pinning and Renovate-driven updates
 - Container scanning with Trivy (Docker and SBOM workflows)
 - SBOM generation for tagged releases
-- Secret scanning: `detect-secrets` and TruffleHog as `pre-commit` hooks
+- Secret scanning: `detect-secrets` and TruffleHog as `pre-commit` hooks,
+  GitHub secret scanning (enabled by default on public repositories)
 - Least-privilege workflow tokens and SHA-pinned third-party actions
 
 ## CVE and Advisory Workflow
