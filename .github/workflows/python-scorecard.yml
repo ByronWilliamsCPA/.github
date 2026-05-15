@@ -101,9 +101,12 @@ jobs:
           persist-credentials: false
 
       - name: Warn if SCORECARD_TOKEN is absent
-        if: ${{ secrets.SCORECARD_TOKEN == '' }}  # pragma: allowlist secret
-        run: |  # pragma: allowlist secret
-          echo "::warning::SCORECARD_TOKEN not passed; Branch-Protection will score 0. Pass SCORECARD_TOKEN via the secrets: block -- requires a fine-grained PAT with Administration:Read on the calling repository."  # pragma: allowlist secret
+        env:
+          HAS_SCORECARD_TOKEN: ${{ secrets.SCORECARD_TOKEN }}  # pragma: allowlist secret
+        run: |
+          if [ -z "$HAS_SCORECARD_TOKEN" ]; then
+            echo "::warning::SCORECARD_TOKEN not passed; Branch-Protection will score 0. Pass SCORECARD_TOKEN via the secrets: block; requires a fine-grained PAT with Administration:Read on the calling repository."  # pragma: allowlist secret
+          fi
 
       - name: Warn on deprecated publish-results input
         if: ${{ inputs.publish-results == true }}

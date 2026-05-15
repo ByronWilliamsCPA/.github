@@ -36,7 +36,7 @@ Our standard practices include:
 ## Security Surface Areas
 
 This repository is a GitHub Actions workflow library. Its security surface differs from
-application repos -- there is no deployed service, but the workflows run with elevated
+application repos; there is no deployed service, but the workflows run with elevated
 permissions in every downstream repo that calls them.
 
 Primary attack surfaces and mitigations:
