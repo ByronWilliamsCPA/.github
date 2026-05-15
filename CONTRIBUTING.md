@@ -13,22 +13,38 @@ repositories in the ByronWilliamsCPA org that do not provide their own
 
 ## Local Development Setup
 
-The exact steps depend on the project, but the typical Python flow is:
+Setup is per-repository. Always read the target repo's `README.md` and CI
+workflows (`.github/workflows/`) for the authoritative install and test
+commands. The org spans Python projects, shell/bats projects, and pure
+docs repos, so there is no single setup recipe.
+
+What is consistent across the org:
 
 ```bash
 git clone https://github.com/ByronWilliamsCPA/<repo>.git
 cd <repo>
 git remote add upstream https://github.com/ByronWilliamsCPA/<repo>.git
-
-python3 -m venv .venv
-source .venv/bin/activate
-uv sync                  # or: pip install -e ".[dev]"
-pre-commit install       # required: installs commit hooks
-pytest                   # run the test suite
+pre-commit install       # required: installs commit and commit-msg hooks
 ```
 
 `pre-commit` hooks must pass before a commit lands. Run
 `pre-commit run --all-files` if you touch many files at once.
+
+**Example: Python repos** (those with a `pyproject.toml`):
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+uv sync                  # or: pip install -e ".[dev]"
+pytest                   # run the test suite
+```
+
+**Example: shell/workflow repos** (those with `tests/*.bats`):
+
+```bash
+git submodule update --init --recursive   # bats helper libraries
+bats tests/                                # run the test suite
+```
 
 ## Branch Naming
 

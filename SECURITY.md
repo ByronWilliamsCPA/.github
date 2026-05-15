@@ -31,17 +31,19 @@ from this org, please name the consumer repo as well.
 
 ## Supported Versions
 
-This repository is a community health and reusable workflow library. Releases
-are continuous on `main`; there are no long-term branches.
+This repository is a community health and reusable workflow library with
+continuous deployment on `main`. The `CHANGELOG.md` uses date-based version
+headers (for example, `[2025-01-07]`); there are no numbered releases or
+semver branches.
 
-| Version          | Supported          |
-|------------------|--------------------|
-| `main` (latest)  | Yes                |
-| Tagged releases  | Yes, latest minor  |
-| Pinned commit SHAs older than the latest minor release | No |
+| Version                                               | Supported |
+|-------------------------------------------------------|-----------|
+| `main` (latest commit)                                | Yes       |
+| Most recent dated release tag                         | Yes       |
+| Earlier dated tags / older pinned SHAs                | No        |
 
-If you pin a workflow to a specific commit SHA, you must bump the pin to pick
-up security fixes. Older SHAs do not receive backports.
+If you pin a workflow to a specific commit SHA, bump the pin to pick up
+security fixes. Older SHAs do not receive backports.
 
 ## Response Timeline
 
@@ -57,14 +59,19 @@ updated if a fix needs longer.
 
 ## Security Practices
 
-The org applies the following baseline across its repositories:
+The org applies the following baseline across its repositories. Not every
+tool runs in every repo; the list reflects what is wired up in this
+repository's workflows and pre-commit hooks, which downstream repos
+inherit via the reusable workflows.
 
-- Static analysis with CodeQL, Semgrep, Ruff, and Bandit
+- Static analysis: CodeQL (org-wide), Semgrep (via SonarCloud), Ruff and
+  Bandit (Python reusable workflows)
 - Dependency pinning and Renovate-driven updates
-- Container scanning with Trivy
+- Container scanning with Trivy (Docker and SBOM workflows)
 - SBOM generation for tagged releases
-- Secret scanning in CI (gitleaks, TruffleHog, detect-secrets)
-- Least-privilege workflow tokens and pinned action SHAs
+- Secret scanning: `detect-secrets` and TruffleHog as `pre-commit` hooks,
+  GitGuardian on PRs
+- Least-privilege workflow tokens and SHA-pinned third-party actions
 
 ## CVE and Advisory Workflow
 
