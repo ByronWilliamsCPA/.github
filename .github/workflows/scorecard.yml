@@ -26,3 +26,41 @@ jobs:
       contents: read
       actions: read
     uses: ByronWilliamsCPA/.github/.github/workflows/python-scorecard.yml@e5d5926a5add719155ff8dc151c85413cd501a86  # main
+
+  self-scorecard:
+    name: OpenSSF Scorecard (this repo)
+    runs-on: ubuntu-latest
+    # #ASSUME: This job runs in the context of ByronWilliamsCPA/.github directly.
+    # The OIDC token repository claim resolves to ByronWilliamsCPA/.github, which
+    # is the correct value for publish_results: true. See docs/architecture/adr-001.
+    timeout-minutes: 15
+    permissions:
+      security-events: write
+      id-token: write
+      contents: read
+      actions: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9ca718d3bf646d6534007c269a635b3e54cadf99  # v2.19.2
+        with:
+          egress-policy: audit
+          disable-sudo: true
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Run Scorecard analysis
+        uses: ossf/scorecard-action@4eaacf0543bb3f2c246792bd56e8cdeffafb205a  # v2.4.3
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          repo_token: ${{ secrets.SCORECARD_TOKEN }}
+          publish_results: true
+
+      - name: Upload SARIF results
+        uses: github/codeql-action/upload-sarif@68bde559dea0fdcac2102bfdf6230c5f70eb485e  # v4.35.4
+        with:
+          sarif_file: results.sarif
+          category: scorecard
