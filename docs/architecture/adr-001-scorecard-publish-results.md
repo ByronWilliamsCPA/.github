@@ -1,6 +1,6 @@
 # ADR-001: Scorecard publish-results Deprecated; publish_results Hardcoded False
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-05-14
 
 ## Context
@@ -21,11 +21,9 @@ that uses `publish_results: true`. This job runs the scorecard action directly
 (not via the reusable), so the OIDC token `repository` claim correctly resolves to
 `ByronWilliamsCPA/.github`.
 
-**Implementation deferred to Task 5 (OSSF/Scorecard PR).**
-
 ## Consequences
 
 - Downstream repos using `python-scorecard.yml` do not publish results (by design;
   they opt in by adding their own scorecard workflow).
-- The `.github` repo itself will publish results via the direct job (pending Task 5).
+- The `.github` repo itself publishes results via the direct `self-scorecard` job in `scorecard.yml`.
 - The reusable workflow remains unchanged for callers.

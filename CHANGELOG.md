@@ -29,6 +29,8 @@ are no numbered releases.
 - `.markdownlint.yml`: markdownlint config disabling 14 rules with pre-existing violations; MD060 (table-column-style) suppresses violations across USAGE_EXAMPLES.md, AGENTS.md, and docs/workflows/
 - `scripts/check-no-em-dash.sh`: byte-sequence grep hook that blocks em-dash (U+2014) characters in staged text files; uses `language: script` with `types: [text]` to skip binary files
 - `.secrets.baseline`: detect-secrets baseline with 5 SHA-pin false positives in `.pre-commit-config.yaml`
+- `scorecard.yml`: add `self-scorecard` direct job with `publish_results: true` and `id-token: write`; runs `ossf/scorecard-action` without the reusable wrapper so the OIDC token `repository` claim resolves to `ByronWilliamsCPA/.github` (see ADR-001); includes SCORECARD_TOKEN guard, harden-runner, and job summary step
+- `.codecov.yml`: Codecov configuration for `ByronWilliamsCPA/.github` with 80% project and 90% patch coverage targets
 
 ### Changed
 
