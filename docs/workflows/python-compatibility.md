@@ -14,8 +14,10 @@ cost by 92%); the full matrix runs on ready PRs.
 | `include-macos` | boolean | no | `false` | Include macOS in the matrix |
 | `source-directory` | string | no | `src` | Source code directory |
 | `test-command` | string | no | `pytest -v` | Test command (run with `uv run` prefix) |
-| `skip-on-draft` | boolean | no | `true` | Skip expensive matrix on draft PRs |
+| `coverage-report` | boolean | no | `true` | Generate coverage reports |
 | `fail-fast` | boolean | no | `false` | Fail immediately on first matrix failure |
+| `skip-on-draft` | boolean | no | `true` | Skip expensive matrix on draft PRs |
+| `timeout-minutes` | number | no | `30` | Timeout for each matrix job |
 
 ## Usage
 

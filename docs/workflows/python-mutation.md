@@ -15,6 +15,7 @@ This workflow can be long-running; schedule it weekly rather than on every push.
 | `fail-under-threshold` | boolean | no | `false` | Fail workflow if score is below threshold |
 | `post-pr-comment` | boolean | no | `true` | Post mutation results as PR comment |
 | `timeout-minutes` | number | no | `60` | Timeout for mutation testing |
+| `artifact-retention-days` | number | no | `14` | Days to retain mutation reports |
 
 ## Usage
 
