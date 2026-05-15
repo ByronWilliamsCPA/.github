@@ -1,48 +1,50 @@
 # Governance
 
-## Purpose & Scope
+## Status
 
-This document describes the governance model for the ByronWilliamsCPA organization and
-its repositories. It applies to all project spaces, including code,
-documentation, and community forums.
+ByronWilliamsCPA is currently a **sole-maintainer** organization. Byron
+Williams (byronawilliams@gmail.com) is the sole maintainer and final
+decision-maker for all repositories in the org that do not publish their own
+governance document.
 
-## Roles & Responsibilities
+This is intentional. The org is small and the overhead of a formal
+multi-role governance model is not justified yet. If the project grows
+beyond what one maintainer can handle, this document will be updated to
+reflect a fuller structure.
 
-| Role             | Description                                             |
-|------------------|---------------------------------------------------------|
-| **Project Lead** | Has final authority on project decisions, oversees      |
-|                  | overall direction, and resolves conflicts.              |
-| **Core Team**    | Experienced contributors authorized to review           |
-|                  | contributions, merge PRs, and mentor others.            |
-| **Maintainers**  | Individuals responsible for daily maintenance tasks,    |
-|                  | issue triage, and minor releases.                       |
-| **Contributors** | Community members who submit issues, pull requests, and |
-|                  | engage in discussions.                                  |
+## Decision-Making
 
-## Decision Process
+1. **Day-to-day changes** (bug fixes, dependency bumps, small features,
+   documentation): the maintainer reviews and merges directly.
+2. **Larger or breaking changes** (public API changes, new reusable
+   workflows, removal of supported features): the maintainer opens an issue
+   describing the change and waits at least seven calendar days before
+   merging, so external contributors and downstream consumers can comment.
+3. **Security fixes**: handled per [SECURITY.md](SECURITY.md) and may be
+   merged without the waiting period.
 
-1. **Proposal:** Any contributor may open a proposal issue detailing the
-   suggested change.
-2. **Discussion:** The Core Team and community discuss the proposal in the
-   issue thread.
-3. **Review:** The Core Team reviews feedback, refines the proposal, and
-   recommends next steps.
-4. **Decision:** The Project Lead makes the final call based on
-   recommendations and community input.
-5. **Implementation:** Contributors implement the approved changes,
-   referencing the proposal issue.
+Decisions are final once merged. Disagreement is welcome before that point;
+open an issue or comment on the PR.
 
-## Future Evolution
+## How to Propose a Change
 
-Governance is a living process. To suggest updates or new roles, open an issue
-in this repository labeled **governance**. Proposals will follow the same
-Decision Process above.
+1. Open an issue using the appropriate template. For
+   non-trivial changes, describe the problem, the proposed solution, and any
+   alternatives considered.
+2. Wait for a maintainer response or for the seven-day comment window on
+   larger changes.
+3. Submit a pull request that references the issue. Follow
+   [CONTRIBUTING.md](CONTRIBUTING.md), including the GPG-signing requirement
+   and PR checklist.
 
-## Contact
+Proposals that would change governance itself (for example, adding new roles
+or changing the decision process) should be opened as an issue labeled
+`governance` and discussed publicly before any PR is filed.
 
-For questions about governance or to nominate yourself for a role,
-open an issue in this repository or use GitHub Discussions.
+## Succession
 
-## Last Updated
+If the maintainer becomes unavailable, the repositories remain under the
+existing license and can be forked by anyone. There is no formal succession
+plan; if that changes, this section will be updated.
 
-November 16, 2025
+Last updated: May 15, 2026

@@ -44,9 +44,14 @@ representative at an online or offline event.
 ## Reporting Guidelines
 
 If you are subject to or witness unacceptable behavior, or have any other
-concerns, please report it **promptly** via the private
-[Security Advisory](https://github.com/ByronWilliamsCPA/.github/security/advisories/new)
-channel.
+concerns, please report it **promptly** through one of these private
+channels:
+
+- Email the maintainer at **byronawilliams@gmail.com** with the subject line
+  `CONDUCT:` followed by a short summary.
+- File a private
+  [Security Advisory](https://github.com/ByronWilliamsCPA/.github/security/advisories/new).
+
 All reports will be treated confidentially to the greatest extent possible,
 and you will not be retaliated against for making a good-faith report.
 
@@ -80,4 +85,4 @@ This Code of Conduct is adapted from the
 and incorporates an enforcement framework inspired by
 Mozilla’s Community Participation Guidelines.
 
-## Last updated: November 16, 2025
+## Last updated: May 15, 2026

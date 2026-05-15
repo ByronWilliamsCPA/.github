@@ -2,88 +2,82 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in any project under our organization,
-**please do not open a public issue**.
-Instead, use GitHub's built-in Security advisories feature:
+Do not open a public issue for security problems. Use one of these private
+channels:
 
-1. Go to the repository's **Security** tab
-2. Click **"Report a vulnerability"**
-3. Fill in the details and submit
+1. **GitHub Security Advisory** (preferred): go to the affected repository's
+   **Security** tab and click **Report a vulnerability**.
+2. **Email**: send details to **byronawilliams@gmail.com**. Use the subject
+   line `SECURITY:` followed by a short summary.
 
-All reports will be kept confidential. We commit to acknowledging receipt and
-next steps via the Security tab.
+Both channels are monitored by the maintainer. Reports remain confidential
+until a fix is published.
+
+## What to Include in a Report
+
+A useful report contains, at minimum:
+
+- A clear description of the issue and the security impact (what an attacker
+  can do).
+- The affected repository, file path, workflow, or commit SHA.
+- Steps to reproduce, including any inputs, environment, or configuration
+  needed.
+- A proof of concept if you have one (snippet, log, or test case).
+- Suggested fix or mitigation, if known.
+- Your contact details and whether you want public credit in the advisory.
+
+If the issue affects a downstream repository that consumes a reusable workflow
+from this org, please name the consumer repo as well.
 
 ## Supported Versions
 
-This repository is a shared workflow library with continuous deployment. There
-are no numbered releases; the `main` branch is always the supported version.
-Callers that pin to a specific commit SHA must update their pin to a newer
-commit on `main` to receive security fixes. Older commits may not contain the
-latest security patches.
+This repository is a community health and reusable workflow library. Releases
+are continuous on `main`; there are no long-term branches.
 
-## Security Practices
+| Version          | Supported          |
+|------------------|--------------------|
+| `main` (latest)  | Yes                |
+| Tagged releases  | Yes, latest minor  |
+| Pinned commit SHAs older than the latest minor release | No |
 
-We strive for proactive security across our codebases and infrastructure.
-Our standard practices include:
-
-- **Static Analysis** with CodeQL, Semgrep, Ruff, and Bandit
-- **Dependency Pinning** for reproducible builds
-- **Container Scanning** using Trivy
-- **SBOM Generation** for each release
-- **Secrets Detection** integrated in CI pipelines
-- **Hardened CI Runners** with minimal privileges
-
-## Security Surface Areas
-
-This repository is a GitHub Actions workflow library. Its security surface differs from
-application repos; there is no deployed service, but the workflows run with elevated
-permissions in every downstream repo that calls them.
-
-Primary attack surfaces and mitigations:
-
-- **Script injection via workflow inputs**: reusable workflows that interpolate
-  `${{ inputs.* }}` directly into `run:` blocks are vulnerable to injection if a caller
-  passes adversarial input. Mitigation: route all inputs through `env:` variables before
-  using in shell commands. Tracked with SonarCloud (githubactions:S7630).
-
-- **Overly broad token permissions**: workflows using `permissions: write-all` or setting
-  write grants at the workflow level rather than the job level violate least-privilege.
-  Mitigation: scope `permissions:` to the job level; request only the specific write
-  permission needed for each job. Tracked via OpenSSF Scorecard Token-Permissions check.
-
-- **Mutable action and workflow refs**: `uses:` fields referencing `@main`, `@v1`, or other
-  mutable tags allow upstream supply chain compromise. Mitigation: pin all external `uses:`
-  to a 40-character commit SHA. Renovate is configured to open SHA-bump PRs automatically.
-
-- **Unchecked caller inputs**: inputs from calling repos are not sanitized before use.
-  Mitigation: treat all inputs as untrusted; validate ranges and expected values in the
-  workflow before acting on them.
-
-## CVE & Advisory Workflow
-
-We track and publish advisories for all confirmed vulnerabilities:
-
-1. **Request a CVE** for issues rated Moderate or above.
-2. **Draft and publish an advisory** in the Security tab.
-3. **Include remediation steps** in the Security Advisory and CHANGELOG.
+If you pin a workflow to a specific commit SHA, you must bump the pin to pick
+up security fixes. Older SHAs do not receive backports.
 
 ## Response Timeline
 
-- **Acknowledgment:** within 5 business days
-- **Critical resolution:** We aim to provide a resolution or workaround within 14 calendar days for critical vulnerabilities.
-- **Fix released:** within 30 days of acknowledgment
-- **Emergency patch:** sooner for critical severity
+| Stage                          | Target                  |
+|--------------------------------|-------------------------|
+| Acknowledgement of report      | 5 business days         |
+| Initial triage and severity    | 10 business days        |
+| Fix or mitigation for critical | 14 calendar days        |
+| Fix released (other severities)| 30 calendar days        |
 
-## Disclosure Policy
+These are targets, not guarantees. The maintainer will keep the reporter
+updated if a fix needs longer.
 
-We follow coordinated disclosure principles. Once a fix is available, we will
-publish details in our Security Advisories page. If you wish to receive credit
-for responsibly disclosing a vulnerability, please let us know; otherwise
-credit will be anonymous.
+## Security Practices
 
-## Credit
+The org applies the following baseline across its repositories:
 
-This policy is based on community best practices and has drawn on elements from
-multiple sources within our organization's previous drafts.
+- Static analysis with CodeQL, Semgrep, Ruff, and Bandit
+- Dependency pinning and Renovate-driven updates
+- Container scanning with Trivy
+- SBOM generation for tagged releases
+- Secret scanning in CI (gitleaks, TruffleHog, detect-secrets)
+- Least-privilege workflow tokens and pinned action SHAs
 
-Last updated: April 23, 2026
+## CVE and Advisory Workflow
+
+For confirmed vulnerabilities rated Moderate or higher:
+
+1. Request a CVE through GitHub.
+2. Draft and publish a GitHub Security Advisory on the affected repository.
+3. Record remediation in the advisory and in the repository's CHANGELOG.
+
+## Disclosure
+
+The org follows coordinated disclosure. Public details are published in the
+advisory once a fix or mitigation is available. Reporters who want credit
+should say so in the report; otherwise credit is anonymous.
+
+Last updated: May 15, 2026
