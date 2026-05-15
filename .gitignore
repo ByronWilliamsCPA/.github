@@ -43,6 +43,11 @@ actionlint
 .claude/cache/
 .claude/session/
 .claude/conversations/
+.claude/memories/
+.claude/logs/
+.claude/todos/
+.claude/worktrees/
+.claude/scheduled_tasks.lock
 
 # Git worktrees
 .worktrees/

@@ -1,4 +1,4 @@
-# ADR-001: Scorecard publish_results: false in Reusable Workflow
+# ADR-001: Scorecard publish-results Deprecated; publish_results Hardcoded False
 
 **Status:** Proposed
 **Date:** 2026-05-14
@@ -27,5 +27,5 @@ that uses `publish_results: true`. This job runs the scorecard action directly
 
 - Downstream repos using `python-scorecard.yml` do not publish results (by design;
   they opt in by adding their own scorecard workflow).
-- The `.github` repo itself publishes results via the direct job.
+- The `.github` repo itself will publish results via the direct job (pending Task 5).
 - The reusable workflow remains unchanged for callers.

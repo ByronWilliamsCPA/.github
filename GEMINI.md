@@ -7,8 +7,8 @@ workflows. There is no Python package or test suite.
 
 ## Tool Mapping
 
-Gemini CLI tool names differ from Claude Code. See tool mapping in:
-`~/.claude/skills/brainstorming/references/` for equivalents.
+Gemini CLI uses its own built-in tools (Read, Write, Edit, Bash, etc.). Consult
+the Gemini CLI documentation for tool names; they differ from Claude Code equivalents.
 
 ## Writing Rules
 

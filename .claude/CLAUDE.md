@@ -27,7 +27,7 @@ Tag assumptions with `#CRITICAL`, `#ASSUME`, `#EDGE`, and `#VERIFY` in comments
 when editing workflow YAML. Mandatory for: permission scopes, secret references,
 OIDC token behavior, and reusable workflow caller/callee permission inheritance.
 
-See: [docs/response-aware-development.md](https://github.com/ByronWilliamsCPA/.github/blob/main/docs/response-aware-development.md)
+See the global `~/.claude/CLAUDE.md` for full RAD tagging syntax and examples.
 
 ## Writing Rules
 

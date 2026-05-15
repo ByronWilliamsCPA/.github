@@ -2,9 +2,9 @@
 
 Index of ADRs for the ByronWilliamsCPA/.github reusable workflow library.
 
-| ADR | Title | Status | Date |
-|-----|-------|--------|------|
-| [ADR-001](adr-001-scorecard-publish-results.md) | Scorecard publish_results: false in reusable workflow | Accepted | 2026-05-14 |
+| ADR                                             | Title                                                              | Status   | Date       |
+|-------------------------------------------------|--------------------------------------------------------------------|----------|------------|
+| [ADR-001](adr-001-scorecard-publish-results.md) | Scorecard publish-results deprecated; action param hardcoded false | Proposed | 2026-05-14 |
 
 ## ADR Format
 

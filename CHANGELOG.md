@@ -39,6 +39,13 @@ are no numbered releases.
 - Prose cleanup across 18 documentation files to remove AI-pattern language and improve plain-language clarity
 - `python-scorecard.yml`: add `Warn on deprecated publish-results input` step that emits a `::warning::` annotation when a caller passes `publish-results: true`; surfaces the deprecation in CI logs so callers know to remove the now-ignored input
 - `.github/workflows/pr-validation.yml`: add `Dependency & Standards Validation` job to satisfy the required branch protection check context that no workflow in this repo was previously reporting; gates on the same title-check and body-check results as `PR Validation Gate`
+- `.claude/CLAUDE.md`: project-scoped Claude Code instructions with Model Selection table, RAD tagging rules, no-em-dash writing rule, and git workflow conventions (CLAUDE-001 through CLAUDE-006)
+- `.claude/settings.json`: explicit allow/deny permission block scoping Claude Code operations to safe repo commands (CLAUDE-002)
+- `AGENTS.md`: agent catalog and model assignment table for subagents operating in this repo (CLAUDE-003)
+- `GEMINI.md`: Gemini CLI context stub with repo summary, writing rules, and branch naming convention (CLAUDE-004)
+- `docs/known-vulnerabilities.md`: empty CVE baseline satisfying the OpenSSF FOUND-007 foundation check; no known vulnerabilities as of 2026-05-14
+- `docs/architecture/adr-000-index.md`, `docs/architecture/adr-001-scorecard-publish-results.md`: ADR infrastructure and first decision record documenting the `publish-results: false` constraint in the reusable scorecard workflow and the plan for a direct `self-scorecard` job (FOUND-008)
+- `.gitignore`: narrow `.claude/` exclusion from directory-level to specific transient subdirs so `.claude/CLAUDE.md` and `.claude/settings.json` are tracked by git
 
 ### Fixed
 
