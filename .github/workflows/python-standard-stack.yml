@@ -63,7 +63,6 @@ permissions: {}
 jobs:
   ci:
     name: CI
-    timeout-minutes: 60
     uses: ./.github/workflows/python-ci.yml
     permissions:
       contents: read
@@ -75,7 +74,6 @@ jobs:
 
   security:
     name: Security Analysis
-    timeout-minutes: 30
     needs: [ci]
     uses: ./.github/workflows/python-security-analysis.yml
     permissions:
@@ -89,7 +87,6 @@ jobs:
 
   sbom:
     name: SBOM
-    timeout-minutes: 20
     needs: [ci]
     uses: ./.github/workflows/python-sbom.yml
     permissions:

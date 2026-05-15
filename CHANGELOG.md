@@ -55,6 +55,7 @@ are no numbered releases.
 
 ### Fixed
 
+- `python-slsa.yml`, `python-standard-stack.yml`, `scorecard.yml`, `security-analysis.yml`: remove `timeout-minutes` from 6 reusable-workflow-call jobs (`provenance`, `ci`, `security`, `sbom`, `scorecard`); GitHub Actions disallows `timeout-minutes` on jobs that use `uses:`, causing actionlint CI failure
 - `python-scorecard.yml`: hard-code `publish_results: false` in the `ossf/scorecard-action` step and remove `id-token: write` from the workflow permissions; the OIDC token `repository` claim resolves to the `.github` org repo when the workflow runs as a reusable callee, causing scorecard-action to publish to the wrong repository and error; the `publish-results` input is retained for backwards compatibility but is now deprecated and always treated as false; SARIF upload to the Security tab is unaffected
 - `scorecard.yml`: remove `publish-results: true` and `id-token: write` from the `.github` org repo's own scorecard caller to align with the reusable workflow fix
 - `workflow-templates/python-scorecard.yml`: remove `id-token: write` from top-level and job-level permissions and remove `publish-results: true` from the `with:` block; aligns the starter template with the reusable workflow fix so new repos generated from this template get the correct permission set

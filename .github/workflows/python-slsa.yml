@@ -94,7 +94,6 @@ permissions: {}
 jobs:
   provenance:
     name: Generate SLSA Provenance
-    timeout-minutes: 60
     permissions:
       actions: read
       id-token: write
