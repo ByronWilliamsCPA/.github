@@ -39,8 +39,15 @@ tmp/
 tmp_cleanup/
 actionlint
 
-# AI assistant state
-.claude/
+# AI assistant state (track CLAUDE.md and settings.json; ignore only transient cache subdirs)
+.claude/cache/
+.claude/session/
+.claude/conversations/
+.claude/memories/
+.claude/logs/
+.claude/todos/
+.claude/worktrees/
+.claude/scheduled_tasks.lock
 
 # Git worktrees
 .worktrees/
