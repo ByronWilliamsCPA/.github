@@ -46,6 +46,11 @@ on:
         type: number
         required: false
         default: 80
+      no-build:
+        description: 'Pass --no-build to uv sync/run commands (disable for projects with a build backend like hatchling)'
+        required: false
+        type: boolean
+        default: true
 
 permissions: {}
 
@@ -54,6 +59,8 @@ jobs:
     name: Build Documentation
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      NO_BUILD_FLAG: ${{ inputs.no-build && '--no-build' || '' }}
     permissions:
       contents: read
 
@@ -80,7 +87,7 @@ jobs:
           cache-dependency-glob: "uv.lock"
 
       - name: Install dependencies
-        run: uv sync --all-extras --frozen
+        run: uv sync --all-extras --frozen $NO_BUILD_FLAG
 
       - name: Check docstring coverage
         env:
@@ -88,14 +95,14 @@ jobs:
           DOCSTRING_THRESHOLD: ${{ inputs.docstring-threshold }}
         run: |
           echo "📝 Checking docstring coverage..."
-          uv run --frozen --no-build interrogate "$SRC_DIR" \
+          uv run --frozen $NO_BUILD_FLAG interrogate "$SRC_DIR" \
             --fail-under="$DOCSTRING_THRESHOLD" \
             --verbose || echo "⚠️  Docstring coverage below threshold"
 
       - name: Build MkDocs site
         run: |
           echo "🏗️  Building documentation site..."
-          uv run --frozen --no-build mkdocs build --strict --verbose
+          uv run --frozen $NO_BUILD_FLAG mkdocs build --strict --verbose
 
       - name: Upload documentation artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1

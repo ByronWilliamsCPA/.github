@@ -91,6 +91,11 @@ on:
         type: number
         required: false
         default: 14
+      no-build:
+        description: 'Pass --no-build to uv sync/run commands (disable for projects with a build backend like hatchling)'
+        required: false
+        type: boolean
+        default: true
 
     outputs:
       mutation-score:
@@ -107,6 +112,8 @@ jobs:
     name: Mutation Testing
     runs-on: ubuntu-latest
     timeout-minutes: ${{ inputs.timeout-minutes }}
+    env:
+      NO_BUILD_FLAG: ${{ inputs.no-build && '--no-build' || '' }}
     permissions:
       contents: read
       pull-requests: write
@@ -135,7 +142,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --all-extras --frozen
+          uv sync --all-extras --frozen $NO_BUILD_FLAG
           uv pip install --no-build 'mutmut==2.5.1'
 
       - name: Run mutation testing
@@ -147,15 +154,15 @@ jobs:
           echo "Starting mutation testing on $SOURCE_DIRECTORY..."
 
           # Run mutmut with configurable paths
-          uv run --frozen --no-build mutmut run \
+          uv run --frozen $NO_BUILD_FLAG mutmut run \
             --paths-to-mutate="$SOURCE_DIRECTORY" \
             --tests-dir="$TEST_DIRECTORY" \
             --no-progress \
             || true
 
           # Generate reports
-          uv run --frozen --no-build mutmut results > mutmut-results.txt || true
-          uv run --frozen --no-build mutmut html || true
+          uv run --frozen $NO_BUILD_FLAG mutmut results > mutmut-results.txt || true
+          uv run --frozen $NO_BUILD_FLAG mutmut html || true
 
       - name: Analyze mutation results
         id: analyze

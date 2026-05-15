@@ -39,6 +39,11 @@ on:
         type: boolean
         required: false
         default: true
+      no-build:
+        description: 'Pass --no-build to uv sync/run commands (disable for projects with a build backend like hatchling)'
+        required: false
+        type: boolean
+        default: true
 
 permissions: {}
 
@@ -47,6 +52,8 @@ jobs:
     name: Pre-Commit Hooks
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      NO_BUILD_FLAG: ${{ inputs.no-build && '--no-build' || '' }}
     permissions:
       contents: read
 
@@ -67,7 +74,7 @@ jobs:
           cache-dependency-glob: "uv.lock"
 
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync --frozen $NO_BUILD_FLAG
 
       - name: Run pre-commit hooks
         env:
@@ -75,9 +82,9 @@ jobs:
           FAIL_FAST: ${{ inputs.fail-fast }}
         run: |
           if [ "$FAIL_FAST" = "true" ]; then
-            uv run --frozen --no-build pre-commit run --all-files --config "$CONFIG_PATH" --show-diff-on-failure
+            uv run --frozen $NO_BUILD_FLAG pre-commit run --all-files --config "$CONFIG_PATH" --show-diff-on-failure
           else
-            uv run --frozen --no-build pre-commit run --all-files --config "$CONFIG_PATH"
+            uv run --frozen $NO_BUILD_FLAG pre-commit run --all-files --config "$CONFIG_PATH"
           fi
 
       - name: Pre-Commit Summary
@@ -90,5 +97,5 @@ jobs:
           else
             echo "One or more pre-commit hooks failed. Review the output above." >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "To run locally: \`uv run --frozen --no-build pre-commit run --all-files\`" >> $GITHUB_STEP_SUMMARY
+            echo "To run locally: \`uv run --frozen $NO_BUILD_FLAG pre-commit run --all-files\`" >> $GITHUB_STEP_SUMMARY
           fi

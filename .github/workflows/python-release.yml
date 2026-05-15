@@ -97,6 +97,11 @@ on:
         required: false
         type: boolean
         default: true
+      no-build:
+        description: 'Pass --no-build to uv sync/run commands (disable for projects with a build backend like hatchling)'
+        required: false
+        type: boolean
+        default: true
     outputs:
       released:
         description: 'Whether a release was created'
@@ -121,6 +126,8 @@ jobs:
     permissions:
       contents: read
     timeout-minutes: 15
+    env:
+      NO_BUILD_FLAG: ${{ inputs.no-build && '--no-build' || '' }}
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@9ca718d3bf646d6534007c269a635b3e54cadf99  # v2.19.2
@@ -143,14 +150,14 @@ jobs:
         run: uv python install "$PYTHON_VERSION"
 
       - name: Install dependencies
-        run: uv sync --all-extras --frozen
+        run: uv sync --all-extras --frozen $NO_BUILD_FLAG
 
       - name: Run tests
         env:
           SRC_DIR: ${{ inputs.source-directory }}
           COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold }}
         run: |
-          uv run --frozen --no-build pytest \
+          uv run --frozen $NO_BUILD_FLAG pytest \
             --cov="$SRC_DIR" \
             --cov-report=term-missing \
             --cov-fail-under="$COVERAGE_THRESHOLD" \
@@ -159,12 +166,12 @@ jobs:
       - name: Run type checker
         env:
           SRC_DIR: ${{ inputs.source-directory }}
-        run: uv run --frozen --no-build basedpyright "$SRC_DIR/"
+        run: uv run --frozen $NO_BUILD_FLAG basedpyright "$SRC_DIR/"
 
       - name: Run linter
         env:
           SRC_DIR: ${{ inputs.source-directory }}
-        run: uv run --frozen --no-build ruff check "$SRC_DIR/"
+        run: uv run --frozen $NO_BUILD_FLAG ruff check "$SRC_DIR/"
 
   # ============================================================================
   # Job 2: Build and Create Release
@@ -175,6 +182,8 @@ jobs:
     if: always() && (needs.test.result == 'success' || needs.test.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      NO_BUILD_FLAG: ${{ inputs.no-build && '--no-build' || '' }}
     permissions:
       contents: write
       id-token: write
@@ -222,7 +231,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --all-extras --frozen
+        run: uv sync --all-extras --frozen $NO_BUILD_FLAG
 
       - name: Build package
         run: |

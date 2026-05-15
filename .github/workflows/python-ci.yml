@@ -105,6 +105,12 @@ on:
         type: boolean
         default: true
 
+      no-build:
+        description: 'Pass --no-build to uv sync/run commands (disable for projects with a build backend like hatchling)'
+        required: false
+        type: boolean
+        default: true
+
 permissions: {}
 
 jobs:
@@ -117,6 +123,8 @@ jobs:
     permissions:
       contents: read
     timeout-minutes: 15
+    env:
+      NO_BUILD_FLAG: ${{ inputs.no-build && '--no-build' || '' }}
 
     outputs:
       coverage-artifact: coverage-reports
@@ -144,7 +152,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --all-extras --frozen
+          uv sync --all-extras --frozen $NO_BUILD_FLAG
 
       - name: Run Ruff formatter check
         env:
@@ -152,8 +160,8 @@ jobs:
           TEST_DIR: ${{ inputs.test-directory }}
         run: |
           echo "::group::Ruff Formatting"
-          uv run --frozen --no-build ruff format --check "$SRC_DIR"/ "$TEST_DIR"/ || {
-            echo "::error::Code formatting issues detected. Run: uv run --frozen --no-build ruff format ${SRC_DIR}/ ${TEST_DIR}/"
+          uv run --frozen $NO_BUILD_FLAG ruff format --check "$SRC_DIR"/ "$TEST_DIR"/ || {
+            echo "::error::Code formatting issues detected. Run: uv run --frozen $NO_BUILD_FLAG ruff format ${SRC_DIR}/ ${TEST_DIR}/"
             exit 1
           }
           echo "::endgroup::"
@@ -164,7 +172,7 @@ jobs:
           TEST_DIR: ${{ inputs.test-directory }}
         run: |
           echo "::group::Ruff Linting"
-          uv run --frozen --no-build ruff check "$SRC_DIR"/ "$TEST_DIR"/ --output-format=github
+          uv run --frozen $NO_BUILD_FLAG ruff check "$SRC_DIR"/ "$TEST_DIR"/ --output-format=github
           echo "::endgroup::"
 
       - name: Run BasedPyright type checker
@@ -172,7 +180,7 @@ jobs:
           SRC_DIR: ${{ inputs.source-directory }}
         run: |
           echo "::group::BasedPyright Type Checking"
-          uv run --frozen --no-build basedpyright "$SRC_DIR"/ || {
+          uv run --frozen $NO_BUILD_FLAG basedpyright "$SRC_DIR"/ || {
             echo "::warning::Type checking found issues"
           }
           echo "::endgroup::"
@@ -193,7 +201,7 @@ jobs:
           echo "Scanning for dead code (min confidence: $DEAD_CODE_CONFIDENCE%)..."
 
           # Capture output for reporting
-          VULTURE_OUTPUT=$(uv run --frozen --no-build vulture "$SRC_DIR"/ --min-confidence "$DEAD_CODE_CONFIDENCE" 2>&1) || true
+          VULTURE_OUTPUT=$(uv run --frozen $NO_BUILD_FLAG vulture "$SRC_DIR"/ --min-confidence "$DEAD_CODE_CONFIDENCE" 2>&1) || true
 
           if [ -n "$VULTURE_OUTPUT" ]; then
             echo "$VULTURE_OUTPUT"
@@ -234,7 +242,7 @@ jobs:
           SRC_DIR: ${{ inputs.source-directory }}
         run: |
           echo "::group::Unit Test Execution"
-          uv run --frozen --no-build pytest \
+          uv run --frozen $NO_BUILD_FLAG pytest \
             -m "unit or not (integration or security or slow)" \
             --cov="$SRC_DIR" \
             --cov-report=xml:coverage-unit.xml \
@@ -252,7 +260,7 @@ jobs:
         run: |
           echo "::group::Integration Test Execution"
           set +e
-          uv run --frozen --no-build pytest \
+          uv run --frozen $NO_BUILD_FLAG pytest \
             -m "integration" \
             --cov="$SRC_DIR" \
             --cov-report=xml:coverage-integration.xml \
@@ -274,7 +282,7 @@ jobs:
         run: |
           echo "::group::Security Test Execution"
           set +e
-          uv run --frozen --no-build pytest \
+          uv run --frozen $NO_BUILD_FLAG pytest \
             -m "security" \
             --cov="$SRC_DIR" \
             --cov-report=xml:coverage-security.xml \
@@ -294,10 +302,10 @@ jobs:
           COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold }}
         run: |
           echo "::group::Combined Coverage"
-          uv run --frozen --no-build coverage combine --keep || true
-          uv run --frozen --no-build coverage xml -o coverage.xml
-          uv run --frozen --no-build coverage html
-          uv run --frozen --no-build coverage report --fail-under="$COVERAGE_THRESHOLD"
+          uv run --frozen $NO_BUILD_FLAG coverage combine --keep || true
+          uv run --frozen $NO_BUILD_FLAG coverage xml -o coverage.xml
+          uv run --frozen $NO_BUILD_FLAG coverage html
+          uv run --frozen $NO_BUILD_FLAG coverage report --fail-under="$COVERAGE_THRESHOLD"
           echo "::endgroup::"
 
       - name: Security scan with Bandit
@@ -308,9 +316,9 @@ jobs:
           echo "::group::Bandit Security Scan"
           # -lll filters to HIGH severity only; non-zero exit on findings.
           if [ "$FAIL_ON_FINDINGS" = "true" ]; then
-            uv run --frozen --no-build bandit -r "$SRC_DIR"/ -c pyproject.toml -lll -f json -o bandit-report.json
+            uv run --frozen $NO_BUILD_FLAG bandit -r "$SRC_DIR"/ -c pyproject.toml -lll -f json -o bandit-report.json
           else
-            uv run --frozen --no-build bandit -r "$SRC_DIR"/ -c pyproject.toml -lll -f json -o bandit-report.json || {
+            uv run --frozen $NO_BUILD_FLAG bandit -r "$SRC_DIR"/ -c pyproject.toml -lll -f json -o bandit-report.json || {
               echo "::warning::HIGH-severity security issues detected (fail-on-security-findings=false; not failing CI)"
               cat bandit-report.json
             }
@@ -330,9 +338,9 @@ jobs:
             IGNORE_ARGS=$(python3 -c "import tomllib; d=tomllib.load(open('pyproject.toml','rb')); ids=d.get('tool',{}).get('pip-audit',{}).get('ignore-vuln',[]); print(' '.join('--ignore-vuln '+i for i in ids))" 2>/dev/null || true)
           fi
           if [ "$FAIL_ON_FINDINGS" = "true" ]; then
-            uv run --frozen --no-build pip-audit $IGNORE_ARGS
+            uv run --frozen $NO_BUILD_FLAG pip-audit $IGNORE_ARGS
           else
-            uv run --frozen --no-build pip-audit $IGNORE_ARGS || echo "::warning::Vulnerable dependencies detected (fail-on-security-findings=false; not failing CI)"
+            uv run --frozen $NO_BUILD_FLAG pip-audit $IGNORE_ARGS || echo "::warning::Vulnerable dependencies detected (fail-on-security-findings=false; not failing CI)"
           fi
           echo "::endgroup::"
 
@@ -507,6 +515,8 @@ jobs:
     permissions:
       contents: read
     timeout-minutes: 15
+    env:
+      NO_BUILD_FLAG: ${{ inputs.no-build && '--no-build' || '' }}
 
     strategy:
       fail-fast: false
@@ -533,7 +543,7 @@ jobs:
         run: uv python install "$PYTHON_VERSION"
 
       - name: Install dependencies
-        run: uv sync --all-extras --frozen
+        run: uv sync --all-extras --frozen $NO_BUILD_FLAG
 
       - name: Run tests
         env:
@@ -541,7 +551,7 @@ jobs:
           PYTHON_VERSION: ${{ matrix.python-version }}
         run: |
           echo "::group::Testing on Python $PYTHON_VERSION"
-          uv run --frozen --no-build pytest \
+          uv run --frozen $NO_BUILD_FLAG pytest \
             --cov="$SRC_DIR" \
             --cov-report=term-missing \
             -v
