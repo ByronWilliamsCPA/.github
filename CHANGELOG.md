@@ -72,6 +72,7 @@ are no numbered releases.
 - `.claude/settings.json`: add `Bash(rm -fr*)` deny entry to block the `-fr` flag-order variant not covered by the existing `Bash(rm -r*)` and `Bash(rm -f*)` entries
 - `.claude/settings.json`: `Write(.claude/**)` and `Edit(.claude/**)` intentionally kept broad to allow transient writes to gitignore'd subdirectories (worktree state, tool caches); these paths are excluded from the repo via `.gitignore`
 - `.gitignore`: replace 8 enumerated `.claude/<subdir>/` exclusion entries with a catch-all `.claude/*` plus negations for `!.claude/CLAUDE.md` and `!.claude/settings.json`; new repos and new transient subdirs are excluded automatically without requiring manual `.gitignore` updates
+- `.github/workflows/pr-validation.yml`, `USAGE_EXAMPLES.md`, `docs/audits/2026-05-01-security-audit.md`: replace em-dash characters with colons and commas in error messages, list bullets, and documentation prose; resolves `no-em-dash` pre-commit hook violations (CLAUDE-007)
 
 ### Security
 
