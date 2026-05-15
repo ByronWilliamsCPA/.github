@@ -93,8 +93,10 @@ jobs:
           SRC_DIR: ${{ inputs.source-directory }}
         run: |
           echo "Running pre-publish security checks..."
-          uv run --with pip-audit==2.10.0 pip-audit --strict
-          uv run --with 'bandit[toml]==1.9.4' bandit -r "$SRC_DIR" -c pyproject.toml -ll
+          uv pip install --no-build 'pip-audit==2.10.0'
+          uv run pip-audit --strict
+          uv pip install --no-build 'bandit[toml]==1.9.4'
+          uv run bandit -r "$SRC_DIR" -c pyproject.toml -ll
 
       - name: Build distribution packages
         run: |
