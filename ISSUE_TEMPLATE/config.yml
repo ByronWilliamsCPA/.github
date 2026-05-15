@@ -5,19 +5,19 @@ blank_issues_enabled: true
 
 contact_links:
   - name: 💬 GitHub Discussions
-    url: https://github.com/williaby/.github/discussions
+    url: https://github.com/ByronWilliamsCPA/.github/discussions
     about: Ask questions and discuss ideas with the community
 
   - name: 📖 Documentation
-    url: https://github.com/williaby/.github/blob/main/README.md
+    url: https://github.com/ByronWilliamsCPA/.github/blob/main/README.md
     about: Read the documentation for help and guidance
 
   - name: 🆘 Support
-    url: https://github.com/williaby/.github/blob/main/SUPPORT.md
+    url: https://github.com/ByronWilliamsCPA/.github/blob/main/SUPPORT.md
     about: Get help and support for using our projects
 
   - name: 🔒 Security Vulnerability
-    url: https://github.com/williaby/.github/security/advisories/new
+    url: https://github.com/ByronWilliamsCPA/.github/security/advisories/new
     about: Report security vulnerabilities privately (do not open public issues)
 
 # Last updated: November 16, 2025

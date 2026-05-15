@@ -44,8 +44,9 @@ representative at an online or offline event.
 ## Reporting Guidelines
 
 If you are subject to or witness unacceptable behavior, or have any other
-concerns, please report it **promptly** by emailing
-[**conduct@williaby.com**](mailto:conduct@williaby.com).
+concerns, please report it **promptly** via the private
+[Security Advisory](https://github.com/ByronWilliamsCPA/.github/security/advisories/new)
+channel.
 All reports will be treated confidentially to the greatest extent possible,
 and you will not be retaliated against for making a good-faith report.
 

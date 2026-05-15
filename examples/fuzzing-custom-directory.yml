@@ -30,7 +30,7 @@ permissions: read-all
 jobs:
   fuzzing:
     name: Security-Specific Fuzzing
-    uses: williaby/.github/.github/workflows/python-fuzzing.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@main
     permissions:
       contents: read
       security-events: write

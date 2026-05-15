@@ -3,7 +3,7 @@
 
 > **NOTE:** This file is maintained centrally in the organization's `.github` repository.
 > For the latest version, see:
-> https://github.com/williaby/.github/blob/main/pull_request_template.md
+> https://github.com/ByronWilliamsCPA/.github/blob/main/pull_request_template.md
 
 # Pull Request
 

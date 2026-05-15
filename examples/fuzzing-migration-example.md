@@ -93,7 +93,7 @@ permissions: read-all
 
 jobs:
   fuzzing:
-    uses: williaby/.github/.github/workflows/python-fuzzing.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@main
     permissions:
       contents: read
       security-events: write
@@ -163,7 +163,7 @@ permissions: read-all
 
 jobs:
   fuzzing:
-    uses: williaby/.github/.github/workflows/python-fuzzing.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@main
     permissions:
       contents: read
       security-events: write
@@ -180,7 +180,7 @@ Use dry-run to validate setup:
 ```yaml
 jobs:
   fuzzing-test:
-    uses: williaby/.github/.github/workflows/python-fuzzing.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@main
     with:
       dry-run: true  # Build only, no execution
 ```
@@ -251,12 +251,12 @@ with:
 ```yaml
 jobs:
   address-sanitizer:
-    uses: williaby/.github/.github/workflows/python-fuzzing.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@main
     with:
       sanitizer: 'address'
 
   undefined-sanitizer:
-    uses: williaby/.github/.github/workflows/python-fuzzing.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@main
     with:
       sanitizer: 'undefined'
 ```
@@ -303,4 +303,4 @@ For issues during migration:
 1. Check [python-fuzzing.md](../docs/workflows/python-fuzzing.md) documentation
 2. Review [examples/](../examples/) for similar use cases
 3. Run with `dry-run: true` to validate setup
-4. Open issue at [williaby/.github](https://github.com/williaby/.github/issues)
+4. Open issue at [ByronWilliamsCPA/.github](https://github.com/ByronWilliamsCPA/.github/issues)

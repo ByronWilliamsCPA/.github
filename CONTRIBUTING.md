@@ -63,7 +63,7 @@ help improve our code, documentation, and community processes.
   - **JavaScript/TypeScript:** follow
     [Airbnb style](https://github.com/airbnb/javascript)
 - **Linters & formatters**
-  - Python: `ruff --fix`, `black`
+  - Python: `ruff --fix` (formatter and linter)
   - JavaScript/TypeScript: `eslint --fix`, `prettier --write`
 - **Imports**
   Group imports in this order, with a blank line between groups:
@@ -78,21 +78,18 @@ help improve our code, documentation, and community processes.
    ```bash
    python3 -m venv .venv
    source .venv/bin/activate
-   pip install -r requirements.txt
    ```
 
-2. **Install dependencies** (Node example)
+2. **Install dependencies**
 
    ```bash
-   npm install
+   uv sync
    ```
 
 3. **Run tests**
 
    ```bash
    pytest
-   # or
-   npm test
    ```
 
 ## Last updated: November 16, 2025
