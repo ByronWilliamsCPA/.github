@@ -170,17 +170,18 @@ on:
         description: 'Image digest'
         value: ${{ jobs.build.outputs.digest }}
 
-permissions:
-  contents: read
-  packages: write
-  pull-requests: write
-  security-events: write
+permissions: {}
 
 jobs:
   build:
     name: Build Docker Image
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+      pull-requests: write
+      security-events: write
 
     outputs:
       tags: ${{ steps.meta.outputs.tags }}

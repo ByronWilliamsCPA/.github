@@ -104,6 +104,9 @@ on:
         required: false
         type: boolean
         default: true
+
+permissions: {}
+
 jobs:
   # ============================================================================
   # Job 1: Standard Quality Checks
@@ -552,10 +555,17 @@ jobs:
     runs-on: ubuntu-latest
     needs: [quality-checks, llm-governance, matrix-testing]
     if: always()
+    timeout-minutes: 10
     permissions:
       contents: read
 
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9ca718d3bf646d6534007c269a635b3e54cadf99  # v2.19.2
+        with:
+          egress-policy: audit
+          disable-sudo: true
+
       - name: Check CI results
         env:
           RESULT_QUALITY_CHECKS: ${{ needs.quality-checks.result }}

@@ -148,14 +148,22 @@ on:
 # Note: this workflow is a migration stub that exits 1 immediately. No
 # pull-requests: write permission is needed; the stub emits only error
 # annotations and performs no GitHub API calls.
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   migration-required:
     name: This workflow is removed
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
     steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@9ca718d3bf646d6534007c269a635b3e54cadf99  # v2.19.2
+        with:
+          egress-policy: audit
+          disable-sudo: true
+
       - name: Migration required
         run: |
           echo "::error::python-pr-validation.yml has been removed."

@@ -40,14 +40,15 @@ on:
         required: false
         default: true
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   pre-commit:
     name: Pre-Commit Hooks
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
 
     steps:
       - name: Harden Runner

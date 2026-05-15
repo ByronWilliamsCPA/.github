@@ -58,10 +58,7 @@ on:
 
 # Workflow-level permissions are the ceiling for all jobs in this workflow.
 # Each job below declares only what it actually needs.
-permissions:
-  contents: read
-  pull-requests: write
-  security-events: write
+permissions: {}
 
 jobs:
   ci:

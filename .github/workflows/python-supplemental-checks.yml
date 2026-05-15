@@ -112,6 +112,8 @@ on:
         required: false
         default: false
 
+permissions: {}
+
 jobs:
   # ==========================================================================
   # Documentation Link Check
@@ -519,12 +521,18 @@ jobs:
   supplemental-summary:
     name: Supplemental Summary
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     needs: [link-check, changelog-check, cruft-check, automerge, commit-lint]
     if: always()
     permissions:
       contents: read
 
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@9ca718d3bf646d6534007c269a635b3e54cadf99  # v2.19.2
+        with:
+          egress-policy: audit
+
       - name: Generate summary
         env:
           LINK_CHECK_ENABLED: ${{ inputs.enable-link-check }}

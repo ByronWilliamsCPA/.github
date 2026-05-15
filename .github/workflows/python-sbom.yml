@@ -75,6 +75,8 @@ on:
         description: 'Docker Hardened Images registry personal access token (optional, for future use)'
         required: false
 
+permissions: {}
+
 jobs:
   # ============================================================================
   # Job 1: Generate SBOMs

@@ -68,11 +68,14 @@ on:
         required: false
         default: true
 
+permissions: {}
+
 jobs:
   # Detect security-relevant changes
   detect-changes:
     name: Detect Security Changes
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       security_files: ${{ steps.filter.outputs.security }}
     permissions:
@@ -166,6 +169,7 @@ jobs:
     name: Dependency Review
     if: ${{ inputs.run-dependency-review && github.event_name == 'pull_request' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: detect-changes
     permissions:
       contents: read
@@ -257,6 +261,7 @@ jobs:
     name: OSV Vulnerability Scanner
     if: ${{ inputs.run-osv }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: detect-changes
     permissions:
       contents: read
@@ -397,12 +402,18 @@ jobs:
   security-gate:
     name: Security Gate Validation
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     needs: [detect-changes, codeql, dependency-review, python-security, osv-scanner]
     if: always()
     permissions:
       contents: read
 
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@9ca718d3bf646d6534007c269a635b3e54cadf99  # v2.19.2
+        with:
+          egress-policy: audit
+
       - name: Validate Security Results
         env:
           RESULT_CODEQL: ${{ needs.codeql.result }}

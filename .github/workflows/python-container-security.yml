@@ -116,6 +116,8 @@ on:
         description: 'Docker Hardened Images registry personal access token'
         required: false
 
+permissions: {}
+
 jobs:
   # Hadolint Dockerfile linting
   hadolint:
@@ -319,11 +321,17 @@ jobs:
     name: Security Summary
     needs: [hadolint, trivy-scan]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     if: always()
     permissions:
       contents: read
 
     steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@9ca718d3bf646d6534007c269a635b3e54cadf99  # v2.19.2
+        with:
+          egress-policy: audit
+
       - name: Overall security summary
         run: |
           echo "## Container Security Summary" >> $GITHUB_STEP_SUMMARY

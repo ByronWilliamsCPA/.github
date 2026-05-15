@@ -150,6 +150,8 @@ on:
         description: 'SonarCloud authentication token'
         required: false
 
+permissions: {}
+
 jobs:
   # Check if SONAR_TOKEN is configured
   check-configuration:

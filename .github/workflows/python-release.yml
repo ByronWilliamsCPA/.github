@@ -108,6 +108,8 @@ on:
         description: 'The release tag'
         value: ${{ jobs.release.outputs.tag }}
 
+permissions: {}
+
 jobs:
   # ============================================================================
   # Job 1: Run Tests Before Release
