@@ -59,6 +59,7 @@ are no numbered releases.
 
 ### Fixed
 
+- `python-performance-regression.yml`: fix `$NO_BUILD_FLAG` reference in the `Post PR Comment` step; the flag appeared as a literal string in the PR body because the step uses `actions/github-script` (JavaScript), not bash; add `NO_BUILD_FLAG` to the step `env:` block and use `${noBuildFlag}` (via `process.env.NO_BUILD_FLAG`) in the template literal
 - `python-scorecard.yml`: replace `if: ${{ secrets.SCORECARD_TOKEN == '' }}` guard with an env-var + shell check pattern (`[ -z "$HAS_SCORECARD_TOKEN" ]`); direct secret comparison in `if:` expressions is unreliable in GitHub Actions (runner issue #520) because secrets are redacted before expression evaluation
 - `python-compatibility.yml`: add `shell: bash` to the `Install dependencies` step to prevent silent failure on Windows matrix legs where the default shell is PowerShell and `$NO_BUILD_FLAG` expands to nothing
 - `python-slsa.yml`, `python-standard-stack.yml`, `scorecard.yml`, `security-analysis.yml`: remove `timeout-minutes` from 6 reusable-workflow-call jobs (`provenance`, `ci`, `security`, `sbom`, `scorecard`); GitHub Actions disallows `timeout-minutes` on jobs that use `uses:`, causing actionlint CI failure
