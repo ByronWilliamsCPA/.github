@@ -39,8 +39,10 @@ tmp/
 tmp_cleanup/
 actionlint
 
-# AI assistant state
+# AI assistant state (ephemeral session content ignored; intentional config files are explicitly unignored below)
 .claude/
+!.claude/CLAUDE.md
+!.claude/settings.json
 
 # Git worktrees
 .worktrees/
