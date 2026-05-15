@@ -18,6 +18,9 @@ cost by 92%); the full matrix runs on ready PRs.
 | `fail-fast` | boolean | no | `false` | Fail immediately on first matrix failure |
 | `skip-on-draft` | boolean | no | `true` | Skip expensive matrix on draft PRs |
 | `timeout-minutes` | number | no | `30` | Timeout for each matrix job |
+| `system-deps-ubuntu` | string | no | | APT packages to install on Ubuntu (space-separated, e.g., `libmagic-dev libffi-dev`) |
+| `system-deps-macos` | string | no | | Homebrew packages to install on macOS (space-separated, e.g., `libmagic`) |
+| `system-deps-windows` | string | no | | Chocolatey packages to install on Windows (space-separated) |
 
 ## Usage
 
