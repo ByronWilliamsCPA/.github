@@ -107,6 +107,9 @@ jobs:
     name: Mutation Testing
     runs-on: ubuntu-latest
     timeout-minutes: ${{ inputs.timeout-minutes }}
+    permissions:
+      contents: read
+      pull-requests: write
     outputs:
       score: ${{ steps.analyze.outputs.score }}
       passed: ${{ steps.analyze.outputs.passed }}

@@ -102,6 +102,9 @@ jobs:
     name: Upload Coverage to Codecov
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
 
     steps:
       - name: Harden Runner
