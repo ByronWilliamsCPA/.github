@@ -76,6 +76,7 @@ are no numbered releases.
 - `.claude/settings.json`: `Write(.claude/**)` and `Edit(.claude/**)` intentionally kept broad to allow transient writes to gitignore'd subdirectories (worktree state, tool caches); these paths are excluded from the repo via `.gitignore`
 - `.gitignore`: replace 8 enumerated `.claude/<subdir>/` exclusion entries with a catch-all `.claude/*` plus negations for `!.claude/CLAUDE.md` and `!.claude/settings.json`; new repos and new transient subdirs are excluded automatically without requiring manual `.gitignore` updates
 - `.github/workflows/pr-validation.yml`, `USAGE_EXAMPLES.md`, `docs/audits/2026-05-01-security-audit.md`: replace em-dash characters with colons and commas in error messages, list bullets, and documentation prose; resolves `no-em-dash` pre-commit hook violations (CLAUDE-007)
+- Rename org identity from `williaby` to `ByronWilliamsCPA` across 19 community health, documentation, and example files: `CODEOWNERS`, `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `FUNDING.yml`, `GOVERNANCE.md`, `ISSUE_TEMPLATE/config.yml`, `QLTY_INTEGRATION.md`, `README.md`, `REUSE.toml`, `SUPPORT.md`, `pull_request_template.md`, `profile/README.md`, and seven workflow documentation and example files; updates all GitHub URLs, workflow `uses:` references, and contact pointers; extends copyright year to `2025-2026`
 
 ### Security
 

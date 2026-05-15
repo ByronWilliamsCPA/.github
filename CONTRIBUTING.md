@@ -80,7 +80,13 @@ help improve our code, documentation, and community processes.
    source .venv/bin/activate
    ```
 
-2. **Run tests**
+2. **Install dependencies**
+
+   ```bash
+   uv sync
+   ```
+
+3. **Run tests**
 
    ```bash
    pytest
