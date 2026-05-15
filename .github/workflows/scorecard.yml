@@ -33,6 +33,9 @@ jobs:
     # #ASSUME: This job runs in the context of ByronWilliamsCPA/.github directly.
     # The OIDC token repository claim resolves to ByronWilliamsCPA/.github, which
     # is the correct value for publish_results: true. See docs/architecture/adr-001.
+    # #VERIFY: After first successful run, confirm the "Run Scorecard analysis" step
+    # log shows repository=ByronWilliamsCPA/.github in the OIDC token claims, and
+    # that results appear at securityscorecards.dev/viewer/?uri=github.com/ByronWilliamsCPA/.github
     timeout-minutes: 15
     permissions:
       security-events: write
@@ -40,6 +43,15 @@ jobs:
       contents: read
       actions: read
     steps:
+      - name: Verify SCORECARD_TOKEN is set
+        env:
+          TOKEN_SET: ${{ secrets.SCORECARD_TOKEN != '' }}
+        run: |
+          if [ "$TOKEN_SET" != "true" ]; then
+            echo "::error::SCORECARD_TOKEN secret is not set. publish_results: true requires this token."
+            exit 1
+          fi
+
       - name: Harden runner
         uses: step-security/harden-runner@9ca718d3bf646d6534007c269a635b3e54cadf99  # v2.19.2
         with:
@@ -64,3 +76,10 @@ jobs:
         with:
           sarif_file: results.sarif
           category: scorecard
+
+      - name: Scorecard summary
+        if: always()
+        run: |
+          echo "## OpenSSF Scorecard (this repo)" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Dashboard: https://securityscorecards.dev/viewer/?uri=github.com/ByronWilliamsCPA/.github" >> "$GITHUB_STEP_SUMMARY"
