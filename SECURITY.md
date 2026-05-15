@@ -44,6 +44,7 @@ We track and publish advisories for all confirmed vulnerabilities:
 ## Response Timeline
 
 - **Acknowledgment:** within 5 business days
+- **Critical resolution:** We aim to provide a resolution or workaround within 14 calendar days for critical vulnerabilities.
 - **Fix released:** within 30 days of acknowledgment
 - **Emergency patch:** sooner for critical severity
 
