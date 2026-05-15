@@ -482,6 +482,7 @@ jobs:
           BASELINE_SOURCE: ${{ steps.baseline_source.outputs.source }}
           BENCHMARK_SCRIPT: ${{ inputs.benchmark-script }}
           BENCHMARK_ARGS: ${{ inputs.benchmark-args }}
+          NO_BUILD_FLAG: ${{ env.NO_BUILD_FLAG }}
         with:
           script: |
             const baseline = process.env.COMPARE_BASELINE;
@@ -495,6 +496,7 @@ jobs:
             const baselineSource = process.env.BASELINE_SOURCE;
             const benchmarkScript = process.env.BENCHMARK_SCRIPT;
             const benchmarkArgs = process.env.BENCHMARK_ARGS;
+            const noBuildFlag = process.env.NO_BUILD_FLAG || '';
 
             let icon, statusText, actionText;
             if (status === 'regression') {
@@ -553,7 +555,7 @@ jobs:
 
             To reproduce locally:
             \`\`\`bash
-            uv run --frozen $NO_BUILD_FLAG python ${benchmarkScript} --iterations 1000 ${benchmarkArgs}
+            uv run --frozen ${noBuildFlag} python ${benchmarkScript} --iterations 1000 ${benchmarkArgs}
             \`\`\`
             </details>
             `;
