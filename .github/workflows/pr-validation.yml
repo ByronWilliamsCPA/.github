@@ -83,7 +83,7 @@ jobs:
           BODY_RESULT: ${{ needs.body-check.result }}
         run: |
           if [ "$TITLE_RESULT" != "success" ] || [ "$BODY_RESULT" != "success" ]; then
-            echo "::error::PR validation checks failed — dependency and standards gate blocked."
+            echo "::error::PR validation checks failed: dependency and standards gate blocked."
             exit 1
           fi
           echo "Dependency and standards validation passed."

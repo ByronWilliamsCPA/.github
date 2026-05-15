@@ -216,10 +216,10 @@ jobs:
 This repository publishes two kinds of tags so callers can choose the right
 trade-off between stability and security:
 
-- **`@v1`** — moving major-version tag, re-pointed when a backward-compatible
+- **`@v1`**: moving major-version tag, re-pointed when a backward-compatible
   change lands on `main`. Recommended default for most production callers.
-- **`@v1.0.0`** — immutable patch tag for exact-version pinning.
-- **`@<sha>`** — full 40-character commit SHA. Most secure (immune to tag
+- **`@v1.0.0`**: immutable patch tag for exact-version pinning.
+- **`@<sha>`**: full 40-character commit SHA. Most secure (immune to tag
   rewrites), highest maintenance burden (must be rotated manually).
 
 `@main` is **not** recommended for any caller. A push to `main` takes effect
