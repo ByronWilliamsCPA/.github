@@ -1,0 +1,14 @@
+default: true
+MD013: false  # line length - GitHub Actions docs use long lines
+MD022: false  # headings surrounded by blank lines - not required for all docs
+MD024: false  # multiple headings with the same content - common in changelogs
+MD026: false  # trailing punctuation in heading
+MD029: false  # ordered list item prefix
+MD031: false  # fenced code blocks surrounded by blank lines
+MD032: false  # lists surrounded by blank lines - pre-existing style throughout repo
+MD033: false  # inline HTML
+MD034: false  # bare URLs - common in workflow docs
+MD036: false  # emphasis as heading
+MD040: false  # fenced code blocks language specified
+MD041: false  # first line heading - not required for all docs
+MD060: false  # table column style - pre-existing violations in USAGE_EXAMPLES.md and docs/workflows/

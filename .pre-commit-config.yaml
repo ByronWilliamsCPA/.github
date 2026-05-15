@@ -1,7 +1,7 @@
 # Pre-commit hooks: file checks and secret scanning.
 # See pre-commit-authoring skill for hook authoring guidance.
 
-default_install_hook_types: [pre-commit]
+default_install_hook_types: [pre-commit, commit-msg]
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -19,6 +19,43 @@ repos:
         stages: [pre-commit]
 
   # ============================================================================
+  # Commit Message Validation - Commitizen (PC-008)
+  # ============================================================================
+  - repo: https://github.com/commitizen-tools/commitizen
+    rev: 9707a58ba8c850259ece0fafc8108ba2f350e005  # v4.16.0
+    hooks:
+      - id: commitizen
+        stages: [commit-msg]
+
+  # ============================================================================
+  # YAML Linting - yamllint (PC-009)
+  # ============================================================================
+  - repo: https://github.com/adrienverge/yamllint
+    rev: cba56bcde1fdd01c1deb3f945e69764c291a6530  # v1.38.0
+    hooks:
+      - id: yamllint
+        stages: [pre-commit]
+
+  # ============================================================================
+  # Markdown Linting - markdownlint-cli (PC-010)
+  # ============================================================================
+  - repo: https://github.com/igorshubovych/markdownlint-cli
+    rev: e72a3ca1632f0b11a07d171449fe447a7ff6795e  # v0.48.0
+    hooks:
+      - id: markdownlint
+        stages: [pre-commit]
+
+  # ============================================================================
+  # Secret Detection - detect-secrets (PC-013)
+  # ============================================================================
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: 01886c8a910c64595c47f186ca1ffc0b77fa5458  # v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: [--baseline, .secrets.baseline]
+        stages: [pre-commit]
+
+  # ============================================================================
   # Secret Detection - TruffleHog
   # ============================================================================
   - repo: local
@@ -33,4 +70,18 @@ repos:
         entry: bash -c 'command -v trufflehog >/dev/null 2>&1 && (git diff --cached -z --diff-filter=d --name-only 2>/dev/null | xargs -0 -r trufflehog filesystem --fail --no-update --results=verified,unknown --exclude-paths .trufflehog-exclude) || echo "TruffleHog not installed - skipping secret scan"'
         language: system
         pass_filenames: false
+        stages: [pre-commit]
+
+  # ============================================================================
+  # Em-Dash Guard (PC-011)
+  # ============================================================================
+  - repo: local
+    hooks:
+      - id: no-em-dash
+        name: No em-dash
+        description: Block em-dash characters (U+2014) in all staged files.
+        entry: scripts/check-no-em-dash.sh
+        language: script
+        pass_filenames: false
+        types: [text]
         stages: [pre-commit]

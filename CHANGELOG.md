@@ -23,6 +23,12 @@ are no numbered releases.
 - `tests/update-pinned-actions.bats`: 38 automated tests covering dry-run, apply mode, annotated tag resolution, and sandbox PATH validation for the action-pinning script
 - `tests/libs/bats-core`, `tests/libs/bats-support`, `tests/libs/bats-assert` submodules for test infrastructure
 - `.github/workflows/shell-tests.yml`: CI workflow that runs bats tests on pushes and pull requests touching `scripts/`, `tests/`, or the workflow file itself
+- `.pre-commit-config.yaml`: five new SHA-pinned pre-commit hooks: commitizen at `commit-msg` stage (PC-008), yamllint (PC-009), markdownlint-cli (PC-010), no-em-dash guard (PC-011), and detect-secrets (PC-013); all `rev:` values are 40-character commit SHAs
+- `.cz.toml`: commitizen conventional commits configuration with `allow_abort = true` to permit merge and revert commit messages
+- `.yamllint.yml`: yamllint config extending default with `document-start: disable`, relaxed line-length (150-char, warning) and truthy (warning) rules
+- `.markdownlint.yml`: markdownlint config disabling 14 rules with pre-existing violations; MD060 (table-column-style) suppresses violations across USAGE_EXAMPLES.md, AGENTS.md, and docs/workflows/
+- `scripts/check-no-em-dash.sh`: byte-sequence grep hook that blocks em-dash (U+2014) characters in staged text files; uses `language: script` with `types: [text]` to skip binary files
+- `.secrets.baseline`: detect-secrets baseline with 5 SHA-pin false positives in `.pre-commit-config.yaml`
 
 ### Changed
 
