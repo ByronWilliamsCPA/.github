@@ -56,6 +56,8 @@ are no numbered releases.
 - `docs/known-vulnerabilities.md`: empty CVE baseline satisfying the OpenSSF FOUND-007 foundation check; no known vulnerabilities as of 2026-05-14
 - `docs/architecture/adr-000-index.md`, `docs/architecture/adr-001-scorecard-publish-results.md`: ADR infrastructure and first decision record documenting the `publish-results: false` constraint in the reusable scorecard workflow and the plan for a direct `self-scorecard` job (FOUND-008)
 - `.gitignore`: narrow `.claude/` exclusion from directory-level to specific transient subdirs so `.claude/CLAUDE.md` and `.claude/settings.json` are tracked by git
+- `python-ci.yml`: add `Validate source layout` precondition step that fails fast with an actionable `::error::` block when `source-directory` or `test-directory` does not exist, replacing the previous opaque `Failed to format src: No such file or directory` failure from ruff; step uses explicit `shell: bash` and reads inputs via `env:`; behavior change for misuse cases (callers without `src/`/`tests/` now fail one step earlier with a clearer message), no breaking change for correctly configured callers
+- `docs/workflows/python-ci.md`: new docs page documenting the required `src/` layout, when to use vs not use the workflow, flat-layout support via `source-directory: '.'` override, minimal usage example, and selected inputs
 
 ### Fixed
 
