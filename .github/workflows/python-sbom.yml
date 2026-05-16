@@ -122,7 +122,7 @@ jobs:
 
       - name: Generate runtime SBOM (production dependencies)
         run: |
-          cyclonedx-py environment \
+          .venv/bin/cyclonedx-py environment \
             --output-format JSON \
             --output-file "$GITHUB_WORKSPACE/sbom-runtime.json" \
             .venv/bin/python3
@@ -295,4 +295,5 @@ jobs:
           echo '```json' >> $GITHUB_STEP_SUMMARY
           echo "$FORBIDDEN_LICENSES" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
+
 
