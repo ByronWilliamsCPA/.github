@@ -4,7 +4,8 @@
 
 This repo contains GitHub org-level community health files and reusable GitHub Actions
 workflows. There is no Python package; the Bats test suite under `tests/` covers
-the shell scripts in `scripts/`.
+`scripts/update-pinned-actions.sh`. The other scripts in `scripts/` do not yet have
+automated tests.
 
 ## Tool Mapping
 
