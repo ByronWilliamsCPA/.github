@@ -21,6 +21,7 @@ cost by 92%); the full matrix runs on ready PRs.
 | `system-deps-ubuntu` | string | no | `''` | APT packages to install on Ubuntu (space-separated, e.g., `libmagic-dev libffi-dev`) |
 | `system-deps-macos` | string | no | `''` | Homebrew packages to install on macOS (space-separated, e.g., `libmagic`) |
 | `system-deps-windows` | string | no | `''` | Chocolatey packages to install on Windows (space-separated) |
+| `no-build` | boolean | no | `true` | Pass `--no-build` to `uv sync`/`uv run` commands (disable for projects with a build backend like hatchling) |
 
 ## Usage
 
