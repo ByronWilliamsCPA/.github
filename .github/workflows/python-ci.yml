@@ -141,6 +141,7 @@ jobs:
           fetch-depth: 0
 
       - name: Validate source layout
+        shell: bash
         env:
           SRC_DIR: ${{ inputs.source-directory }}
           TEST_DIR: ${{ inputs.test-directory }}

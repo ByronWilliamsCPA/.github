@@ -31,16 +31,27 @@ Do not call `python-ci.yml` from:
 
 - Configuration repositories (agent configs, Claude prompt repos, docs-only
   repositories)
-- Repositories with a flat Python layout (no `src/` directory)
 - Repositories that are not Python at all
 
-If you do, the validation step will fail. Choose an alternative:
+If you do, the validation step will fail. Write a hand-rolled CI workflow
+instead that emits the `CI Gate` required status context using appropriate
+tooling (yamllint, markdownlint, actionlint, em-dash check).
 
-- For **flat-layout Python packages**, pass `source-directory: '.'` (or the
-  actual package directory) so the validation finds the code.
-- For **non-Python or pure config repositories**, write a hand-rolled CI
-  workflow that emits the `CI Gate` required status context using
-  appropriate tooling (yamllint, markdownlint, actionlint, em-dash check).
+### Flat-layout Python packages
+
+Flat-layout Python packages (no `src/` directory) are supported via input
+overrides. Pass `source-directory: '.'` (or the actual package directory)
+along with the matching `test-directory`, and the validation step will
+locate the code without complaint:
+
+```yaml
+jobs:
+  ci:
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
+    with:
+      source-directory: '.'
+      test-directory: tests
+```
 
 ## Minimal usage
 
@@ -55,7 +66,7 @@ on:
 
 jobs:
   ci:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
     with:
       python-version: "3.12"
       coverage-threshold: 80
@@ -82,7 +93,3 @@ from `${{ inputs.source-directory }}`. If the directory does not exist, the
 first step that runs against it errors out with a tool-specific message,
 which is hard to diagnose from the caller side. The precondition step
 exists so future misuse fails with the same actionable error every time.
-
-For the original investigation that prompted this hardening, see
-`docs/superpowers/plans/2026-05-16-reusable-ci-workflow-audit.md` in the
-downstream `.claude` configuration repo.
