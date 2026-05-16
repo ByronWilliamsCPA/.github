@@ -55,9 +55,9 @@ security fixes. Older SHAs do not receive backports.
 | Fix or mitigation for critical reports | 14 calendar days from acknowledgement |
 | Fix released for other severities      | 30 calendar days from acknowledgement |
 
-These are targets, not guarantees. The fix windows run from triage
-completion, not from the initial report date. The maintainer will keep the
-reporter updated if a fix needs longer.
+These are targets, not guarantees. All windows run from acknowledgement of
+the report. The maintainer will keep the reporter updated if a fix needs
+longer.
 
 ## Security Practices
 
@@ -66,8 +66,8 @@ tool runs in every repo; the list reflects what is wired up in this
 repository's workflows and pre-commit hooks, which downstream repos
 inherit via the reusable workflows.
 
-- Static analysis: CodeQL (org-wide), SonarCloud (incorporates Semgrep rule
-  patterns), Ruff and Bandit (Python reusable workflows)
+- Static analysis: CodeQL (org-wide), SonarCloud (SAST); downstream Python
+  repos add Ruff and Bandit via the Python reusable workflows
 - Dependency pinning and Renovate-driven updates
 - Container scanning with Trivy (Docker and SBOM workflows)
 - SBOM generation for tagged releases

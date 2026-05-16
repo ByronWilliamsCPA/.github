@@ -33,7 +33,9 @@ pre-commit install       # installs commit and commit-msg hooks
 ```
 
 Maintainers with push access to the org repository can clone the org URL
-directly and skip the fork step.
+directly and skip the fork step. If the repository is private, request
+access from the maintainer rather than forking; private repositories cannot
+be forked by external contributors.
 
 `pre-commit` hooks must pass before a commit lands. Run
 `pre-commit run --all-files` if you touch many files at once.
@@ -43,6 +45,7 @@ directly and skip the fork step.
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
+# uv must be installed first: https://github.com/astral-sh/uv
 uv sync                  # or: pip install -e ".[dev]"
 pytest                   # run the test suite
 ```
@@ -62,7 +65,7 @@ Branch from `main` using one of these prefixes:
 |-------------|--------------------------------------------------|
 | `feature/`  | New functionality                                |
 | `fix/`      | Bug fixes                                        |
-| `chore/`    | Tooling, build, dependency, and CI changes       |
+| `chore/`    | Tooling, build, dependency, CI, refactoring, test-only, and style changes |
 | `docs/`     | Documentation only                               |
 | `claude/`   | Reserved for automated agent commits             |
 
@@ -105,9 +108,8 @@ Keep the subject under 72 characters and in the imperative mood.
 ## GPG-Signed Commits Required
 
 Every commit on every PR must be GPG-signed (or SSH-signed) and show as
-**Verified** on GitHub. Branch protection on `main` enforces this at merge
-time; unsigned commits pushed to a feature branch are not rejected at push,
-but they cannot be merged.
+**Verified** on GitHub. This is org policy: unsigned commits will be
+requested for re-signing before a PR is merged.
 
 To set this up once:
 
@@ -128,7 +130,7 @@ signature.
 Before requesting review, confirm each item:
 
 - [ ] Branch follows the naming convention above.
-- [ ] All commits are GPG-signed and show as Verified on the PR.
+- [ ] All commits are GPG-signed; confirm each shows the Verified badge before requesting review.
 - [ ] Commit messages follow Conventional Commits.
 - [ ] `pre-commit run --all-files` passes locally.
 - [ ] Tests pass (`pytest`, or the project's equivalent).

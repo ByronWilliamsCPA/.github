@@ -18,10 +18,11 @@ reflect a fuller structure.
    documentation): the maintainer reviews and merges directly.
 2. **Larger or breaking changes** (public API changes, new reusable
    workflows, removal of supported features): the maintainer opens an issue
-   describing the change and waits at least seven calendar days before
-   merging, so external contributors and downstream consumers can comment.
-3. **Security fixes**: handled per [SECURITY.md](SECURITY.md) and may be
-   merged without the waiting period.
+   describing the change and waits at least seven calendar days from the
+   issue creation date before merging, so external contributors and
+   downstream consumers can comment.
+3. **Security fixes**: reported via [SECURITY.md](SECURITY.md); the
+   maintainer may merge fixes without the seven-day waiting period.
 
 Decisions are final once merged. Disagreement is welcome before that point;
 open an issue or comment on the PR.
@@ -45,7 +46,7 @@ filed.
 
 ## Succession
 
-If the maintainer becomes unavailable, the repositories remain under the
+If the maintainer becomes unavailable, public repositories remain under the
 existing license and can be forked by anyone. There is no formal succession
 plan; if that changes, this section will be updated.
 
