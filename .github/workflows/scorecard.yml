@@ -25,7 +25,7 @@ jobs:
       security-events: write
       contents: read
       actions: read
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-scorecard.yml@98e015f99e0050374295cc04fab98558f656788a  # main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-scorecard.yml@3262aafb272959bf117143c29e3288e722c0acf6  # main
 
   self-scorecard:
     name: OpenSSF Scorecard (this repo)
