@@ -88,6 +88,11 @@ are no numbered releases.
 
 ### Security
 
+- Phase 1 security remediation across four reusable workflows (PR #117):
+  - `python-qlty-coverage.yml`: move `${{ github.event.repository.name }}` and `${{ github.repository_owner }}` into the step `env:` block in the Coverage Upload Summary step; the values are now referenced as `$REPO_NAME` and `$REPO_OWNER` instead of being interpolated as raw text inside the shell `run:` body
+  - `python-fips-compatibility.yml`: add allowlist regex validation for the `script-path` input before any file or execution step; rejects absolute paths, `..` traversal, and any characters outside `[a-zA-Z0-9_./-]`; requires a `.py` extension
+  - `python-performance-regression.yml`: same allowlist regex applied to the `benchmark-script` input in the Validate Benchmark Script step
+  - `python-security-analysis.yml`: remove `|| true` from the Bandit Static Analysis step so real findings fail the job; collapse the duplicate fail-only invocation into a single call that writes the JSON report and propagates the exit code; false positives should now be handled via `.bandit` config or inline `# nosec` with justification
 - `.pre-commit-config.yaml`: upgrade TruffleHog from `repo: local` with a pinned system binary to `repo: https://github.com/trufflesecurity/trufflehog` at SHA `05cccb53bc9e13bc6d17997db5a6bcc3df44bf2f` (v3.92.3); upstream repo is the recommended distribution channel; adds `scorecard.yml` warning about the `SCORECARD_TOKEN` scope requirement
 - Remediate SonarCloud S7630 script injection in 9 workflow files: move all `${{ inputs.* }}` references used in `run:` shell bodies to `env:` blocks; affects `python-ci.yml`, `python-compatibility.yml`, `python-docs.yml`, `python-mutation.yml`, `python-publish-pypi.yml`, `python-release.yml`, `python-sbom.yml`, `python-sonarcloud.yml`, `python-performance-regression.yml`
 - Remediate SonarCloud S8233/S8264 permission over-grant in 14 workflow files: move workflow-level `permissions:` blocks to per-job scope to enforce least-privilege; `id-token: write` and `pages: write` grants preserved at per-job level where required
