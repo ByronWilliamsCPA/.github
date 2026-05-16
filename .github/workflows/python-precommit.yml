@@ -79,9 +79,9 @@ jobs:
       - name: Run pre-commit hooks
         env:
           CONFIG_PATH: ${{ inputs.config-path }}
-          FAIL_FAST: ${{ inputs.show-diff-on-failure }}
+          SHOW_DIFF_ON_FAILURE: ${{ inputs.show-diff-on-failure }}
         run: |
-          if [ "$FAIL_FAST" = "true" ]; then
+          if [ "$SHOW_DIFF_ON_FAILURE" = "true" ]; then
             uv run --frozen $NO_BUILD_FLAG pre-commit run --all-files --config "$CONFIG_PATH" --show-diff-on-failure
           else
             uv run --frozen $NO_BUILD_FLAG pre-commit run --all-files --config "$CONFIG_PATH"

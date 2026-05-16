@@ -280,7 +280,7 @@ pattern established in Phase 1.
 
 - `python-precommit.yml` (new reusable `workflow_call` workflow): inputs `config-path`
   (string, default `.pre-commit-config.yaml`), `python-version` (string, default `3.12`),
-  `fail-fast` (boolean, default `true`); steps: harden-runner (egress: audit), checkout,
+  `show-diff-on-failure` (boolean, default `true`); steps: harden-runner (egress: audit), checkout,
   setup-uv, `uv sync`, `pre-commit run --all-files`; all inputs via env vars in `run:` blocks
 - `python-standard-stack.yml` (new caller reusable workflow): chains `python-ci.yml`,
   `python-security-analysis.yml`, `python-sbom.yml` using `needs:`; documents itself as the

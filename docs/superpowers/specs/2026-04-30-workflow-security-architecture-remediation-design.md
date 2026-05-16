@@ -329,7 +329,7 @@ Reusable `workflow_call` workflow following the same structure as all existing w
 Inputs:
 - `config-path`: string, default `.pre-commit-config.yaml`
 - `python-version`: string, default `3.12`
-- `fail-fast`: boolean, default `true`
+- `show-diff-on-failure`: boolean, default `true`
 
 Steps: harden-runner (egress: audit), checkout, setup-uv, uv sync, run pre-commit.
 
