@@ -271,6 +271,11 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
 
+      - name: Create virtual environment
+        # #CRITICAL: uv pip install requires an existing .venv (issue #106). uv venv
+        # creates a bare venv at .venv before cruft is installed into it.
+        run: uv venv
+
       - name: Install cruft
         run: uv pip install --no-build 'cruft==2.15.0'
 

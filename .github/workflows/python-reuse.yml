@@ -86,8 +86,11 @@ jobs:
 
       - name: Generate SPDX SBOM
         if: ${{ inputs.generate-spdx }}
+        # #CRITICAL: uv pip install requires an existing .venv (issue #106). uv venv
+        # creates a bare venv at .venv before the reuse tool is installed into it.
         run: |
           echo "Generating SPDX SBOM..."
+          uv venv
           uv pip install --no-build 'reuse==5.0.2'
           reuse spdx -o reuse-spdx.spdx || echo "SPDX generation completed with warnings"
 
