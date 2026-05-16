@@ -9,7 +9,7 @@
 #       uses: ByronWilliamsCPA/.github/.github/workflows/python-precommit.yml@v1
 #       with:
 #         python-version: '3.12'
-#         fail-fast: true
+#         show-diff-on-failure: true
 #
 # Features:
 #   - Runs pre-commit run --all-files via uv run (project virtualenv)
@@ -34,8 +34,8 @@ on:
         required: false
         default: '3.12'
 
-      fail-fast:
-        description: 'Show diff on first hook failure (--show-diff-on-failure)'
+      show-diff-on-failure:
+        description: 'Pass --show-diff-on-failure to pre-commit run'
         type: boolean
         required: false
         default: true
@@ -79,7 +79,7 @@ jobs:
       - name: Run pre-commit hooks
         env:
           CONFIG_PATH: ${{ inputs.config-path }}
-          FAIL_FAST: ${{ inputs.fail-fast }}
+          FAIL_FAST: ${{ inputs.show-diff-on-failure }}
         run: |
           if [ "$FAIL_FAST" = "true" ]; then
             uv run --frozen $NO_BUILD_FLAG pre-commit run --all-files --config "$CONFIG_PATH" --show-diff-on-failure
