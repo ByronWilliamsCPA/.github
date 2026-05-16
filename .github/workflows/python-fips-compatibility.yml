@@ -115,6 +115,16 @@ jobs:
         env:
           SCRIPT_PATH: ${{ inputs.script-path }}
         run: |
+          # Allowlist pattern: relative path of letters, digits, underscore, dash,
+          # dot, forward slash; must end in .py; no traversal, whitespace, or
+          # shell metacharacters.
+          if [[ ! "$SCRIPT_PATH" =~ ^[a-zA-Z0-9_./-]+\.py$ ]] \
+              || [[ "$SCRIPT_PATH" == *..* ]] \
+              || [[ "$SCRIPT_PATH" == /* ]]; then
+            echo "::error::script-path rejected by allowlist: $SCRIPT_PATH"
+            echo "Expected a relative .py path matching ^[a-zA-Z0-9_./-]+\\.py$ with no '..' or leading '/'."
+            exit 1
+          fi
           if [ -f "$SCRIPT_PATH" ]; then
             echo "script_exists=true" >> $GITHUB_OUTPUT
             echo "FIPS check script found at $SCRIPT_PATH"

@@ -240,10 +240,12 @@ jobs:
           SRC_DIR: ${{ inputs.source-directory }}
         run: |
           echo "🔒 Running Bandit security analysis..."
+          # Single invocation: writes the JSON report and propagates the exit
+          # code so real findings fail the job. Suppress false positives via a
+          # .bandit config or inline `# nosec` with justification in source.
           uv run --frozen $NO_BUILD_FLAG bandit -r "$SRC_DIR" \
             -f json -o bandit-report.json \
-            -c pyproject.toml || true
-          uv run --frozen $NO_BUILD_FLAG bandit -r "$SRC_DIR" -c pyproject.toml
+            -c pyproject.toml
 
       - name: Safety Vulnerability Scan
         if: ${{ inputs.run-safety }}
