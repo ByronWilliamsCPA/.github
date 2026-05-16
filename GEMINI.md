@@ -3,7 +3,9 @@
 ## Repository Context
 
 This repo contains GitHub org-level community health files and reusable GitHub Actions
-workflows. There is no Python package or test suite.
+workflows. There is no Python package; the Bats test suite under `tests/` covers
+`scripts/update-pinned-actions.sh`. The other scripts in `scripts/` do not yet have
+automated tests.
 
 ## Tool Mapping
 

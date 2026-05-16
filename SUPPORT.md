@@ -16,7 +16,9 @@ contributions of knowledge, bug reports, and fixes are highly appreciated.
   community chat.
 
 - **Contact**
-  Use GitHub Issues or Discussions for all inquiries.
+  For general inquiries, use GitHub Issues or Discussions.
+  For security vulnerabilities, use private reporting via Security Advisories
+  (see [SECURITY.md](SECURITY.md)).
 
 ## Before Submitting an Issue
 
