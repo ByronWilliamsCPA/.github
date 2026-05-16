@@ -206,6 +206,33 @@ jobs:
           BENCHMARK_SCRIPT: ${{ inputs.benchmark-script }}
           PRIMARY_METRIC: ${{ inputs.primary-metric }}
         run: |
+          # Allowlist pattern: relative path of letters, digits, underscore, dash,
+          # dot, forward slash; must end in .py; no traversal, whitespace, or
+          # shell metacharacters.
+          if [[ ! "$BENCHMARK_SCRIPT" =~ ^[a-zA-Z0-9_./-]+\.py$ ]] \
+              || [[ "$BENCHMARK_SCRIPT" == *..* ]] \
+              || [[ "$BENCHMARK_SCRIPT" == /* ]]; then
+            echo "::error::benchmark-script rejected by allowlist: $BENCHMARK_SCRIPT"
+            echo "Expected a relative .py path matching ^[a-zA-Z0-9_./-]+\\.py$ with no '..' or leading '/'."
+            exit 1
+          fi
+          # Symlink-escape guard: if the file exists, resolve it and confirm
+          # the canonical path stays inside GITHUB_WORKSPACE. Blocks symlinks
+          # planted at e.g. scripts/legit.py that point to /etc/passwd. The
+          # existing missing-file branch below still handles non-existent
+          # paths as a hard error.
+          # #CRITICAL realpath -e fails if any path component is missing;
+          # gate on [ -e ] so the existing missing-file branch fires.
+          if [ -e "$BENCHMARK_SCRIPT" ]; then
+            RESOLVED=$(realpath -e "$BENCHMARK_SCRIPT")
+            case "$RESOLVED" in
+              "$GITHUB_WORKSPACE"/*) ;;
+              *)
+                echo "::error::benchmark-script resolves outside the workspace: $BENCHMARK_SCRIPT -> $RESOLVED"
+                exit 1
+                ;;
+            esac
+          fi
           if [ ! -f "$BENCHMARK_SCRIPT" ]; then
             echo "❌ ERROR: Benchmark script not found: $BENCHMARK_SCRIPT"
             echo ""

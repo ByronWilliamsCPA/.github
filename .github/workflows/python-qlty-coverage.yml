@@ -222,6 +222,8 @@ jobs:
         env:
           COVERAGE_FILE_PATH: ${{ inputs.coverage-file-path }}
           ADDITIONAL_FILES: ${{ inputs.additional-files }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          REPO_NAME: ${{ github.event.repository.name }}
         run: |
           echo "# 📊 Qlty Coverage Upload" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -237,7 +239,7 @@ jobs:
             fi
 
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "View coverage trends at: [Qlty Dashboard](https://qlty.sh/orgs/${{ github.repository_owner }}/repos/${{ github.event.repository.name }})" >> $GITHUB_STEP_SUMMARY
+            echo "View coverage trends at: [Qlty Dashboard](https://qlty.sh/orgs/$REPO_OWNER/repos/$REPO_NAME)" >> $GITHUB_STEP_SUMMARY
           else
             echo "## ⚠️ Coverage Upload Skipped" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
