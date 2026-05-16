@@ -89,7 +89,7 @@ Note: `python-codecov.yml` (the standalone reusable workflow) is retained. Only 
 
 ### Phase 3 Deliverables
 
-- `python-precommit.yml` (new): reusable workflow with harden-runner, checkout, setup-uv, `uv sync`, pre-commit run; inputs `config-path`, `python-version`, `fail-fast` -- all via env vars
+- `python-precommit.yml` (new): reusable workflow with harden-runner, checkout, setup-uv, `uv sync`, pre-commit run; inputs `config-path`, `python-version`, `show-diff-on-failure` -- all via env vars
 - `python-standard-stack.yml` (new): caller reusable workflow (`workflow_call` trigger) chaining `python-ci.yml`, `python-security-analysis.yml`, `python-sbom.yml` as called workflows via `needs:`; exposes `python-version`, `source-directory`, `coverage-threshold`, `fail-on-high`. Nesting depth: downstream caller calls standard-stack (level 1) which calls ci/security/sbom (level 2) -- within GitHub's 4-level reusable workflow limit.
 - `python-supplemental-checks.yml`: add optional `commit-lint` job gated on `enable-commit-lint` input (default `false`); uses `amannn/action-semantic-pull-request` (SHA-pinned)
 

@@ -295,5 +295,3 @@ jobs:
           echo '```json' >> $GITHUB_STEP_SUMMARY
           echo "$FORBIDDEN_LICENSES" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-
-
