@@ -140,6 +140,23 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Validate source layout
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
+          TEST_DIR: ${{ inputs.test-directory }}
+        run: |
+          missing=()
+          [ -d "$SRC_DIR" ] || missing+=("$SRC_DIR")
+          [ -d "$TEST_DIR" ] || missing+=("$TEST_DIR")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::python-ci.yml requires the following directories to exist: ${missing[*]}"
+            echo "::error::This reusable workflow assumes a Python src/ layout. If your repo"
+            echo "::error::is a configuration repo (no Python package), use a hand-rolled CI"
+            echo "::error::workflow instead. See ByronWilliamsCPA/.github/docs/workflows/python-ci.md"
+            echo "::error::for the full layout requirement and an alternative template."
+            exit 1
+          fi
+
       - name: Install uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
         with:
