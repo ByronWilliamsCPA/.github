@@ -78,24 +78,25 @@ jobs:
         id: reuse
         continue-on-error: ${{ !inputs.fail-on-missing }}
 
-      - name: Install UV for SPDX generation
-        if: ${{ inputs.generate-spdx }}
-        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
-        with:
-          enable-cache: true
-
+      # #CRITICAL: SPDX generation reuses the fsfe/reuse Docker image rather than
+      # installing reuse via `uv pip install --no-build`. Reason (issue #124): PyPI
+      # publishes only one wheel per reuse release (e.g., 5.0.2 cp313-only, 6.2.0
+      # cp310-only). The runner's `uv venv` defaults to system CPython 3.12, no
+      # wheel matches, and `--no-build` (S8541/S8544 mitigation from PR #110)
+      # forbids the sdist fallback. The Docker image already has reuse installed
+      # for the matching Python ABI, so reusing it avoids the version mismatch
+      # entirely while preserving the security posture (no pip install on host).
+      # #VERIFY: confirm fsfe/reuse-action@v6 `args:` input passes through to the
+      # reuse CLI and that output files written to /github/workspace persist.
       - name: Generate SPDX SBOM
         if: ${{ inputs.generate-spdx }}
-        # #CRITICAL: uv pip install requires an existing .venv (issue #106). uv venv
-        # creates a bare venv at .venv before the reuse tool is installed into it.
-        run: |
-          echo "Generating SPDX SBOM..."
-          uv venv
-          uv pip install --no-build 'reuse==5.0.2'
-          reuse spdx -o reuse-spdx.spdx || echo "SPDX generation completed with warnings"
+        id: spdx
+        uses: fsfe/reuse-action@676e2d560c9a403aa252096d99fcab3e1132b0f5  # v6.0.0
+        with:
+          args: spdx -o reuse-spdx.spdx
 
       - name: Upload SPDX artifact
-        if: ${{ inputs.generate-spdx }}
+        if: ${{ inputs.generate-spdx && steps.spdx.outcome == 'success' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: reuse-spdx-report
@@ -105,12 +106,17 @@ jobs:
       - name: REUSE Compliance Summary
         if: always()
         env:
+          # #ASSUME: steps.*.outcome values are constrained to success/failure/cancelled/skipped
+          # by GitHub Actions; passing through env vars avoids ${{ }} shell interpolation
+          # (workflow-injection guidance).
           GENERATE_SPDX: ${{ inputs.generate-spdx }}
+          REUSE_OUTCOME: ${{ steps.reuse.outcome }}
+          SPDX_OUTCOME: ${{ steps.spdx.outcome }}
         run: |
           echo "## REUSE Compliance Check" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          if [ "${{ steps.reuse.outcome }}" == "success" ]; then
+          if [ "$REUSE_OUTCOME" = "success" ]; then
             echo "**Status:** Compliant" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "All files have proper licensing information according to the REUSE specification." >> $GITHUB_STEP_SUMMARY
@@ -138,7 +144,11 @@ jobs:
           echo "- [REUSE Tutorial](https://reuse.software/tutorial/)" >> $GITHUB_STEP_SUMMARY
           echo "- [SPDX License List](https://spdx.org/licenses/)" >> $GITHUB_STEP_SUMMARY
 
-          if [ "$GENERATE_SPDX" == "true" ]; then
+          if [ "$GENERATE_SPDX" = "true" ]; then
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "SPDX SBOM generated and uploaded as artifact." >> $GITHUB_STEP_SUMMARY
+            if [ "$SPDX_OUTCOME" = "success" ]; then
+              echo "SPDX SBOM generated and uploaded as artifact." >> $GITHUB_STEP_SUMMARY
+            else
+              echo "SPDX SBOM generation failed (outcome: $SPDX_OUTCOME). See workflow logs for details." >> $GITHUB_STEP_SUMMARY
+            fi
           fi
