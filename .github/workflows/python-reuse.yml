@@ -88,6 +88,10 @@ jobs:
       # entirely while preserving the security posture (no pip install on host).
       # #VERIFY: confirm fsfe/reuse-action@v6 `args:` input passes through to the
       # reuse CLI and that output files written to /github/workspace persist.
+      # #ASSUME: when callers pass `fail-on-missing: false`, the lint step is
+      # marked continue-on-error and SPDX still runs against a possibly non-
+      # compliant tree (best-effort SBOM). This is intentional: the SBOM is
+      # for transparency, not for gating, and a partial inventory beats none.
       - name: Generate SPDX SBOM
         if: ${{ inputs.generate-spdx }}
         id: spdx
@@ -97,6 +101,7 @@ jobs:
 
       - name: Upload SPDX artifact
         if: ${{ inputs.generate-spdx && steps.spdx.outcome == 'success' }}
+        id: upload-spdx
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: reuse-spdx-report
@@ -112,6 +117,7 @@ jobs:
           GENERATE_SPDX: ${{ inputs.generate-spdx }}
           REUSE_OUTCOME: ${{ steps.reuse.outcome }}
           SPDX_OUTCOME: ${{ steps.spdx.outcome }}
+          UPLOAD_OUTCOME: ${{ steps.upload-spdx.outcome }}
         run: |
           echo "## REUSE Compliance Check" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -146,8 +152,18 @@ jobs:
 
           if [ "$GENERATE_SPDX" = "true" ]; then
             echo "" >> $GITHUB_STEP_SUMMARY
-            if [ "$SPDX_OUTCOME" = "success" ]; then
+            # SPDX status is reported as the cross product of generation outcome
+            # and upload outcome so operators can distinguish:
+            #   - generated and uploaded (the happy path)
+            #   - generated but upload failed (the artifact is missing)
+            #   - never attempted because an earlier step failed (skipped)
+            #   - attempted and failed (the step ran and errored)
+            if [ "$SPDX_OUTCOME" = "success" ] && [ "$UPLOAD_OUTCOME" = "success" ]; then
               echo "SPDX SBOM generated and uploaded as artifact." >> $GITHUB_STEP_SUMMARY
+            elif [ "$SPDX_OUTCOME" = "success" ]; then
+              echo "SPDX SBOM generated but artifact upload did not succeed (upload outcome: $UPLOAD_OUTCOME). See workflow logs for details." >> $GITHUB_STEP_SUMMARY
+            elif [ "$SPDX_OUTCOME" = "skipped" ]; then
+              echo "SPDX SBOM generation was skipped (an earlier step did not succeed). No SPDX failure to investigate." >> $GITHUB_STEP_SUMMARY
             else
               echo "SPDX SBOM generation failed (outcome: $SPDX_OUTCOME). See workflow logs for details." >> $GITHUB_STEP_SUMMARY
             fi
