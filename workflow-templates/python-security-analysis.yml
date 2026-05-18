@@ -1,11 +1,13 @@
 # Python Project - Security Analysis Workflow
-# Comprehensive security scanning with CodeQL, Bandit, OSV-Scanner, and Dependency-Review
+# Comprehensive security scanning with CodeQL, Bandit, OSV-Scanner,
+# Dependency-Review, and OWASP Dependency-Check
 #
 # WORKFLOW SCANS (Centralized Here):
 #   - CodeQL: Python security-extended and quality queries
 #   - Dependency Review: PR-based dependency vulnerability detection
 #   - Bandit: Python static security analysis
 #   - OSV-Scanner: Multi-ecosystem vulnerability detection
+#   - OWASP Dependency-Check: Cross-ecosystem dependency CVE scan with SARIF upload
 #
 # EXTERNAL GITHUB APPS (Complementary - No Duplication):
 #   - Semgrep Cloud Platform: Advanced SAST with better UI/tracking
