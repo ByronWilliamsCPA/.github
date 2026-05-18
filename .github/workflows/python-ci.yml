@@ -237,7 +237,7 @@ jobs:
             echo '```' >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "> **Note:** Review these findings. Some may be false positives (e.g., pytest fixtures, CLI entry points)." >> $GITHUB_STEP_SUMMARY
-            echo "> Use a `.vulture_whitelist.py` file to suppress known false positives." >> $GITHUB_STEP_SUMMARY
+            echo "> Use a \`.vulture_whitelist.py\` file to suppress known false positives." >> $GITHUB_STEP_SUMMARY
 
             if [ "$FAIL_ON_DEAD_CODE" == "true" ]; then
               echo "::error::Dead code detected. Set 'fail-on-dead-code: false' to make this a warning."
