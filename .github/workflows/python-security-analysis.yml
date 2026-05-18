@@ -258,7 +258,7 @@ jobs:
           # ignore mechanism or a policy file, not exit-code suppression.
           uv run --frozen $NO_BUILD_FLAG safety check \
             --file requirements-scan.txt \
-            --json --output safety-report.json
+            --json > safety-report.json
 
       - name: Upload Security Reports
         if: always()
