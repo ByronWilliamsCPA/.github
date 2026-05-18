@@ -10,6 +10,14 @@ are no numbered releases.
 
 ## [Unreleased]
 
+### Removed
+
+- `safety` SCA scanner from `python-security-analysis.yml` and the
+  `workflow-templates/` mirror. Python dependency vulnerability scanning
+  is fully covered by OSV-Scanner, Dependency-Review, and consumer-side
+  `pip-audit`. Resolves the cascading regressions from PRs #136/#137/#138
+  and the editable-install blocker from #138's merged form.
+
 ### Breaking Changes
 
 - `python-precommit.yml`: the `fail-fast` input has been renamed to `show-diff-on-failure` to accurately reflect what it controls. Callers passing `fail-fast:` in their `with:` block must update to `show-diff-on-failure:`. Default value (`true`) and type (`boolean`) are unchanged.
