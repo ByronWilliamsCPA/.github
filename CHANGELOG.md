@@ -12,6 +12,40 @@ are no numbered releases.
 
 ### Breaking Changes
 
+- `python-security-analysis.yml`: the `safety` SCA scanner has been
+  removed from the reusable workflow and its `workflow-templates/`
+  mirror. Three downstream-visible surfaces change:
+
+  1. **Input removed.** The `run-safety` boolean input is gone.
+     Callers still passing `run-safety:` in their `with:` block will
+     fail GitHub Actions workflow-call input validation and the run
+     will not start.
+  2. **Required-check name change.** The `python-security` job display
+     name changed from `Python Security Scan` to `Python SAST (Bandit)`.
+     Consumer repos with branch protection rules or required-check
+     configurations referencing the old name will see merges silently
+     blocked until those rules are updated.
+  3. **Conditional narrowed.** The `python-security` job's `if:`
+     condition changed from `run-bandit || run-safety` to `run-bandit`
+     alone. Callers that previously set `run-bandit: false,
+     run-safety: true` to scope scanning to dependency CVEs only now
+     receive no Python security job at all.
+
+  Migration:
+
+  1. Remove `run-safety:` from any `with:` block in caller workflows.
+  2. Rename references to `Python Security Scan` in branch protection
+     rules and required-check configurations to `Python SAST (Bandit)`.
+  3. If you depended on the `run-bandit: false, run-safety: true`
+     configuration, drop the `run-safety: true` line; dependency
+     vulnerability scanning is now performed exclusively by OSV-Scanner
+     and the Dependency-Review action.
+
+  Rationale: `safety` is the only Python dep CVE scanner in the fleet
+  whose data sources are a strict subset of OSV-Scanner's. Removal
+  eliminates the cascading regressions traced in PRs #136/#137/#138
+  and the editable-install blocker from #138's merged form.
+
 - `python-precommit.yml`: the `fail-fast` input has been renamed to `show-diff-on-failure` to accurately reflect what it controls. Callers passing `fail-fast:` in their `with:` block must update to `show-diff-on-failure:`. Default value (`true`) and type (`boolean`) are unchanged.
 
   Migration: update your caller workflow's `with:` block as follows.

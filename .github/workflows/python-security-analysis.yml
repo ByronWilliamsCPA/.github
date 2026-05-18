@@ -1,5 +1,5 @@
 # Python Security Analysis - Reusable Workflow
-# Comprehensive security scanning with CodeQL, Bandit, Safety, OSV-Scanner, and OWASP
+# Comprehensive security scanning with CodeQL, Bandit, OSV-Scanner, and Dependency-Review
 #
 # Usage from downstream repos:
 #   jobs:
@@ -52,12 +52,6 @@ on:
 
       run-bandit:
         description: 'Run Bandit static analysis'
-        type: boolean
-        required: false
-        default: true
-
-      run-safety:
-        description: 'Run Safety vulnerability scan'
         type: boolean
         required: false
         default: true
@@ -199,10 +193,10 @@ jobs:
           comment-summary-in-pr: always
           deny-licenses: GPL-2.0, GPL-3.0
 
-  # Python security scanning (Bandit + Safety)
+  # Python security scanning (Bandit)
   python-security:
-    name: Python Security Scan
-    if: ${{ inputs.run-bandit || inputs.run-safety }}
+    name: Python SAST (Bandit)
+    if: ${{ inputs.run-bandit }}
     runs-on: ubuntu-latest
     needs: detect-changes
     timeout-minutes: 15
@@ -247,30 +241,12 @@ jobs:
             -f json -o bandit-report.json \
             -c pyproject.toml
 
-      - name: Safety Vulnerability Scan
-        if: ${{ inputs.run-safety }}
-        run: |
-          echo "🛡️ Scanning dependencies for vulnerabilities..."
-          # safety 3.x deprecated `safety check` and changed CLI semantics.
-          # Use `safety scan` which auto-discovers project files
-          # (pyproject.toml, requirements*.txt, uv.lock), persists JSON
-          # via --save-as, and propagates exit code on findings.
-          # `--no-build` is set as a literal flag (not via $NO_BUILD_FLAG)
-          # so SonarCloud's S8541 rule can verify it is present; safety
-          # scan reads dependency metadata only, no setup scripts run.
-          # Suppress false positives via the Safety ignore mechanism or a
-          # policy file, not exit-code suppression.
-          uv run --frozen --no-build safety scan \
-            --save-as json safety-report.json
-
       - name: Upload Security Reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: python-security-reports
-          path: |
-            bandit-report.json
-            safety-report.json
+          path: bandit-report.json
 
   # OSV Scanner
   osv-scanner:
