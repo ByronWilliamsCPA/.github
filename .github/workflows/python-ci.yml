@@ -225,7 +225,7 @@ jobs:
             echo "$VULTURE_OUTPUT"
 
             # Count issues
-            DEAD_CODE_COUNT=$(echo "$VULTURE_OUTPUT" | grep -c ":" || echo "0")
+            DEAD_CODE_COUNT=$(echo "$VULTURE_OUTPUT" | grep -c ":" || true)
 
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### Dead Code Detection (Vulture)" >> $GITHUB_STEP_SUMMARY
