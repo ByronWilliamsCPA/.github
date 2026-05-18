@@ -251,14 +251,16 @@ jobs:
         if: ${{ inputs.run-safety }}
         run: |
           echo "🛡️ Scanning dependencies for vulnerabilities..."
-          uv export --format requirements-txt --no-hashes --output-file requirements-scan.txt
-          # Single invocation: writes the JSON report and propagates the exit
-          # code so real findings fail the job. Mirrors the Bandit pattern in
-          # this same workflow. Suppress false positives via the Safety
-          # ignore mechanism or a policy file, not exit-code suppression.
-          uv run --frozen $NO_BUILD_FLAG safety check \
-            --file requirements-scan.txt \
-            --json > safety-report.json
+          # safety 3.x deprecated `safety check` and changed CLI semantics.
+          # Use `safety scan` which auto-discovers project files
+          # (pyproject.toml, requirements*.txt, uv.lock), supports --output
+          # for stdout format and --save-as for file persistence, and
+          # propagates exit code on findings.
+          # Suppress false positives via the Safety ignore mechanism or a
+          # policy file, not exit-code suppression.
+          uv run --frozen $NO_BUILD_FLAG safety scan \
+            --output json \
+            --save-as json safety-report.json
 
       - name: Upload Security Reports
         if: always()
@@ -268,7 +270,6 @@ jobs:
           path: |
             bandit-report.json
             safety-report.json
-            requirements-scan.txt
 
   # OSV Scanner
   osv-scanner:
