@@ -141,9 +141,15 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
+        # Mutmut 3.x is required because this workflow uses the 3.x CLI surface
+        # ('mutmut run --paths-to-mutate=...'). Range-pin avoids the unsatisfiable
+        # wheel resolution that the previous '==2.5.1' + --no-build combo caused.
+        # Downstream projects that already declare mutmut in their dev extras
+        # (via 'uv sync --all-extras') will have it installed by the prior step;
+        # this line is a safety net for projects that do not.
         run: |
           uv sync --all-extras --frozen $NO_BUILD_FLAG
-          uv pip install --no-build 'mutmut==2.5.1'
+          uv pip install 'mutmut>=3.3,<4'
 
       - name: Run mutation testing
         id: mutmut

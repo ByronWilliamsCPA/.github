@@ -197,13 +197,22 @@ jobs:
         if: ${{ inputs.build-image }}
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
+      # Conditional DHI login: docker/login-action emits "##[error]Username and
+      # password required" when secrets are absent, which clutters CI logs even
+      # though continue-on-error suppresses the failure. This shell-based form
+      # silently skips when credentials are unset, and uses --password-stdin so
+      # the PAT never appears in process listings.
       - name: Login to DHI Registry
         if: inputs.enable-dhi-login
-        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121  # v4.1.0
-        with:
-          registry: dhi.io
-          username: ${{ secrets.DHI_USERNAME }}
-          password: ${{ secrets.DHI_PAT }}
+        env:
+          DHI_USERNAME: ${{ secrets.DHI_USERNAME }}
+          DHI_PAT: ${{ secrets.DHI_PAT }}
+        run: |
+          if [ -z "${DHI_USERNAME}" ] || [ -z "${DHI_PAT}" ]; then
+            echo "::notice::DHI credentials not configured; skipping dhi.io login (unauthenticated public pulls only)"
+            exit 0
+          fi
+          echo "${DHI_PAT}" | docker login dhi.io -u "${DHI_USERNAME}" --password-stdin
         continue-on-error: true
 
       - name: Check Dockerfile exists
