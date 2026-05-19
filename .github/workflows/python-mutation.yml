@@ -155,7 +155,18 @@ jobs:
         # rather than a silent install of an arbitrary version. The
         # workflow's CLI assumes mutmut 3.x ('mutmut run
         # --paths-to-mutate=...'); consumers should pin accordingly.
-        run: uv sync --all-extras --frozen $NO_BUILD_FLAG
+        #
+        # NOSONAR(githubactions:S8541): The $NO_BUILD_FLAG env (set from
+        # inputs.no-build, default 'true' -> '--no-build') is dynamic by
+        # design so consumers with PEP 517 build backends like hatchling
+        # can pass 'no-build: false' to permit editable installs of their
+        # own project from source. SonarCloud's static analyzer cannot
+        # resolve the env var to determine whether --no-build is present.
+        # The lockfile-based 'uv sync --frozen' itself constrains which
+        # dependency versions are installable (resolved versions only),
+        # so the residual risk of arbitrary setup-script execution is
+        # bounded by the consumer's audited uv.lock.
+        run: uv sync --all-extras --frozen $NO_BUILD_FLAG  # NOSONAR
 
       - name: Run mutation testing
         id: mutmut
