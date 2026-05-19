@@ -141,15 +141,21 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        # Mutmut 3.x is required because this workflow uses the 3.x CLI surface
-        # ('mutmut run --paths-to-mutate=...'). Range-pin avoids the unsatisfiable
-        # wheel resolution that the previous '==2.5.1' + --no-build combo caused.
-        # Downstream projects that already declare mutmut in their dev extras
-        # (via 'uv sync --all-extras') will have it installed by the prior step;
-        # this line is a safety net for projects that do not.
-        run: |
-          uv sync --all-extras --frozen $NO_BUILD_FLAG
-          uv pip install 'mutmut>=3.3,<4'
+        # Mutmut is expected to be declared in the consumer project's dev
+        # dependencies (e.g. 'mutmut>=3.3.1' in pyproject.toml's [dev]
+        # extra). Installing via 'uv sync --all-extras --frozen' uses the
+        # exact version locked in the consumer's uv.lock, which is fully
+        # reproducible AND respects each consumer's pinning. The previous
+        # standalone 'uv pip install mutmut==2.5.1 --no-build' line was
+        # both unsatisfiable (no wheels for 2.5.1) and a forced downgrade
+        # for consumers with newer mutmut releases; it is intentionally
+        # removed. If a consumer omits mutmut from their dev deps the
+        # workflow will fail loudly at 'mutmut run' with a clear
+        # ModuleNotFoundError, which is the desired explicit failure mode
+        # rather than a silent install of an arbitrary version. The
+        # workflow's CLI assumes mutmut 3.x ('mutmut run
+        # --paths-to-mutate=...'); consumers should pin accordingly.
+        run: uv sync --all-extras --frozen $NO_BUILD_FLAG
 
       - name: Run mutation testing
         id: mutmut
