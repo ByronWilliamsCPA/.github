@@ -1,0 +1,79 @@
+# Cut a semver tag on every push to main.
+#
+# Bump rules (conventional commits):
+#   BREAKING CHANGE footer or ! modifier: major bump
+#   feat: prefix: minor bump
+#   all other types (fix, chore, ci, docs, refactor, perf, test): patch bump
+#
+# Creates an annotated tag (v1.x.y) and force-moves the floating major
+# tag (v1) to HEAD. Both are pushed via GITHUB_TOKEN.
+#
+# The floating v1 tag is safe because all consumers pin to full 40-char
+# SHAs (CI-005 enforcement); v1 is human-readable documentation only.
+
+name: Release Tag
+
+on:
+  push:
+    branches:
+      - main
+
+permissions: {}
+
+jobs:
+  tag:
+    name: Cut semver release tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Harden the runner
+        uses: step-security/harden-runner@9ca718d3bf646d6534007c269a635b3e54cadf99  # v2.19.2
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Compute next version and tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          # Fetch all tags so git describe works on a fresh checkout.
+          git fetch --tags --quiet
+
+          PREV=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          MAJOR=$(echo "${PREV#v}" | cut -d. -f1)
+          MINOR=$(echo "${PREV#v}" | cut -d. -f2)
+          PATCH=$(echo "${PREV#v}" | cut -d. -f3)
+
+          MSG=$(git log -1 --pretty=%B)
+
+          if echo "$MSG" | grep -qE "BREAKING[[:space:]]CHANGE|^[a-z]+(\(.+\))?!:"; then
+            MAJOR=$((MAJOR+1)); MINOR=0; PATCH=0
+          elif echo "$MSG" | grep -qE "^feat(\(.+\))?:"; then
+            MINOR=$((MINOR+1)); PATCH=0
+          else
+            PATCH=$((PATCH+1))
+          fi
+
+          NEW_TAG="v${MAJOR}.${MINOR}.${PATCH}"
+          FLOATING="v${MAJOR}"
+
+          echo "Previous tag: $PREV"
+          echo "New tag:      $NEW_TAG"
+          echo "Floating tag: $FLOATING"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git tag -a "$NEW_TAG" -m "Release $NEW_TAG"
+          git tag -f "$FLOATING" -m "Latest $FLOATING release: $NEW_TAG"
+
+          git push origin "$NEW_TAG"
+          git push origin "$FLOATING" --force
