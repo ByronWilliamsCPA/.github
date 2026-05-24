@@ -77,7 +77,6 @@
     }
   ],
   "enabledManagers": [
-    "uv",
     "pep621",
     "pip_requirements",
     "github-actions"
