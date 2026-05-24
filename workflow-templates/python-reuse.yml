@@ -26,7 +26,7 @@ permissions:
 jobs:
   reuse:
     name: REUSE Compliance Check
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-reuse.yml@ea8e19054eac195e6ab7bc93e9c2319632560b77 # v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-reuse.yml@6f71aecae2c91214ca0a0a2206a36cf912aa31ac # v1
     with:
       generate-spdx: true
       fail-on-missing: true
