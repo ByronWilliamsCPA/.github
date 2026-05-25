@@ -194,15 +194,12 @@ jobs:
           fi
         shell: bash
 
-      - name: Install dependencies (uv with lockfile)
-        if: steps.detect.outputs.state == 'uv-locked'
+      - name: Install dependencies
+        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
+        env:
+          FROZEN_FLAG: ${{ steps.detect.outputs.state == 'uv-locked' && '--frozen' || '' }}
         run: |
-          uv sync --all-extras --frozen $NO_BUILD_FLAG
-
-      - name: Install dependencies (uv without lockfile)
-        if: steps.detect.outputs.state == 'uv-no-lock'
-        run: |
-          uv sync --all-extras $NO_BUILD_FLAG
+          uv sync --all-extras $FROZEN_FLAG $NO_BUILD_FLAG  # NOSONAR S8541
 
       - name: Skip notice (no pyproject.toml)
         if: steps.detect.outputs.state == 'skip'
@@ -635,13 +632,11 @@ jobs:
           fi
         shell: bash
 
-      - name: Install dependencies (uv with lockfile)
-        if: steps.detect.outputs.state == 'uv-locked'
-        run: uv sync --all-extras --frozen $NO_BUILD_FLAG
-
-      - name: Install dependencies (uv without lockfile)
-        if: steps.detect.outputs.state == 'uv-no-lock'
-        run: uv sync --all-extras $NO_BUILD_FLAG
+      - name: Install dependencies
+        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
+        env:
+          FROZEN_FLAG: ${{ steps.detect.outputs.state == 'uv-locked' && '--frozen' || '' }}
+        run: uv sync --all-extras $FROZEN_FLAG $NO_BUILD_FLAG  # NOSONAR S8541
 
       - name: Run tests
         if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
