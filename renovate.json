@@ -52,8 +52,11 @@
       "pinDigests": true
     },
     {
-      "description": "Python version updates - manual review required",
-      "matchDepTypes": [
+      "description": "Do not auto-update requires-python; the version range is managed per repo alongside the CI matrix strategy",
+      "matchManagers": [
+        "pep621"
+      ],
+      "matchDepNames": [
         "python"
       ],
       "enabled": false,
