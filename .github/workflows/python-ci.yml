@@ -419,10 +419,14 @@ jobs:
           fi
           if [ "$FAIL_ON_FINDINGS" = "true" ]; then
             # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
-            uv run --frozen $NO_BUILD_FLAG pip-audit $IGNORE_ARGS
+            # --skip-editable: locally-built editable installs are not on PyPI;
+            # pip-audit 2.10+ otherwise errors with "Dependency not found on PyPI"
+            uv run --frozen $NO_BUILD_FLAG pip-audit --skip-editable $IGNORE_ARGS
           else
             # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
-            uv run --frozen $NO_BUILD_FLAG pip-audit $IGNORE_ARGS || echo "::warning::Vulnerable dependencies detected (fail-on-security-findings=false; not failing CI)"
+            # --skip-editable: locally-built editable installs are not on PyPI;
+            # pip-audit 2.10+ otherwise errors with "Dependency not found on PyPI"
+            uv run --frozen $NO_BUILD_FLAG pip-audit --skip-editable $IGNORE_ARGS || echo "::warning::Vulnerable dependencies detected (fail-on-security-findings=false; not failing CI)"
           fi
           echo "::endgroup::"
 
