@@ -259,50 +259,41 @@ jobs:
           fi
         shell: bash
 
-      # Install paths split by detect.outputs.state so SonarCloud sees literal `--frozen`
-      # on the uv-locked path (S8544 cannot fire). The uv-no-lock path inlines NOSONAR for
-      # both S8541 (--no-build via input) and S8544 (no uv.lock by design on this path).
-      # The extra-dependencies input remains a single env-var-driven shell branch inside
-      # each step; flattening that into 3*2 = 6 step variants would obscure intent.
-      - name: Install dependencies (uv with lockfile)
-        if: steps.detect.outputs.state == 'uv-locked'
+      # Resolve the extras flag once so each install step below is a clean single-line
+      # `run:` that SonarCloud's githubactions rule set can pattern-match. Both
+      # multi-line `run: |` blocks AND inline NOSONAR inside them are ignored for
+      # S8541/S8544 (empirical anti-pattern from docs/sonarcloud-nosonar-patterns.md);
+      # the single-line `run:` shape is the only reliable Pattern A position.
+      - name: Resolve extras flag
+        id: extras
+        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
         env:
           EXTRA_DEPENDENCIES: ${{ inputs.extra-dependencies }}
         run: |
-          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
           if [ "$EXTRA_DEPENDENCIES" == "all" ]; then
-            uv sync --all-extras --frozen $NO_BUILD_FLAG
+            echo "flag=--all-extras" >> $GITHUB_OUTPUT
           elif [ -n "$EXTRA_DEPENDENCIES" ]; then
-            EXTRA_ARGS=()
-            while IFS= read -r dep; do
-              [[ -n "$dep" ]] && EXTRA_ARGS+=("--extra" "$dep")
-            done < <(echo "$EXTRA_DEPENDENCIES" | tr ' ' '\n')
-            uv sync "${EXTRA_ARGS[@]}" --frozen $NO_BUILD_FLAG
+            FLAG=""
+            for dep in $EXTRA_DEPENDENCIES; do
+              FLAG="$FLAG --extra $dep"
+            done
+            echo "flag=$FLAG" >> $GITHUB_OUTPUT
           else
-            uv sync --frozen $NO_BUILD_FLAG
+            echo "flag=" >> $GITHUB_OUTPUT
           fi
+        shell: bash
+
+      # Install paths split by detect.outputs.state so SonarCloud sees literal `--frozen`
+      # on the uv-locked path (S8544 cannot fire). The uv-no-lock path inlines NOSONAR for
+      # both S8541 (--no-build via input) and S8544 (no uv.lock by design on this path).
+      - name: Install dependencies (uv with lockfile)
+        if: steps.detect.outputs.state == 'uv-locked'
+        run: uv sync ${{ steps.extras.outputs.flag }} --frozen $NO_BUILD_FLAG  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
         shell: bash
 
       - name: Install dependencies (uv without lockfile)
         if: steps.detect.outputs.state == 'uv-no-lock'
-        env:
-          EXTRA_DEPENDENCIES: ${{ inputs.extra-dependencies }}
-        run: |
-          # No uv.lock exists on this path by design; this step creates it via `uv sync`.
-          # Inline NOSONAR per line because preceding-line NOSONAR inside a `run: |` block
-          # is not honored by SonarCloud's githubactions rule set (anti-pattern doc:
-          # docs/sonarcloud-nosonar-patterns.md). --no-build is opt-out via `no-build` input.
-          if [ "$EXTRA_DEPENDENCIES" == "all" ]; then
-            uv sync --all-extras $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): see step header
-          elif [ -n "$EXTRA_DEPENDENCIES" ]; then
-            EXTRA_ARGS=()
-            while IFS= read -r dep; do
-              [[ -n "$dep" ]] && EXTRA_ARGS+=("--extra" "$dep")
-            done < <(echo "$EXTRA_DEPENDENCIES" | tr ' ' '\n')
-            uv sync "${EXTRA_ARGS[@]}" $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): see step header
-          else
-            uv sync $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): see step header
-          fi
+        run: uv sync ${{ steps.extras.outputs.flag }} $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path (uv sync creates one)
         shell: bash
 
       - name: Skip notice (no pyproject.toml)
