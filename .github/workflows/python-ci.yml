@@ -194,12 +194,18 @@ jobs:
           fi
         shell: bash
 
-      - name: Install dependencies
-        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
-        env:
-          FROZEN_FLAG: ${{ steps.detect.outputs.state == 'uv-locked' && '--frozen' || '' }}
-        run: |
-          uv sync --all-extras $FROZEN_FLAG $NO_BUILD_FLAG  # NOSONAR S8541
+      - name: Install dependencies (uv with lockfile)
+        if: steps.detect.outputs.state == 'uv-locked'
+        run: uv sync --all-extras --frozen $NO_BUILD_FLAG
+        shell: bash
+
+      # SonarCloud cannot follow the $NO_BUILD_FLAG env-var indirection, and by design no
+      # uv.lock exists yet on this path until this step generates one. Inline NOSONAR with
+      # rationale; the uv-locked install step above keeps the literal --frozen visible.
+      - name: Install dependencies (uv without lockfile)
+        if: steps.detect.outputs.state == 'uv-no-lock'
+        run: uv sync --all-extras $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path
+        shell: bash
 
       - name: Skip notice (no pyproject.toml)
         if: steps.detect.outputs.state == 'skip'
@@ -213,11 +219,11 @@ jobs:
         env:
           SRC_DIR: ${{ inputs.source-directory }}
           TEST_DIR: ${{ inputs.test-directory }}
-          FROZEN_FLAG: ${{ steps.detect.outputs.state == 'uv-locked' && '--frozen' || '' }}
         run: |
           echo "::group::Ruff Formatting"
-          uv run $FROZEN_FLAG $NO_BUILD_FLAG ruff format --check "$SRC_DIR"/ "$TEST_DIR"/ || {
-            echo "::error::Code formatting issues detected. Run: uv run $FROZEN_FLAG $NO_BUILD_FLAG ruff format ${SRC_DIR}/ ${TEST_DIR}/"
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          uv run --frozen $NO_BUILD_FLAG ruff format --check "$SRC_DIR"/ "$TEST_DIR"/ || {
+            echo "::error::Code formatting issues detected. Run: uv run --frozen $NO_BUILD_FLAG ruff format ${SRC_DIR}/ ${TEST_DIR}/"
             exit 1
           }
           echo "::endgroup::"
@@ -227,20 +233,20 @@ jobs:
         env:
           SRC_DIR: ${{ inputs.source-directory }}
           TEST_DIR: ${{ inputs.test-directory }}
-          FROZEN_FLAG: ${{ steps.detect.outputs.state == 'uv-locked' && '--frozen' || '' }}
         run: |
           echo "::group::Ruff Linting"
-          uv run $FROZEN_FLAG $NO_BUILD_FLAG ruff check "$SRC_DIR"/ "$TEST_DIR"/ --output-format=github
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          uv run --frozen $NO_BUILD_FLAG ruff check "$SRC_DIR"/ "$TEST_DIR"/ --output-format=github
           echo "::endgroup::"
 
       - name: Run BasedPyright type checker
         if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
         env:
           SRC_DIR: ${{ inputs.source-directory }}
-          FROZEN_FLAG: ${{ steps.detect.outputs.state == 'uv-locked' && '--frozen' || '' }}
         run: |
           echo "::group::BasedPyright Type Checking"
-          uv run $FROZEN_FLAG $NO_BUILD_FLAG basedpyright "$SRC_DIR"/ || {
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          uv run --frozen $NO_BUILD_FLAG basedpyright "$SRC_DIR"/ || {
             echo "::warning::Type checking found issues"
           }
           echo "::endgroup::"
@@ -251,7 +257,6 @@ jobs:
           SRC_DIR: ${{ inputs.source-directory }}
           DEAD_CODE_CONFIDENCE: ${{ inputs.dead-code-confidence }}
           FAIL_ON_DEAD_CODE: ${{ inputs.fail-on-dead-code }}
-          FROZEN_FLAG: ${{ steps.detect.outputs.state == 'uv-locked' && '--frozen' || '' }}
         run: |
           echo "::group::Vulture Dead Code Detection"
 
@@ -262,7 +267,8 @@ jobs:
           echo "Scanning for dead code (min confidence: $DEAD_CODE_CONFIDENCE%)..."
 
           # Capture output for reporting
-          VULTURE_OUTPUT=$(uv run $FROZEN_FLAG $NO_BUILD_FLAG vulture "$SRC_DIR"/ --min-confidence "$DEAD_CODE_CONFIDENCE" 2>&1) || true
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          VULTURE_OUTPUT=$(uv run --frozen $NO_BUILD_FLAG vulture "$SRC_DIR"/ --min-confidence "$DEAD_CODE_CONFIDENCE" 2>&1) || true
 
           if [ -n "$VULTURE_OUTPUT" ]; then
             echo "$VULTURE_OUTPUT"
@@ -302,10 +308,10 @@ jobs:
         if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
         env:
           SRC_DIR: ${{ inputs.source-directory }}
-          FROZEN_FLAG: ${{ steps.detect.outputs.state == 'uv-locked' && '--frozen' || '' }}
         run: |
           echo "::group::Unit Test Execution"
-          uv run $FROZEN_FLAG $NO_BUILD_FLAG pytest \
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          uv run --frozen $NO_BUILD_FLAG pytest \
             -m "unit or not (integration or security or slow)" \
             --cov="$SRC_DIR" \
             --cov-report=xml:coverage-unit.xml \
@@ -320,11 +326,11 @@ jobs:
         if: inputs.run-integration-tests && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock')
         env:
           SRC_DIR: ${{ inputs.source-directory }}
-          FROZEN_FLAG: ${{ steps.detect.outputs.state == 'uv-locked' && '--frozen' || '' }}
         run: |
           echo "::group::Integration Test Execution"
           set +e
-          uv run $FROZEN_FLAG $NO_BUILD_FLAG pytest \
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          uv run --frozen $NO_BUILD_FLAG pytest \
             -m "integration" \
             --cov="$SRC_DIR" \
             --cov-report=xml:coverage-integration.xml \
@@ -343,11 +349,11 @@ jobs:
         if: inputs.run-security-tests && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock')
         env:
           SRC_DIR: ${{ inputs.source-directory }}
-          FROZEN_FLAG: ${{ steps.detect.outputs.state == 'uv-locked' && '--frozen' || '' }}
         run: |
           echo "::group::Security Test Execution"
           set +e
-          uv run $FROZEN_FLAG $NO_BUILD_FLAG pytest \
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          uv run --frozen $NO_BUILD_FLAG pytest \
             -m "security" \
             --cov="$SRC_DIR" \
             --cov-report=xml:coverage-security.xml \
@@ -366,13 +372,16 @@ jobs:
         if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
         env:
           COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold }}
-          FROZEN_FLAG: ${{ steps.detect.outputs.state == 'uv-locked' && '--frozen' || '' }}
         run: |
           echo "::group::Combined Coverage"
-          uv run $FROZEN_FLAG $NO_BUILD_FLAG coverage combine --keep || true
-          uv run $FROZEN_FLAG $NO_BUILD_FLAG coverage xml -o coverage.xml
-          uv run $FROZEN_FLAG $NO_BUILD_FLAG coverage html
-          uv run $FROZEN_FLAG $NO_BUILD_FLAG coverage report --fail-under="$COVERAGE_THRESHOLD"
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          uv run --frozen $NO_BUILD_FLAG coverage combine --keep || true
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          uv run --frozen $NO_BUILD_FLAG coverage xml -o coverage.xml
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          uv run --frozen $NO_BUILD_FLAG coverage html
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          uv run --frozen $NO_BUILD_FLAG coverage report --fail-under="$COVERAGE_THRESHOLD"
           echo "::endgroup::"
 
       - name: Security scan with Bandit
@@ -380,14 +389,15 @@ jobs:
         env:
           SRC_DIR: ${{ inputs.source-directory }}
           FAIL_ON_FINDINGS: ${{ inputs.fail-on-security-findings }}
-          FROZEN_FLAG: ${{ steps.detect.outputs.state == 'uv-locked' && '--frozen' || '' }}
         run: |
           echo "::group::Bandit Security Scan"
           # -lll filters to HIGH severity only; non-zero exit on findings.
           if [ "$FAIL_ON_FINDINGS" = "true" ]; then
-            uv run $FROZEN_FLAG $NO_BUILD_FLAG bandit -r "$SRC_DIR"/ -c pyproject.toml -lll -f json -o bandit-report.json
+            # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+            uv run --frozen $NO_BUILD_FLAG bandit -r "$SRC_DIR"/ -c pyproject.toml -lll -f json -o bandit-report.json
           else
-            uv run $FROZEN_FLAG $NO_BUILD_FLAG bandit -r "$SRC_DIR"/ -c pyproject.toml -lll -f json -o bandit-report.json || {
+            # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+            uv run --frozen $NO_BUILD_FLAG bandit -r "$SRC_DIR"/ -c pyproject.toml -lll -f json -o bandit-report.json || {
               echo "::warning::HIGH-severity security issues detected (fail-on-security-findings=false; not failing CI)"
               cat bandit-report.json
             }
@@ -398,7 +408,6 @@ jobs:
         if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
         env:
           FAIL_ON_FINDINGS: ${{ inputs.fail-on-security-findings }}
-          FROZEN_FLAG: ${{ steps.detect.outputs.state == 'uv-locked' && '--frozen' || '' }}
         run: |
           echo "::group::pip-audit Dependency Scan"
           # Read [tool.pip-audit].ignore-vuln from pyproject.toml if present.
@@ -409,9 +418,11 @@ jobs:
             IGNORE_ARGS=$(python3 -c "import tomllib; d=tomllib.load(open('pyproject.toml','rb')); ids=d.get('tool',{}).get('pip-audit',{}).get('ignore-vuln',[]); print(' '.join('--ignore-vuln '+i for i in ids))" 2>/dev/null || true)
           fi
           if [ "$FAIL_ON_FINDINGS" = "true" ]; then
-            uv run $FROZEN_FLAG $NO_BUILD_FLAG pip-audit $IGNORE_ARGS
+            # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+            uv run --frozen $NO_BUILD_FLAG pip-audit $IGNORE_ARGS
           else
-            uv run $FROZEN_FLAG $NO_BUILD_FLAG pip-audit $IGNORE_ARGS || echo "::warning::Vulnerable dependencies detected (fail-on-security-findings=false; not failing CI)"
+            # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+            uv run --frozen $NO_BUILD_FLAG pip-audit $IGNORE_ARGS || echo "::warning::Vulnerable dependencies detected (fail-on-security-findings=false; not failing CI)"
           fi
           echo "::endgroup::"
 
@@ -632,21 +643,29 @@ jobs:
           fi
         shell: bash
 
-      - name: Install dependencies
-        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
-        env:
-          FROZEN_FLAG: ${{ steps.detect.outputs.state == 'uv-locked' && '--frozen' || '' }}
-        run: uv sync --all-extras $FROZEN_FLAG $NO_BUILD_FLAG  # NOSONAR S8541
+      - name: Install dependencies (uv with lockfile)
+        if: steps.detect.outputs.state == 'uv-locked'
+        run: uv sync --all-extras --frozen $NO_BUILD_FLAG
+        shell: bash
+
+      # SonarCloud cannot follow the $NO_BUILD_FLAG env-var indirection, and by design no
+      # uv.lock exists yet on this path until this step generates one. Inline NOSONAR with
+      # rationale; the uv-locked install step above keeps the literal --frozen visible.
+      - name: Install dependencies (uv without lockfile)
+        if: steps.detect.outputs.state == 'uv-no-lock'
+        run: uv sync --all-extras $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path
+        shell: bash
 
       - name: Run tests
         if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
         env:
           SRC_DIR: ${{ inputs.source-directory }}
           PYTHON_VERSION: ${{ matrix.python-version }}
-          FROZEN_FLAG: ${{ steps.detect.outputs.state == 'uv-locked' && '--frozen' || '' }}
         run: |
           echo "::group::Testing on Python $PYTHON_VERSION"
-          uv run $FROZEN_FLAG $NO_BUILD_FLAG pytest \
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          uv run --frozen $NO_BUILD_FLAG pytest \
             --cov="$SRC_DIR" \
             --cov-report=term-missing \
             -v
