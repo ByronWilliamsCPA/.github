@@ -607,3 +607,101 @@ STUB
   assert_success
   refute_output --partial "Applying changes"
 }
+
+# ---------------------------------------------------------------------------
+# --pin-tags mode
+# ---------------------------------------------------------------------------
+
+# Fresh SHAs the gh stub returns for --pin-tags tests
+CHECKOUT_V4_LATEST_TAG="v4.3.0"
+CHECKOUT_V4_LATEST_SHA="8edcb1bdb4e267140fa742c62e395cd74f332709"  # pragma: allowlist secret
+SETUP_PYTHON_V5_LATEST_TAG="v5.2.0"
+SETUP_PYTHON_V5_LATEST_SHA="0b93645e9fea7318ecaed2b359559ac225c90a2b"  # pragma: allowlist secret
+
+# Override the default gh stub to also answer tag-to-SHA resolution calls
+_write_gh_stub_pin_tags() {
+  cat > "$GH_BIN/gh" <<EOF
+#!/usr/bin/env bash
+set -e
+case "\$*" in
+  *"release list --repo actions/checkout"*)
+    echo '[{"tagName":"v4.3.0"},{"tagName":"v4.2.0"}]' ;;
+  *"release list --repo actions/setup-python"*)
+    echo '[{"tagName":"v5.2.0"},{"tagName":"v5.1.0"}]' ;;
+  *"git/refs/tags/v4.3.0"*"actions/checkout"*)
+    echo '{"object":{"type":"commit","sha":"$CHECKOUT_V4_LATEST_SHA"}}' ;;
+  *"git/refs/tags/v5.2.0"*"actions/setup-python"*)
+    echo '{"object":{"type":"commit","sha":"$SETUP_PYTHON_V5_LATEST_SHA"}}' ;;
+  *"auth status"*) exit 0 ;;
+  *) echo "unexpected gh call: \$*" >&2; exit 1 ;;
+esac
+EOF
+  chmod +x "$GH_BIN/gh"
+}
+
+@test "--pin-tags dry-run reports conversions without modifying files" {
+  _write_gh_stub_pin_tags
+  pin_tags_dir="$TEST_TMPDIR/pin_tags_workdir"
+  mkdir -p "$pin_tags_dir"
+  cp "$FIXTURES/tag-pinned.yml" "$pin_tags_dir/"
+
+  run "$SCRIPT" --pin-tags --workflows-dir "$pin_tags_dir"
+
+  assert_success
+  assert_output --partial "actions/checkout@v4"
+  assert_output --partial "$CHECKOUT_V4_LATEST_TAG"
+  assert_output --partial "DRY RUN"
+  # File unchanged
+  run grep -F "actions/checkout@v4" "$pin_tags_dir/tag-pinned.yml"
+  assert_success
+}
+
+@test "--pin-tags --apply rewrites tag refs to SHA with trailing comment" {
+  _write_gh_stub_pin_tags
+  pin_tags_dir="$TEST_TMPDIR/pin_tags_workdir"
+  mkdir -p "$pin_tags_dir"
+  cp "$FIXTURES/tag-pinned.yml" "$pin_tags_dir/"
+
+  run "$SCRIPT" --pin-tags --apply --workflows-dir "$pin_tags_dir"
+
+  assert_success
+  run grep -F "actions/checkout@$CHECKOUT_V4_LATEST_SHA  # $CHECKOUT_V4_LATEST_TAG" \
+    "$pin_tags_dir/tag-pinned.yml"
+  assert_success
+  run grep -F "actions/setup-python@$SETUP_PYTHON_V5_LATEST_SHA  # $SETUP_PYTHON_V5_LATEST_TAG" \
+    "$pin_tags_dir/tag-pinned.yml"
+  assert_success
+}
+
+@test "--pin-tags leaves first-party org refs untouched" {
+  _write_gh_stub_pin_tags
+  pin_tags_dir="$TEST_TMPDIR/pin_tags_workdir"
+  mkdir -p "$pin_tags_dir"
+  cp "$FIXTURES/tag-pinned.yml" "$pin_tags_dir/"
+
+  run "$SCRIPT" --pin-tags --apply --workflows-dir "$pin_tags_dir"
+
+  assert_success
+  run grep -F "ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1" \
+    "$pin_tags_dir/tag-pinned.yml"
+  assert_success
+  run grep -F "williaby/.github/.github/workflows/release-tag.yml@v1" \
+    "$pin_tags_dir/tag-pinned.yml"
+  assert_success
+}
+
+@test "--pin-tags refuses to convert branch refs and reports them" {
+  _write_gh_stub_pin_tags
+  pin_tags_dir="$TEST_TMPDIR/pin_tags_workdir"
+  mkdir -p "$pin_tags_dir"
+  cp "$FIXTURES/tag-pinned.yml" "$pin_tags_dir/"
+
+  run "$SCRIPT" --pin-tags --apply --workflows-dir "$pin_tags_dir"
+
+  assert_success
+  assert_output --partial "some-org/some-action@main"
+  assert_output --partial "branch ref"
+  # Branch ref left untouched
+  run grep -F "some-org/some-action@main" "$pin_tags_dir/tag-pinned.yml"
+  assert_success
+}
