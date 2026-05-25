@@ -29,7 +29,7 @@ on:
         type: string
         default: '3.12'
       fail-on-vulnerabilities:
-        description: 'Fail workflow on CRITICAL/HIGH vulnerabilities'
+        description: 'Fail workflow on CRITICAL/HIGH vulnerabilities. Parallel-run: applies to Trivy only; Grype always runs non-gating (see issue #152).'
         required: false
         type: boolean
         default: true
@@ -54,7 +54,7 @@ on:
         type: boolean
         default: false
       trivyignore-path:
-        description: 'Path to .trivyignore file for suppressing known CVEs (relative to repo root)'
+        description: 'Path to .trivyignore file for suppressing known CVEs (relative to repo root). DEPRECATED: removed at Trivy cutover (see issue #152).'
         required: false
         type: string
         default: '.trivyignore'
@@ -63,6 +63,11 @@ on:
         required: false
         type: boolean
         default: true
+      grype-config-path:
+        description: 'Path to Grype config file (CVE ignore rules etc.) relative to repo root.'
+        required: false
+        type: string
+        default: '.grype.yaml'
 
     # Optional secrets - callers may pass these even if unused by this workflow
     # This prevents startup_failure when callers pass extra secrets
