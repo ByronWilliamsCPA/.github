@@ -168,47 +168,93 @@ jobs:
           PYTHON_VERSION: ${{ inputs.python-version }}
         run: uv python install "$PYTHON_VERSION"
 
-      - name: Install dependencies
+      # Detect the repo state before attempting uv sync. The reusable workflow is uv-only
+      # by org policy (poetry repos are being converted to uv in separate work), but it is
+      # still called by some repos that don't have a pyproject.toml (template / docs-only
+      # forks like DeQA-Doc) and by uv-managed repos that haven't yet committed a uv.lock.
+      # Hardcoding `uv sync --frozen` failed for both categories. Auto-detection skips
+      # cleanly when pyproject is absent and drops --frozen when no lockfile exists yet.
+      # Poetry repos are explicitly rejected with an actionable error.
+      - name: Detect repo state
+        id: detect
+        run: |
+          if [ ! -f pyproject.toml ]; then
+            echo "state=skip" >> $GITHUB_OUTPUT
+            echo "::notice::No pyproject.toml found at repo root; python-ci.yml will be skipped. Remove the python-ci.yml caller from this repo if it does not need Python CI."
+          elif [ -f poetry.lock ] || grep -qE '^\[tool\.poetry(\.|])' pyproject.toml; then
+            echo "state=poetry-not-supported" >> $GITHUB_OUTPUT
+            echo "::error::This repo uses Poetry. The python-ci.yml reusable workflow is uv-only by org policy. Convert this repo to uv before re-enabling Python CI."
+            exit 1
+          elif [ -f uv.lock ]; then
+            echo "state=uv-locked" >> $GITHUB_OUTPUT
+            echo "Detected: uv with lockfile"
+          else
+            echo "state=uv-no-lock" >> $GITHUB_OUTPUT
+            echo "Detected: uv without lockfile (PEP 621 pyproject.toml only); will sync without --frozen"
+          fi
+        shell: bash
+
+      - name: Install dependencies (uv with lockfile)
+        if: steps.detect.outputs.state == 'uv-locked'
         run: |
           uv sync --all-extras --frozen $NO_BUILD_FLAG
 
+      - name: Install dependencies (uv without lockfile)
+        if: steps.detect.outputs.state == 'uv-no-lock'
+        run: |
+          uv sync --all-extras $NO_BUILD_FLAG
+
+      - name: Skip notice (no pyproject.toml)
+        if: steps.detect.outputs.state == 'skip'
+        run: |
+          echo "## Python CI Skipped" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "No pyproject.toml at repo root, nothing to test." >> $GITHUB_STEP_SUMMARY
+
       - name: Run Ruff formatter check
+        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
         env:
           SRC_DIR: ${{ inputs.source-directory }}
           TEST_DIR: ${{ inputs.test-directory }}
+          FROZEN_FLAG: ${{ steps.detect.outputs.state == 'uv-locked' && '--frozen' || '' }}
         run: |
           echo "::group::Ruff Formatting"
-          uv run --frozen $NO_BUILD_FLAG ruff format --check "$SRC_DIR"/ "$TEST_DIR"/ || {
-            echo "::error::Code formatting issues detected. Run: uv run --frozen $NO_BUILD_FLAG ruff format ${SRC_DIR}/ ${TEST_DIR}/"
+          uv run $FROZEN_FLAG $NO_BUILD_FLAG ruff format --check "$SRC_DIR"/ "$TEST_DIR"/ || {
+            echo "::error::Code formatting issues detected. Run: uv run $FROZEN_FLAG $NO_BUILD_FLAG ruff format ${SRC_DIR}/ ${TEST_DIR}/"
             exit 1
           }
           echo "::endgroup::"
 
       - name: Run Ruff linter
+        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
         env:
           SRC_DIR: ${{ inputs.source-directory }}
           TEST_DIR: ${{ inputs.test-directory }}
+          FROZEN_FLAG: ${{ steps.detect.outputs.state == 'uv-locked' && '--frozen' || '' }}
         run: |
           echo "::group::Ruff Linting"
-          uv run --frozen $NO_BUILD_FLAG ruff check "$SRC_DIR"/ "$TEST_DIR"/ --output-format=github
+          uv run $FROZEN_FLAG $NO_BUILD_FLAG ruff check "$SRC_DIR"/ "$TEST_DIR"/ --output-format=github
           echo "::endgroup::"
 
       - name: Run BasedPyright type checker
+        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
         env:
           SRC_DIR: ${{ inputs.source-directory }}
+          FROZEN_FLAG: ${{ steps.detect.outputs.state == 'uv-locked' && '--frozen' || '' }}
         run: |
           echo "::group::BasedPyright Type Checking"
-          uv run --frozen $NO_BUILD_FLAG basedpyright "$SRC_DIR"/ || {
+          uv run $FROZEN_FLAG $NO_BUILD_FLAG basedpyright "$SRC_DIR"/ || {
             echo "::warning::Type checking found issues"
           }
           echo "::endgroup::"
 
       - name: Dead code detection with Vulture
-        if: inputs.enable-dead-code-check
+        if: inputs.enable-dead-code-check && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock')
         env:
           SRC_DIR: ${{ inputs.source-directory }}
           DEAD_CODE_CONFIDENCE: ${{ inputs.dead-code-confidence }}
           FAIL_ON_DEAD_CODE: ${{ inputs.fail-on-dead-code }}
+          FROZEN_FLAG: ${{ steps.detect.outputs.state == 'uv-locked' && '--frozen' || '' }}
         run: |
           echo "::group::Vulture Dead Code Detection"
 
@@ -219,7 +265,7 @@ jobs:
           echo "Scanning for dead code (min confidence: $DEAD_CODE_CONFIDENCE%)..."
 
           # Capture output for reporting
-          VULTURE_OUTPUT=$(uv run --frozen $NO_BUILD_FLAG vulture "$SRC_DIR"/ --min-confidence "$DEAD_CODE_CONFIDENCE" 2>&1) || true
+          VULTURE_OUTPUT=$(uv run $FROZEN_FLAG $NO_BUILD_FLAG vulture "$SRC_DIR"/ --min-confidence "$DEAD_CODE_CONFIDENCE" 2>&1) || true
 
           if [ -n "$VULTURE_OUTPUT" ]; then
             echo "$VULTURE_OUTPUT"
@@ -256,11 +302,13 @@ jobs:
           echo "::endgroup::"
 
       - name: Run unit tests with coverage
+        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
         env:
           SRC_DIR: ${{ inputs.source-directory }}
+          FROZEN_FLAG: ${{ steps.detect.outputs.state == 'uv-locked' && '--frozen' || '' }}
         run: |
           echo "::group::Unit Test Execution"
-          uv run --frozen $NO_BUILD_FLAG pytest \
+          uv run $FROZEN_FLAG $NO_BUILD_FLAG pytest \
             -m "unit or not (integration or security or slow)" \
             --cov="$SRC_DIR" \
             --cov-report=xml:coverage-unit.xml \
@@ -272,13 +320,14 @@ jobs:
           echo "::endgroup::"
 
       - name: Run integration tests with coverage
-        if: inputs.run-integration-tests
+        if: inputs.run-integration-tests && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock')
         env:
           SRC_DIR: ${{ inputs.source-directory }}
+          FROZEN_FLAG: ${{ steps.detect.outputs.state == 'uv-locked' && '--frozen' || '' }}
         run: |
           echo "::group::Integration Test Execution"
           set +e
-          uv run --frozen $NO_BUILD_FLAG pytest \
+          uv run $FROZEN_FLAG $NO_BUILD_FLAG pytest \
             -m "integration" \
             --cov="$SRC_DIR" \
             --cov-report=xml:coverage-integration.xml \
@@ -294,13 +343,14 @@ jobs:
           if [ $EXIT -ne 0 ] && [ $EXIT -ne 5 ]; then exit $EXIT; fi
 
       - name: Run security tests with coverage
-        if: inputs.run-security-tests
+        if: inputs.run-security-tests && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock')
         env:
           SRC_DIR: ${{ inputs.source-directory }}
+          FROZEN_FLAG: ${{ steps.detect.outputs.state == 'uv-locked' && '--frozen' || '' }}
         run: |
           echo "::group::Security Test Execution"
           set +e
-          uv run --frozen $NO_BUILD_FLAG pytest \
+          uv run $FROZEN_FLAG $NO_BUILD_FLAG pytest \
             -m "security" \
             --cov="$SRC_DIR" \
             --cov-report=xml:coverage-security.xml \
@@ -316,27 +366,31 @@ jobs:
           if [ $EXIT -ne 0 ] && [ $EXIT -ne 5 ]; then exit $EXIT; fi
 
       - name: Generate combined coverage report
+        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
         env:
           COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold }}
+          FROZEN_FLAG: ${{ steps.detect.outputs.state == 'uv-locked' && '--frozen' || '' }}
         run: |
           echo "::group::Combined Coverage"
-          uv run --frozen $NO_BUILD_FLAG coverage combine --keep || true
-          uv run --frozen $NO_BUILD_FLAG coverage xml -o coverage.xml
-          uv run --frozen $NO_BUILD_FLAG coverage html
-          uv run --frozen $NO_BUILD_FLAG coverage report --fail-under="$COVERAGE_THRESHOLD"
+          uv run $FROZEN_FLAG $NO_BUILD_FLAG coverage combine --keep || true
+          uv run $FROZEN_FLAG $NO_BUILD_FLAG coverage xml -o coverage.xml
+          uv run $FROZEN_FLAG $NO_BUILD_FLAG coverage html
+          uv run $FROZEN_FLAG $NO_BUILD_FLAG coverage report --fail-under="$COVERAGE_THRESHOLD"
           echo "::endgroup::"
 
       - name: Security scan with Bandit
+        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
         env:
           SRC_DIR: ${{ inputs.source-directory }}
           FAIL_ON_FINDINGS: ${{ inputs.fail-on-security-findings }}
+          FROZEN_FLAG: ${{ steps.detect.outputs.state == 'uv-locked' && '--frozen' || '' }}
         run: |
           echo "::group::Bandit Security Scan"
           # -lll filters to HIGH severity only; non-zero exit on findings.
           if [ "$FAIL_ON_FINDINGS" = "true" ]; then
-            uv run --frozen $NO_BUILD_FLAG bandit -r "$SRC_DIR"/ -c pyproject.toml -lll -f json -o bandit-report.json
+            uv run $FROZEN_FLAG $NO_BUILD_FLAG bandit -r "$SRC_DIR"/ -c pyproject.toml -lll -f json -o bandit-report.json
           else
-            uv run --frozen $NO_BUILD_FLAG bandit -r "$SRC_DIR"/ -c pyproject.toml -lll -f json -o bandit-report.json || {
+            uv run $FROZEN_FLAG $NO_BUILD_FLAG bandit -r "$SRC_DIR"/ -c pyproject.toml -lll -f json -o bandit-report.json || {
               echo "::warning::HIGH-severity security issues detected (fail-on-security-findings=false; not failing CI)"
               cat bandit-report.json
             }
@@ -344,8 +398,10 @@ jobs:
           echo "::endgroup::"
 
       - name: Dependency vulnerability scan
+        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
         env:
           FAIL_ON_FINDINGS: ${{ inputs.fail-on-security-findings }}
+          FROZEN_FLAG: ${{ steps.detect.outputs.state == 'uv-locked' && '--frozen' || '' }}
         run: |
           echo "::group::pip-audit Dependency Scan"
           # Read [tool.pip-audit].ignore-vuln from pyproject.toml if present.
@@ -356,13 +412,14 @@ jobs:
             IGNORE_ARGS=$(python3 -c "import tomllib; d=tomllib.load(open('pyproject.toml','rb')); ids=d.get('tool',{}).get('pip-audit',{}).get('ignore-vuln',[]); print(' '.join('--ignore-vuln '+i for i in ids))" 2>/dev/null || true)
           fi
           if [ "$FAIL_ON_FINDINGS" = "true" ]; then
-            uv run --frozen $NO_BUILD_FLAG pip-audit $IGNORE_ARGS
+            uv run $FROZEN_FLAG $NO_BUILD_FLAG pip-audit $IGNORE_ARGS
           else
-            uv run --frozen $NO_BUILD_FLAG pip-audit $IGNORE_ARGS || echo "::warning::Vulnerable dependencies detected (fail-on-security-findings=false; not failing CI)"
+            uv run $FROZEN_FLAG $NO_BUILD_FLAG pip-audit $IGNORE_ARGS || echo "::warning::Vulnerable dependencies detected (fail-on-security-findings=false; not failing CI)"
           fi
           echo "::endgroup::"
 
       - name: Upload coverage artifacts
+        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: coverage-reports
@@ -560,16 +617,41 @@ jobs:
           PYTHON_VERSION: ${{ matrix.python-version }}
         run: uv python install "$PYTHON_VERSION"
 
-      - name: Install dependencies
+      # Detect the repo state before attempting uv sync. See quality-checks job for rationale.
+      - name: Detect repo state
+        id: detect
+        run: |
+          if [ ! -f pyproject.toml ]; then
+            echo "state=skip" >> $GITHUB_OUTPUT
+            echo "::notice::No pyproject.toml found at repo root; matrix testing will be skipped."
+          elif [ -f poetry.lock ] || grep -qE '^\[tool\.poetry(\.|])' pyproject.toml; then
+            echo "state=poetry-not-supported" >> $GITHUB_OUTPUT
+            echo "::error::This repo uses Poetry. The python-ci.yml reusable workflow is uv-only by org policy. Convert this repo to uv before re-enabling Python CI."
+            exit 1
+          elif [ -f uv.lock ]; then
+            echo "state=uv-locked" >> $GITHUB_OUTPUT
+          else
+            echo "state=uv-no-lock" >> $GITHUB_OUTPUT
+          fi
+        shell: bash
+
+      - name: Install dependencies (uv with lockfile)
+        if: steps.detect.outputs.state == 'uv-locked'
         run: uv sync --all-extras --frozen $NO_BUILD_FLAG
 
+      - name: Install dependencies (uv without lockfile)
+        if: steps.detect.outputs.state == 'uv-no-lock'
+        run: uv sync --all-extras $NO_BUILD_FLAG
+
       - name: Run tests
+        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
         env:
           SRC_DIR: ${{ inputs.source-directory }}
           PYTHON_VERSION: ${{ matrix.python-version }}
+          FROZEN_FLAG: ${{ steps.detect.outputs.state == 'uv-locked' && '--frozen' || '' }}
         run: |
           echo "::group::Testing on Python $PYTHON_VERSION"
-          uv run --frozen $NO_BUILD_FLAG pytest \
+          uv run $FROZEN_FLAG $NO_BUILD_FLAG pytest \
             --cov="$SRC_DIR" \
             --cov-report=term-missing \
             -v
