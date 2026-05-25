@@ -465,3 +465,40 @@ jobs:
           echo '```json' >> $GITHUB_STEP_SUMMARY
           echo "$FORBIDDEN_LICENSES" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
+  # Job 4: Parity Summary (Trivy vs Grype, parallel-run only)
+  # ============================================================================
+  # Removed at Trivy cutover. See issue #152.
+  # #EDGE: if either scan job is cancelled (not failed), `result` is 'cancelled'
+  # and the summary shows that verbatim. Acceptable; cancellation is rare.
+  # ============================================================================
+  parity-summary:
+    name: Trivy vs Grype Parity Summary
+    needs: [scan-runtime, scan-runtime-grype]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions: {}
+    timeout-minutes: 2
+    steps:
+      - name: Write parity table to step summary
+        env:
+          TRIVY_RESULT: ${{ needs.scan-runtime.result }}
+          GRYPE_RESULT: ${{ needs.scan-runtime-grype.result }}
+        run: |
+          {
+            echo "### Trivy vs Grype Parity (issue #152)"
+            echo ""
+            echo "| Scanner | Job result |"
+            echo "|---------|------------|"
+            echo "| Trivy (gating)   | $TRIVY_RESULT |"
+            echo "| Grype (advisory) | $GRYPE_RESULT |"
+            echo ""
+            if [ "$TRIVY_RESULT" != "$GRYPE_RESULT" ]; then
+              echo "**Divergence detected.** Review SARIF in Security tab:"
+              echo "- Trivy findings: category \`trivy-runtime-deps\`"
+              echo "- Grype findings: category \`grype-runtime-deps\`"
+            else
+              echo "Results match. No action required."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
