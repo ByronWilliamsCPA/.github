@@ -10,6 +10,19 @@ are no numbered releases.
 
 ## [Unreleased]
 
+### Added
+
+- `python-sbom.yml`: Grype scanning runs alongside Trivy as a non-gating sibling
+  job (`scan-runtime-grype`) for a 30-day parity window per issue #152. Adds new
+  optional input `grype-config-path` (default `.grype.yaml`) and a
+  `parity-summary` job that writes a Trivy-vs-Grype results table to the run
+  summary. Trivy remains the gating scanner during parallel-run. Caller surface
+  is backwards-compatible; two new check entries appear in PR Checks UI. The
+  `trivyignore-path` input is marked deprecation-pending for removal at the
+  Trivy cutover. Motivation: Trivy release infrastructure compromise (March
+  2026) makes the SBOM scanner itself a supply-chain risk; Grype (Anchore) is
+  unaffected.
+
 ### Breaking Changes
 
 - `python-security-analysis.yml`: the `safety` SCA scanner has been
