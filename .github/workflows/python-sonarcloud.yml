@@ -288,17 +288,20 @@ jobs:
         env:
           EXTRA_DEPENDENCIES: ${{ inputs.extra-dependencies }}
         run: |
-          # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path (uv sync below creates one)
+          # No uv.lock exists on this path by design; this step creates it via `uv sync`.
+          # Inline NOSONAR per line because preceding-line NOSONAR inside a `run: |` block
+          # is not honored by SonarCloud's githubactions rule set (anti-pattern doc:
+          # docs/sonarcloud-nosonar-patterns.md). --no-build is opt-out via `no-build` input.
           if [ "$EXTRA_DEPENDENCIES" == "all" ]; then
-            uv sync --all-extras $NO_BUILD_FLAG
+            uv sync --all-extras $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): see step header
           elif [ -n "$EXTRA_DEPENDENCIES" ]; then
             EXTRA_ARGS=()
             while IFS= read -r dep; do
               [[ -n "$dep" ]] && EXTRA_ARGS+=("--extra" "$dep")
             done < <(echo "$EXTRA_DEPENDENCIES" | tr ' ' '\n')
-            uv sync "${EXTRA_ARGS[@]}" $NO_BUILD_FLAG
+            uv sync "${EXTRA_ARGS[@]}" $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): see step header
           else
-            uv sync $NO_BUILD_FLAG
+            uv sync $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): see step header
           fi
         shell: bash
 
