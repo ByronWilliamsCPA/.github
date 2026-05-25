@@ -114,12 +114,29 @@ jobs:
           echo "::warning::The 'publish-results' input is deprecated and always treated as false. Remove it from your workflow to suppress this warning. See python-scorecard.yml Known Limitations for details."
 
       - name: Run OpenSSF Scorecard
+        # continue-on-error: scorecard-action v2.4.3 attempts to publish results to the
+        # securityscorecards.dev webapp via an internal code path that ignores
+        # publish_results: false. The webapp rejects the upload from a reusable-workflow
+        # context with HTTP 400 ("workflow verification failed: global perm is set to write")
+        # which fails the entire step. The SARIF file is still written before the orphan
+        # upload attempt, so subsequent steps (Security tab upload, artifact upload, score
+        # gate evaluation) all proceed correctly. The next "Verify SARIF was generated" step
+        # turns missing-SARIF into an explicit failure so we don't silently lose detection.
+        continue-on-error: true
         uses: ossf/scorecard-action@4eaacf0543bb3f2c246792bd56e8cdeffafb205a  # v2.4.3
         with:
           results_file: scorecard-results.sarif
           results_format: sarif
           publish_results: false
           repo_token: ${{ secrets.SCORECARD_TOKEN }}
+
+      - name: Verify SARIF was generated
+        run: |
+          if [ ! -s scorecard-results.sarif ]; then
+            echo "::error::scorecard-results.sarif was not generated or is empty. The scorecard step likely failed before SARIF write, not at the webapp upload."
+            exit 1
+          fi
+          echo "SARIF file generated: $(wc -l < scorecard-results.sarif) lines, $(wc -c < scorecard-results.sarif) bytes"
 
       - name: Upload Scorecard SARIF to Security tab
         if: ${{ inputs.upload-sarif }}
