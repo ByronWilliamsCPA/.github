@@ -24,6 +24,10 @@ on:
       - main
       - develop
   workflow_dispatch:
+  # CRITICAL: merge_group fires against the queue's speculative merge commit.
+  # SonarCloud quality gate must run on the queue ref to prevent regressions
+  # that only surface when concurrent PRs are merged together. See CI-040.
+  merge_group:
 
 permissions:
   contents: read

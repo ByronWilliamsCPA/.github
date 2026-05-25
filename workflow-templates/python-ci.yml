@@ -31,6 +31,13 @@ on:
     branches:
       - main
       - develop
+  # CRITICAL: merge_group fires against the queue's speculative merge commit.
+  # Required so this gate produces a check on the queue ref. Without it, repos
+  # that enable merge_queue cannot land PRs that list this workflow as a
+  # required status check. See standards-manifest CI-040. #VERIFY by enabling
+  # merge_queue on a sacrificial repo and confirming the check appears on the
+  # merge_group ref via gh api repos/<org>/<repo>/commits/<sha>/check-runs.
+  merge_group:
 
 permissions:
   contents: read        # For checkout

@@ -27,6 +27,10 @@ on:
   schedule:
     - cron: '30 2 * * 1'  # Weekly Monday 2:30 AM UTC
   workflow_dispatch:  # Manual trigger
+  # CRITICAL: merge_group fires against the queue's speculative merge commit.
+  # Security gate must run on the queue ref so vulnerabilities introduced by
+  # the speculative merge are caught before landing on main. See CI-040.
+  merge_group:
 
 permissions: read-all
 
