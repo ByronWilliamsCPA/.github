@@ -618,20 +618,22 @@ CHECKOUT_V4_LATEST_SHA="8edcb1bdb4e267140fa742c62e395cd74f332709"  # pragma: all
 SETUP_PYTHON_V5_LATEST_TAG="v5.2.0"
 SETUP_PYTHON_V5_LATEST_SHA="0b93645e9fea7318ecaed2b359559ac225c90a2b"  # pragma: allowlist secret
 
-# Override the default gh stub to also answer tag-to-SHA resolution calls
+# Override the default gh stub to also answer tag-to-SHA resolution calls.
+# Uses _apply_jq_flag (defined and exported above) so the stub honors --jq
+# the same way the real gh CLI does, matching every other stub in this file.
 _write_gh_stub_pin_tags() {
   cat > "$GH_BIN/gh" <<EOF
 #!/usr/bin/env bash
 set -e
 case "\$*" in
   *"release list --repo actions/checkout"*)
-    echo '[{"tagName":"v4.3.0"},{"tagName":"v4.2.0"}]' ;;
+    _apply_jq_flag '[{"tagName":"v4.3.0"},{"tagName":"v4.2.0"}]' "\$@" ;;
   *"release list --repo actions/setup-python"*)
-    echo '[{"tagName":"v5.2.0"},{"tagName":"v5.1.0"}]' ;;
-  *"git/refs/tags/v4.3.0"*"actions/checkout"*)
-    echo '{"object":{"type":"commit","sha":"$CHECKOUT_V4_LATEST_SHA"}}' ;;
-  *"git/refs/tags/v5.2.0"*"actions/setup-python"*)
-    echo '{"object":{"type":"commit","sha":"$SETUP_PYTHON_V5_LATEST_SHA"}}' ;;
+    _apply_jq_flag '[{"tagName":"v5.2.0"},{"tagName":"v5.1.0"}]' "\$@" ;;
+  *"actions/checkout"*"git/refs/tags/v4.3.0"*)
+    _apply_jq_flag '{"object":{"type":"commit","sha":"$CHECKOUT_V4_LATEST_SHA"}}' "\$@" ;;
+  *"actions/setup-python"*"git/refs/tags/v5.2.0"*)
+    _apply_jq_flag '{"object":{"type":"commit","sha":"$SETUP_PYTHON_V5_LATEST_SHA"}}' "\$@" ;;
   *"auth status"*) exit 0 ;;
   *) echo "unexpected gh call: \$*" >&2; exit 1 ;;
 esac

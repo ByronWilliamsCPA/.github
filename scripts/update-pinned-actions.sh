@@ -29,6 +29,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 WORKFLOWS_DIR="$REPO_ROOT/.github/workflows"
 APPLY=false
+PIN_TAGS=false
+OWNER_ALLOWLIST="ByronWilliamsCPA,williaby"
 
 # Colors
 RED='\033[0;31m'
@@ -47,6 +49,15 @@ usage() {
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --apply)           APPLY=true; shift ;;
+        --pin-tags)        PIN_TAGS=true; shift ;;
+        --owner-allowlist)
+            if [[ $# -lt 2 || -z "${2:-}" ]]; then
+                echo -e "${RED}ERROR: --owner-allowlist requires a comma-separated list${NC}"
+                usage 1
+            fi
+            OWNER_ALLOWLIST="$2"
+            shift 2
+            ;;
         --workflows-dir)
             if [[ $# -lt 2 || -z "${2:-}" ]]; then
                 echo -e "${RED}ERROR: --workflows-dir requires a directory path${NC}"
@@ -109,9 +120,128 @@ resolve_tag_sha() {
 }
 
 # ---------------------------------------------------------------------------
+# Extract tag-pinned third-party action references
+# Emits one record per line: "owner/repo[/sub]|tag"
+# Skips owners in $OWNER_ALLOWLIST and branch refs (handled separately).
+# ---------------------------------------------------------------------------
+extract_tag_pins() {
+    local allowlist_pattern
+    allowlist_pattern="^($(echo "$OWNER_ALLOWLIST" | tr ',' '|'))/"
+
+    grep -rhE '^[[:space:]]*[#-]?[[:space:]]*uses:[[:space:]]+[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+(/[a-zA-Z0-9_./-]*)?@v[0-9]+(\.[0-9]+)*[[:space:]]*$' \
+        "$WORKFLOWS_DIR"/ 2>/dev/null \
+        | grep -vE '^\s*#' \
+        | sed -E 's/^[[:space:]]*-?[[:space:]]*uses:[[:space:]]+//; s/[[:space:]]*$//' \
+        | awk -F'@' -v skip="$allowlist_pattern" '
+            $1 !~ skip { print $1 "|" $2 }
+          ' \
+        | sort -u
+}
+
+# ---------------------------------------------------------------------------
+# Extract branch-pinned third-party action references (reported, not converted)
+# ---------------------------------------------------------------------------
+extract_branch_pins() {
+    local allowlist_pattern
+    allowlist_pattern="^($(echo "$OWNER_ALLOWLIST" | tr ',' '|'))/"
+
+    grep -rhE '^[[:space:]]*-?[[:space:]]*uses:[[:space:]]+[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+(/[a-zA-Z0-9_./-]*)?@(main|master|HEAD|develop)[[:space:]]*$' \
+        "$WORKFLOWS_DIR"/ 2>/dev/null \
+        | grep -vE '^\s*#' \
+        | sed -E 's/^[[:space:]]*-?[[:space:]]*uses:[[:space:]]+//; s/[[:space:]]*$//' \
+        | awk -F'@' -v skip="$allowlist_pattern" '$1 !~ skip { print $0 }' \
+        | sort -u
+}
+
+# ---------------------------------------------------------------------------
+# --pin-tags mode entry point
+# ---------------------------------------------------------------------------
+pin_tags_main() {
+    echo -e "${BLUE}Mode: PIN-TAGS (convert @vN refs to @<sha>)${NC}"
+    echo "  Allowlist (skipped): $OWNER_ALLOWLIST"
+    echo ""
+
+    local pins
+    pins=$(extract_tag_pins)
+    if [[ -z "$pins" ]]; then
+        echo -e "${GREEN}No third-party tag-pinned actions found. Repo is compliant with CI-060.${NC}"
+    fi
+
+    local branches
+    branches=$(extract_branch_pins)
+    if [[ -n "$branches" ]]; then
+        echo -e "${YELLOW}WARN: branch ref detected (not auto-convertible, fix manually):${NC}"
+        echo "$branches" | sed 's/^/  /'
+        echo ""
+    fi
+
+    [[ -z "$pins" ]] && return 0
+
+    local CHANGE_LOG
+    CHANGE_LOG=$(mktemp)
+    trap 'rm -f "$CHANGE_LOG"' RETURN
+
+    printf "%-65s   %s\n" "Action@Tag" "Target SHA"
+    printf '%0.s-' {1..90}; echo ""
+
+    while IFS='|' read -r full_action current_tag; do
+        [[ -z "$full_action" ]] && continue
+        local ref repo major latest_tag new_sha
+        ref="${full_action}@${current_tag}"
+        repo=$(echo "$full_action" | awk -F/ '{print $1"/"$2}')
+        major=$(echo "$current_tag" | grep -oE '^v[0-9]+')
+
+        latest_tag=$(
+            gh release list --repo "$repo" --limit 50 --json tagName \
+              --jq "[.[] | select(.tagName | test(\"^${major}([.]|\$)\")) | .tagName] | sort_by(split(\".\") | map(ltrimstr(\"v\") | tonumber? // 0)) | reverse | first // empty" \
+              2>/dev/null || true
+        )
+        if [[ -z "$latest_tag" ]]; then
+            printf "%-65s   %b\n" "$ref" "${YELLOW}SKIP: no release found${NC}"
+            continue
+        fi
+
+        new_sha=$(resolve_tag_sha "$repo" "$latest_tag")
+        if [[ -z "$new_sha" ]]; then
+            printf "%-65s   %b\n" "$ref" "${YELLOW}SKIP: cannot resolve SHA${NC}"
+            continue
+        fi
+
+        printf "%-65s -> %b\n" "$ref" "${YELLOW}${latest_tag}  (${new_sha:0:12}...)${NC}"
+        printf '%s|%s|%s|%s\n' "$full_action" "$current_tag" "$new_sha" "$latest_tag" >> "$CHANGE_LOG"
+    done <<< "$pins"
+
+    if [[ "$APPLY" = false ]]; then
+        echo ""
+        echo -e "${CYAN}DRY RUN complete: no files were changed.${NC}"
+        return 0
+    fi
+
+    # Apply
+    while IFS='|' read -r full_action current_tag new_sha latest_tag; do
+        local _pat _rep
+        _pat="${full_action//\//\\/}@${current_tag}"
+        _rep="${full_action//\//\\/}@${new_sha}  # ${latest_tag}"
+        while IFS= read -r wf_file; do
+            local tmp_wf
+            tmp_wf=$(mktemp)
+            sed -E "s|${_pat}([[:space:]]*)$|${_rep}|g" "$wf_file" > "$tmp_wf"
+            mv "$tmp_wf" "$wf_file"
+        done < <(grep -rl "${full_action}@${current_tag}" "$WORKFLOWS_DIR"/ 2>/dev/null)
+    done < "$CHANGE_LOG"
+
+    echo -e "${GREEN}Done. Review with: git diff $WORKFLOWS_DIR${NC}"
+}
+
+# ---------------------------------------------------------------------------
 # Extract unique pinned action references from all workflow files
 # Pattern: uses: owner/repo[/subpath]@<40-char-sha>  # vX.Y.Z
 # ---------------------------------------------------------------------------
+if [[ "$PIN_TAGS" = true ]]; then
+    pin_tags_main
+    exit 0
+fi
+
 UNIQUE_ACTIONS_FILE=$(mktemp)
 CHANGE_LOG=$(mktemp)
 trap 'rm -f "$UNIQUE_ACTIONS_FILE" "$CHANGE_LOG"' EXIT
