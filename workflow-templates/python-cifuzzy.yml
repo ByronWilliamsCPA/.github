@@ -25,6 +25,11 @@ on:
     branches:
       - main
       - develop
+  # CRITICAL: merge_group fires against the queue's speculative merge commit.
+  # Fuzzing gate must run on the queue ref so vulnerabilities introduced by
+  # the speculative merge are caught before landing on main. See CI-040.
+  # #VERIFY same procedure as python-ci.yml's CRITICAL block; tracked in #154.
+  merge_group:
 
 permissions:
   contents: read

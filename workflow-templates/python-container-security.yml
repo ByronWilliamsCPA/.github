@@ -29,6 +29,13 @@ on:
       - 'Dockerfile*'
       - 'docker-compose*.yml'
       - '.dockerignore'
+  # CRITICAL: merge_group fires against the queue's speculative merge commit.
+  # Container security scan must run on the queue ref so Dockerfile or image
+  # regressions introduced by the speculative merge are caught before landing
+  # on main. No paths: filter here; the queue ref reflects a full merge so
+  # path-based skipping cannot be relied on. See CI-040.
+  # #VERIFY same procedure as python-ci.yml's CRITICAL block; tracked in #154.
+  merge_group:
 
 permissions:
   contents: read

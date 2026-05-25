@@ -19,6 +19,12 @@ on:
   pull_request:
     branches:
       - main
+  # CRITICAL: merge_group fires against the queue's speculative merge commit.
+  # REUSE compliance check must run on the queue ref so missing SPDX headers
+  # introduced by the speculative merge are caught before landing on main.
+  # See CI-040.
+  # #VERIFY same procedure as python-ci.yml's CRITICAL block; tracked in #154.
+  merge_group:
 
 permissions:
   contents: read
