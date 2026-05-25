@@ -23,6 +23,7 @@ on:
   # Compatibility matrix must run on the queue ref so Python-version
   # regressions introduced by the speculative merge are caught before landing
   # on main. See CI-040.
+  # #VERIFY same procedure as python-ci.yml's CRITICAL block; tracked in #154.
   merge_group:
 
 permissions:
