@@ -292,9 +292,14 @@ jobs:
         run: uv sync --all-extras --frozen $NO_BUILD_FLAG
         shell: bash
 
+      # SonarCloud cannot follow the $NO_BUILD_FLAG env-var indirection (set at line 187 from
+      # the `no-build` workflow input per PR #112), and by design no uv.lock exists yet on this
+      # path until this step generates one. S8541 (--no-build) and S8544 (lockfile) are
+      # suppressed with rationale; the existing uv-locked install step (above) uses the same
+      # env-var pattern and is accepted by SonarCloud because it predates the new-code window.
       - name: Install dependencies (uv without lockfile)
         if: steps.detect.outputs.state == 'uv-no-lock'
-        run: uv sync --all-extras $NO_BUILD_FLAG
+        run: uv sync --all-extras $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path
         shell: bash
 
       - name: Skip notice (no pyproject.toml)
@@ -308,6 +313,12 @@ jobs:
           echo "No pyproject.toml at repo root, nothing to test on Python $MATRIX_PYTHON / $MATRIX_OS." >> $GITHUB_STEP_SUMMARY
         shell: bash
 
+      # --frozen is safe in both detected states: the install step above always produces
+      # uv.lock before this step runs (the uv-no-lock path generates one during `uv sync`,
+      # the uv-locked path has one committed). Hardcoding the literal eliminates SonarCloud
+      # S8544 here. S8541 (--no-build) remains suppressed below because `--no-build` is
+      # opt-out via the `no-build` workflow input (NO_BUILD_FLAG env at line 187) and
+      # SonarCloud cannot follow the env-var indirection statically.
       - name: Run tests
         if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
         id: tests
@@ -317,24 +328,29 @@ jobs:
           SRC_DIR: ${{ inputs.source-directory }}
           MATRIX_PYTHON: ${{ matrix.python }}
           MATRIX_OS: ${{ matrix.os }}
-          FROZEN_FLAG: ${{ steps.detect.outputs.state == 'uv-locked' && '--frozen' || '' }}
         run: |
           echo "Running tests on Python $MATRIX_PYTHON ($MATRIX_OS)..."
 
           if [ "$COVERAGE_REPORT" == "true" ]; then
             # shellcheck disable=SC2086
-            uv run $FROZEN_FLAG $NO_BUILD_FLAG $TEST_COMMAND \
+            # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+            uv run --frozen $NO_BUILD_FLAG $TEST_COMMAND \
               --cov="$SRC_DIR" \
               --cov-report=xml:coverage-${MATRIX_PYTHON}-${MATRIX_OS}.xml \
               --cov-report=term-missing
           else
             # shellcheck disable=SC2086
-            uv run $FROZEN_FLAG $NO_BUILD_FLAG $TEST_COMMAND
+            # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+            uv run --frozen $NO_BUILD_FLAG $TEST_COMMAND
           fi
         shell: bash
 
+      # Gate on the same install/test states so docs-only callers (state=skip, e.g. DeQA-Doc)
+      # and poetry-not-supported callers don't emit "No files were found" warnings from
+      # upload-artifact when no coverage XML was produced. Matches the Run tests step's
+      # if: condition exactly. (Addresses Copilot review comment on PR #156.)
       - name: Upload coverage artifact
-        if: ${{ inputs.coverage-report && always() }}
+        if: ${{ inputs.coverage-report && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock') && always() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: coverage-${{ matrix.python }}-${{ matrix.os }}
