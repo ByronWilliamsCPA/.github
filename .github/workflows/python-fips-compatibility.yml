@@ -110,6 +110,25 @@ jobs:
           PYTHON_VERSION: ${{ inputs.python-version }}
         run: uv python install "$PYTHON_VERSION"
 
+      # Detect repo state for the uv sync/run commands below. Same logic as
+      # python-compatibility.yml; the reusable workflow is uv-only by org policy.
+      - name: Detect repo state
+        id: detect
+        run: |
+          if [ ! -f pyproject.toml ]; then
+            echo "state=skip" >> $GITHUB_OUTPUT
+            echo "::notice::No pyproject.toml found at repo root; FIPS compatibility check will be skipped."
+          elif [ -f poetry.lock ] || grep -qE '^\[tool\.poetry(\.|])' pyproject.toml; then
+            echo "state=poetry-not-supported" >> $GITHUB_OUTPUT
+            echo "::error::This repo uses Poetry. python-fips-compatibility.yml is uv-only by org policy. Convert to uv before re-enabling FIPS compatibility testing."
+            exit 1
+          elif [ -f uv.lock ]; then
+            echo "state=uv-locked" >> $GITHUB_OUTPUT
+          else
+            echo "state=uv-no-lock" >> $GITHUB_OUTPUT
+          fi
+        shell: bash
+
       - name: Verify FIPS check script exists
         id: script-check
         env:
@@ -152,13 +171,14 @@ jobs:
           fi
 
       - name: Run FIPS compatibility check
-        if: steps.script-check.outputs.script_exists == 'true'
+        if: steps.script-check.outputs.script_exists == 'true' && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock')
         id: fips-check
         env:
           SCRIPT_PATH: ${{ inputs.script-path }}
           STRICT_MODE: ${{ inputs.strict-mode }}
           FIX_HINTS: ${{ inputs.fix-hints }}
           INCLUDE_TESTS: ${{ inputs.include-tests }}
+          FROZEN_FLAG: ${{ steps.detect.outputs.state == 'uv-locked' && '--frozen' || '' }}
         run: |
           # Build command arguments
           STRICT_FLAG=""
@@ -178,7 +198,7 @@ jobs:
 
           # Run check and capture output
           set +e
-          uv run --frozen $NO_BUILD_FLAG python "$SCRIPT_PATH" \
+          uv run $FROZEN_FLAG $NO_BUILD_FLAG python "$SCRIPT_PATH" \
             $FIX_HINTS_FLAG \
             $INCLUDE_TESTS_FLAG \
             $STRICT_FLAG \
@@ -187,7 +207,7 @@ jobs:
           set -e
 
           # Also generate JSON report
-          uv run --frozen $NO_BUILD_FLAG python "$SCRIPT_PATH" \
+          uv run $FROZEN_FLAG $NO_BUILD_FLAG python "$SCRIPT_PATH" \
             --json \
             $INCLUDE_TESTS_FLAG \
             > fips-report.json 2>/dev/null || true
@@ -395,14 +415,40 @@ jobs:
           PYTHON_VERSION: ${{ inputs.python-version }}
         run: uv python install "$PYTHON_VERSION"
 
-      - name: Install dependencies
+      # Detect repo state. Same logic as the fips-check job above.
+      - name: Detect repo state
+        id: detect
+        run: |
+          if [ ! -f pyproject.toml ]; then
+            echo "state=skip" >> $GITHUB_OUTPUT
+            echo "::notice::No pyproject.toml found at repo root; FIPS runtime test will be skipped."
+          elif [ -f poetry.lock ] || grep -qE '^\[tool\.poetry(\.|])' pyproject.toml; then
+            echo "state=poetry-not-supported" >> $GITHUB_OUTPUT
+            echo "::error::This repo uses Poetry. python-fips-compatibility.yml is uv-only by org policy. Convert to uv before re-enabling FIPS runtime test."
+            exit 1
+          elif [ -f uv.lock ]; then
+            echo "state=uv-locked" >> $GITHUB_OUTPUT
+          else
+            echo "state=uv-no-lock" >> $GITHUB_OUTPUT
+          fi
+        shell: bash
+
+      - name: Install dependencies (uv with lockfile)
+        if: steps.detect.outputs.state == 'uv-locked'
         run: uv sync --all-extras --frozen $NO_BUILD_FLAG
 
+      - name: Install dependencies (uv without lockfile)
+        if: steps.detect.outputs.state == 'uv-no-lock'
+        run: uv sync --all-extras $NO_BUILD_FLAG
+
       - name: Test crypto imports in simulated FIPS mode
+        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
+        env:
+          FROZEN_FLAG: ${{ steps.detect.outputs.state == 'uv-locked' && '--frozen' || '' }}
         run: |
           # This tests if the code can import without using non-FIPS algorithms
           # Note: Full FIPS testing requires an actual FIPS-enabled kernel
-          uv run --frozen $NO_BUILD_FLAG python -c "
+          uv run $FROZEN_FLAG $NO_BUILD_FLAG python -c "
           import os
           import sys
 
