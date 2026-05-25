@@ -110,6 +110,25 @@ jobs:
           PYTHON_VERSION: ${{ inputs.python-version }}
         run: uv python install "$PYTHON_VERSION"
 
+      # Detect repo state for the uv sync/run commands below. Same logic as
+      # python-compatibility.yml; the reusable workflow is uv-only by org policy.
+      - name: Detect repo state
+        id: detect
+        run: |
+          if [ ! -f pyproject.toml ]; then
+            echo "state=skip" >> $GITHUB_OUTPUT
+            echo "::notice::No pyproject.toml found at repo root; FIPS compatibility check will be skipped."
+          elif [ -f poetry.lock ] || grep -qE '^\[tool\.poetry(\.|])' pyproject.toml; then
+            echo "state=poetry-not-supported" >> $GITHUB_OUTPUT
+            echo "::error::This repo uses Poetry. python-fips-compatibility.yml is uv-only by org policy. Convert to uv before re-enabling FIPS compatibility testing."
+            exit 1
+          elif [ -f uv.lock ]; then
+            echo "state=uv-locked" >> $GITHUB_OUTPUT
+          else
+            echo "state=uv-no-lock" >> $GITHUB_OUTPUT
+          fi
+        shell: bash
+
       - name: Verify FIPS check script exists
         id: script-check
         env:
@@ -151,14 +170,38 @@ jobs:
             echo "::warning::FIPS check script not found at $SCRIPT_PATH"
           fi
 
+      - name: Install dependencies (uv with lockfile)
+        if: steps.script-check.outputs.script_exists == 'true' && steps.detect.outputs.state == 'uv-locked'
+        run: uv sync --all-extras --frozen $NO_BUILD_FLAG
+        shell: bash
+
+      # SonarCloud cannot follow the $NO_BUILD_FLAG env-var indirection (set at the workflow
+      # env from the `no-build` input per PR #112), and by design no uv.lock exists yet on
+      # this path until this step generates one. S8541 (--no-build) and S8544 (lockfile) are
+      # suppressed inline with rationale; the uv-locked install step above keeps the literal
+      # --frozen so the scanner can see it.
+      - name: Install dependencies (uv without lockfile)
+        if: steps.script-check.outputs.script_exists == 'true' && steps.detect.outputs.state == 'uv-no-lock'
+        run: uv sync --all-extras $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path
+        shell: bash
+
+      # --frozen is safe in both detected states: the install step above always produces
+      # uv.lock before this step runs (the uv-no-lock path generates one during `uv sync`;
+      # uv-locked has one committed). Hardcoding the literal eliminates SonarCloud S8544 on
+      # the uv run lines below. S8541 (--no-build) remains suppressed inline because
+      # `--no-build` is opt-out via the `no-build` workflow input and SonarCloud cannot
+      # follow the env-var indirection statically.
+      # #ASSUME steps.detect runs before the install steps above; #VERIFY the if: condition
+      # on every install step references steps.detect.outputs.state.
       - name: Run FIPS compatibility check
-        if: steps.script-check.outputs.script_exists == 'true'
+        if: steps.script-check.outputs.script_exists == 'true' && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock')
         id: fips-check
         env:
           SCRIPT_PATH: ${{ inputs.script-path }}
           STRICT_MODE: ${{ inputs.strict-mode }}
           FIX_HINTS: ${{ inputs.fix-hints }}
           INCLUDE_TESTS: ${{ inputs.include-tests }}
+        shell: bash
         run: |
           # Build command arguments
           STRICT_FLAG=""
@@ -178,6 +221,7 @@ jobs:
 
           # Run check and capture output
           set +e
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
           uv run --frozen $NO_BUILD_FLAG python "$SCRIPT_PATH" \
             $FIX_HINTS_FLAG \
             $INCLUDE_TESTS_FLAG \
@@ -187,6 +231,7 @@ jobs:
           set -e
 
           # Also generate JSON report
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
           uv run --frozen $NO_BUILD_FLAG python "$SCRIPT_PATH" \
             --json \
             $INCLUDE_TESTS_FLAG \
@@ -208,8 +253,11 @@ jobs:
             echo "info=0" >> $GITHUB_OUTPUT
           fi
 
+      # Gate on detect state too so docs-only callers (state=skip) and poetry-not-supported
+      # callers don't emit upload-artifact "No files were found" warnings when the FIPS
+      # check step was skipped and produced no report files.
       - name: Upload FIPS report
-        if: always() && steps.script-check.outputs.script_exists == 'true'
+        if: always() && steps.script-check.outputs.script_exists == 'true' && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock')
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: fips-compatibility-report
@@ -358,8 +406,12 @@ jobs:
           echo "- [FIPS 140-3 Standard](https://csrc.nist.gov/pubs/fips/140-3/final)" >> $GITHUB_STEP_SUMMARY
           echo "- [Python FIPS Mode](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/security_hardening/using-the-system-wide-cryptographic-policies_security-hardening#proc_enabling-fips-mode-in-a-system_using-the-system-wide-cryptographic-policies)" >> $GITHUB_STEP_SUMMARY
 
+      # Gate on detect state to avoid a false failure when the fips-check step was skipped
+      # (state=skip or poetry-not-supported). When fips-check is skipped, its exit_code
+      # output is empty; `empty != '0'` evaluates true and would otherwise trigger this step
+      # as a false-failure for docs-only callers.
       - name: Check result
-        if: steps.script-check.outputs.script_exists == 'true' && steps.fips-check.outputs.exit_code != '0'
+        if: steps.script-check.outputs.script_exists == 'true' && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock') && steps.fips-check.outputs.exit_code != '0'
         run: |
           echo "::error::FIPS compatibility issues found. See the report for details."
           exit 1
@@ -395,13 +447,51 @@ jobs:
           PYTHON_VERSION: ${{ inputs.python-version }}
         run: uv python install "$PYTHON_VERSION"
 
-      - name: Install dependencies
-        run: uv sync --all-extras --frozen $NO_BUILD_FLAG
+      # Detect repo state. Same logic as the fips-check job above.
+      - name: Detect repo state
+        id: detect
+        run: |
+          if [ ! -f pyproject.toml ]; then
+            echo "state=skip" >> $GITHUB_OUTPUT
+            echo "::notice::No pyproject.toml found at repo root; FIPS runtime test will be skipped."
+          elif [ -f poetry.lock ] || grep -qE '^\[tool\.poetry(\.|])' pyproject.toml; then
+            echo "state=poetry-not-supported" >> $GITHUB_OUTPUT
+            echo "::error::This repo uses Poetry. python-fips-compatibility.yml is uv-only by org policy. Convert to uv before re-enabling FIPS runtime test."
+            exit 1
+          elif [ -f uv.lock ]; then
+            echo "state=uv-locked" >> $GITHUB_OUTPUT
+          else
+            echo "state=uv-no-lock" >> $GITHUB_OUTPUT
+          fi
+        shell: bash
 
+      - name: Install dependencies (uv with lockfile)
+        if: steps.detect.outputs.state == 'uv-locked'
+        run: uv sync --all-extras --frozen $NO_BUILD_FLAG
+        shell: bash
+
+      # SonarCloud cannot follow the $NO_BUILD_FLAG env-var indirection (set at the workflow
+      # env from the `no-build` input per PR #112), and by design no uv.lock exists yet on
+      # this path until this step generates one. S8541 (--no-build) and S8544 (lockfile) are
+      # suppressed with rationale; the uv-locked install step above keeps the literal
+      # --frozen so the scanner can see it.
+      - name: Install dependencies (uv without lockfile)
+        if: steps.detect.outputs.state == 'uv-no-lock'
+        run: uv sync --all-extras $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path
+        shell: bash
+
+      # --frozen is safe in both detected states: the install step above always produces
+      # uv.lock before this step runs (the uv-no-lock path generates one during `uv sync`;
+      # uv-locked has one committed). Hardcoding the literal eliminates SonarCloud S8544.
+      # S8541 (--no-build) remains suppressed below because `--no-build` is opt-out via the
+      # `no-build` workflow input and SonarCloud cannot follow the env-var indirection.
       - name: Test crypto imports in simulated FIPS mode
+        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
+        shell: bash
         run: |
           # This tests if the code can import without using non-FIPS algorithms
           # Note: Full FIPS testing requires an actual FIPS-enabled kernel
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
           uv run --frozen $NO_BUILD_FLAG python -c "
           import os
           import sys
