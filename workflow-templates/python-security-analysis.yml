@@ -30,6 +30,18 @@ on:
   # CRITICAL: merge_group fires against the queue's speculative merge commit.
   # Security gate must run on the queue ref so vulnerabilities introduced by
   # the speculative merge are caught before landing on main. See CI-040.
+  #
+  # KNOWN LIMITATION: actions/dependency-review-action does not support
+  # merge_group events (it requires PR base/head SHAs from a pull_request
+  # context). The dependency-security job below is therefore gated to
+  # pull_request only, so dependency review remains PR-gated and is silently
+  # skipped on merge_group runs. CodeQL, Bandit, OSV-Scanner, and OWASP
+  # Dependency-Check all execute on merge_group refs, so the speculative-merge
+  # security gate retains 4 of 5 sub-scans. #VERIFY same procedure as
+  # python-ci.yml: enable merge_queue on a sacrificial repo and confirm the
+  # check appears on the merge_group ref via
+  # gh api repos/<org>/<repo>/commits/<sha>/check-runs. Follow-up: track
+  # osv-scanner-on-merge_group as a coverage gap (issue #154 followup).
   merge_group:
 
 permissions: read-all
@@ -42,9 +54,15 @@ jobs:
   detect-changes:
     name: Detect Security-Relevant Changes
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       security_files: ${{  steps.filter.outputs.security  }}
     steps:
+      - name: Harden the runner (Audit outbound calls)
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5  # v2.19.3
+        with:
+          egress-policy: audit
+
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
