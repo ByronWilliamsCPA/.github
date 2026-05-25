@@ -170,13 +170,29 @@ jobs:
             echo "::warning::FIPS check script not found at $SCRIPT_PATH"
           fi
 
-      # SonarCloud cannot follow the $FROZEN_FLAG and $NO_BUILD_FLAG env-var indirection
-      # statically. FROZEN_FLAG resolves to --frozen on uv-locked (uv.lock committed), empty
-      # on uv-no-lock (uv resolves and writes uv.lock during this run). NO_BUILD_FLAG is
-      # opt-out via the `no-build` workflow input per PR #112. Both uv run invocations below
-      # are suppressed for S8541 and S8544 with this rationale.
-      # #ASSUME steps.detect runs before this step and sets state to uv-locked or uv-no-lock;
-      # #VERIFY the if: condition enforces both preconditions before any uv run executes.
+      - name: Install dependencies (uv with lockfile)
+        if: steps.script-check.outputs.script_exists == 'true' && steps.detect.outputs.state == 'uv-locked'
+        run: uv sync --all-extras --frozen $NO_BUILD_FLAG
+        shell: bash
+
+      # SonarCloud cannot follow the $NO_BUILD_FLAG env-var indirection (set at the workflow
+      # env from the `no-build` input per PR #112), and by design no uv.lock exists yet on
+      # this path until this step generates one. S8541 (--no-build) and S8544 (lockfile) are
+      # suppressed inline with rationale; the uv-locked install step above keeps the literal
+      # --frozen so the scanner can see it.
+      - name: Install dependencies (uv without lockfile)
+        if: steps.script-check.outputs.script_exists == 'true' && steps.detect.outputs.state == 'uv-no-lock'
+        run: uv sync --all-extras $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path
+        shell: bash
+
+      # --frozen is safe in both detected states: the install step above always produces
+      # uv.lock before this step runs (the uv-no-lock path generates one during `uv sync`;
+      # uv-locked has one committed). Hardcoding the literal eliminates SonarCloud S8544 on
+      # the uv run lines below. S8541 (--no-build) remains suppressed inline because
+      # `--no-build` is opt-out via the `no-build` workflow input and SonarCloud cannot
+      # follow the env-var indirection statically.
+      # #ASSUME steps.detect runs before the install steps above; #VERIFY the if: condition
+      # on every install step references steps.detect.outputs.state.
       - name: Run FIPS compatibility check
         if: steps.script-check.outputs.script_exists == 'true' && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock')
         id: fips-check
@@ -185,7 +201,6 @@ jobs:
           STRICT_MODE: ${{ inputs.strict-mode }}
           FIX_HINTS: ${{ inputs.fix-hints }}
           INCLUDE_TESTS: ${{ inputs.include-tests }}
-          FROZEN_FLAG: ${{ steps.detect.outputs.state == 'uv-locked' && '--frozen' || '' }}
         shell: bash
         run: |
           # Build command arguments
@@ -206,8 +221,8 @@ jobs:
 
           # Run check and capture output
           set +e
-          # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; --frozen via FROZEN_FLAG (set above)
-          uv run $FROZEN_FLAG $NO_BUILD_FLAG python "$SCRIPT_PATH" \
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          uv run --frozen $NO_BUILD_FLAG python "$SCRIPT_PATH" \
             $FIX_HINTS_FLAG \
             $INCLUDE_TESTS_FLAG \
             $STRICT_FLAG \
@@ -216,8 +231,8 @@ jobs:
           set -e
 
           # Also generate JSON report
-          # NOSONAR(S8541,S8544): same rationale as the run above
-          uv run $FROZEN_FLAG $NO_BUILD_FLAG python "$SCRIPT_PATH" \
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          uv run --frozen $NO_BUILD_FLAG python "$SCRIPT_PATH" \
             --json \
             $INCLUDE_TESTS_FLAG \
             > fips-report.json 2>/dev/null || true
