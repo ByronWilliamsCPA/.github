@@ -19,6 +19,11 @@ on:
   pull_request:
     branches:
       - main
+  # CRITICAL: merge_group fires against the queue's speculative merge commit.
+  # Compatibility matrix must run on the queue ref so Python-version
+  # regressions introduced by the speculative merge are caught before landing
+  # on main. See CI-040.
+  merge_group:
 
 permissions:
   contents: read

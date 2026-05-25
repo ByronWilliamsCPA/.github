@@ -44,6 +44,11 @@ on:
         required: false
         default: false
         type: boolean
+  # CRITICAL: merge_group fires against the queue's speculative merge commit.
+  # FIPS compatibility check must run on the queue ref so crypto regressions
+  # introduced by the speculative merge are caught before landing on main.
+  # No paths: filter here; the queue ref reflects a full merge. See CI-040.
+  merge_group:
 
 permissions:
   contents: read

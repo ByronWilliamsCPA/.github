@@ -27,6 +27,12 @@ on:
       - "overrides/**"
       - "tools/**"
       - "src/**"
+  # CRITICAL: merge_group fires against the queue's speculative merge commit.
+  # Docs validation must run on the queue ref so broken links or front-matter
+  # regressions introduced by the speculative merge are caught before landing
+  # on main. No paths: filter here; the queue ref reflects a full merge.
+  # See CI-040.
+  merge_group:
 
 permissions:
   contents: read        # For checkout
