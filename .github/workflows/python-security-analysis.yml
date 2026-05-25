@@ -147,6 +147,7 @@ jobs:
       # Hardcoding `uv sync --frozen` failed for both categories. Auto-detection skips
       # cleanly when pyproject is absent and drops --frozen when no lockfile exists yet.
       # Poetry repos are explicitly rejected with an actionable error.
+      # Mirrored in the python-security job below; keep both blocks in sync.
       - name: Detect repo state
         id: detect
         run: |
