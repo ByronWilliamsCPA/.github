@@ -41,7 +41,7 @@ on:
   # python-ci.yml: enable merge_queue on a sacrificial repo and confirm the
   # check appears on the merge_group ref via
   # gh api repos/<org>/<repo>/commits/<sha>/check-runs. Follow-up: track
-  # osv-scanner-on-merge_group as a coverage gap (issue #154 followup).
+  # dedicated dependency-CVE check on merge_group as a coverage gap (issue #168).
   merge_group:
 
 permissions: read-all
