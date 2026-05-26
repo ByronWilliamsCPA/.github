@@ -233,24 +233,102 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Install dependencies
+      # Detect the repo state before attempting uv sync. The reusable workflow is uv-only
+      # by org policy (poetry repos are being converted to uv in separate work), but it is
+      # still called by some repos that don't have a pyproject.toml (template / docs-only
+      # forks) and by uv-managed repos that haven't yet committed a uv.lock. Hardcoding
+      # `uv sync --frozen` failed for both categories. Auto-detection skips cleanly when
+      # pyproject is absent and drops --frozen when no lockfile exists yet. Poetry repos
+      # are explicitly rejected with an actionable error.
+      - name: Detect repo state
+        id: detect
+        run: |
+          if [ ! -f pyproject.toml ]; then
+            echo "state=skip" >> $GITHUB_OUTPUT
+            echo "::notice::No pyproject.toml found at repo root; SonarCloud analysis will be skipped. Remove the python-sonarcloud.yml caller from this repo if it does not need SonarCloud coverage."
+          elif [ -f poetry.lock ] || grep -qE '^\[tool\.poetry(\.|\])' pyproject.toml; then
+            echo "state=poetry-not-supported" >> $GITHUB_OUTPUT
+            echo "::error::This repo uses Poetry. The python-sonarcloud.yml reusable workflow is uv-only by org policy. Convert this repo to uv before re-enabling SonarCloud analysis."
+            exit 1
+          elif [ -f uv.lock ]; then
+            echo "state=uv-locked" >> $GITHUB_OUTPUT
+            echo "Detected: uv with lockfile"
+          else
+            echo "state=uv-no-lock" >> $GITHUB_OUTPUT
+            echo "Detected: uv without lockfile (PEP 621 pyproject.toml only); will sync without --frozen"
+          fi
+        shell: bash
+
+      # Resolve the extras flag once so each install step below is a clean single-line
+      # `run:` that SonarCloud's githubactions rule set can pattern-match. Both
+      # multi-line `run: |` blocks AND inline NOSONAR inside them are ignored for
+      # S8541/S8544 (empirical anti-pattern from docs/sonarcloud-nosonar-patterns.md);
+      # the single-line `run:` shape is the only reliable Pattern A position.
+      # The downstream `if:` conditions on this and later steps use a positive disjunction
+      # (state == 'uv-locked' || state == 'uv-no-lock') rather than the shorter negative
+      # form (state != 'skip' && state != 'poetry-not-supported'). Keep the positive form:
+      # if an earlier step fails, steps.detect.outputs.state is the empty string '', which
+      # satisfies BOTH negative checks and would incorrectly run downstream steps.
+      - name: Resolve extras flag
+        id: extras
+        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
         env:
           EXTRA_DEPENDENCIES: ${{ inputs.extra-dependencies }}
         run: |
           if [ "$EXTRA_DEPENDENCIES" == "all" ]; then
-            uv sync --all-extras --frozen $NO_BUILD_FLAG
+            echo "flag=--all-extras" >> $GITHUB_OUTPUT
           elif [ -n "$EXTRA_DEPENDENCIES" ]; then
-            EXTRA_ARGS=()
-            while IFS= read -r dep; do
-              [[ -n "$dep" ]] && EXTRA_ARGS+=("--extra" "$dep")
-            done < <(echo "$EXTRA_DEPENDENCIES" | tr ' ' '\n')
-            uv sync "${EXTRA_ARGS[@]}" --frozen $NO_BUILD_FLAG
+            FLAG=""
+            for dep in $EXTRA_DEPENDENCIES; do
+              FLAG="$FLAG --extra $dep"
+            done
+            # Strip the leading space added by the loop accumulator so the output value
+            # is symmetric with the --all-extras and empty branches above.
+            echo "flag=${FLAG# }" >> $GITHUB_OUTPUT
           else
-            uv sync --frozen $NO_BUILD_FLAG
+            echo "flag=" >> $GITHUB_OUTPUT
           fi
+        shell: bash
+
+      # Install paths split by detect.outputs.state so SonarCloud sees literal `--frozen`
+      # on the uv-locked path (S8544 cannot fire there). Both install lines still carry
+      # NOSONAR(S8541) because $NO_BUILD_FLAG is a dynamic env var by design (the no-build:
+      # workflow input lets PEP 517 callers opt-in to building). The uv-no-lock path also
+      # carries NOSONAR(S8544) because no uv.lock exists at that point by design (uv sync
+      # creates one). Empirically S8541 fires on the uv-locked path here even though it
+      # does not in #156/#158/#160; the difference is that this workflow's install step
+      # uses dynamic $NO_BUILD_FLAG, which the rule matches as a missing literal --no-build.
+      #
+      # #CRITICAL: steps.extras.outputs.flag derives from inputs.extra-dependencies, which
+      # is caller-controlled. The flag MUST be passed through an env var (UV_EXTRAS) rather
+      # than interpolated directly into the run: script via ${{ ... }} template expansion;
+      # template expansion runs before bash sees the line, so unfiltered shell metacharacters
+      # would become script text (CodeQL py/code-injection). #VERIFY: each install step uses
+      # env: UV_EXTRAS: ${{ steps.extras.outputs.flag }} and references $UV_EXTRAS only.
+      - name: Install dependencies (uv with lockfile)
+        if: steps.detect.outputs.state == 'uv-locked'
+        env:
+          UV_EXTRAS: ${{ steps.extras.outputs.flag }}
+        run: uv sync $UV_EXTRAS --frozen $NO_BUILD_FLAG  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+        shell: bash
+
+      - name: Install dependencies (uv without lockfile)
+        if: steps.detect.outputs.state == 'uv-no-lock'
+        env:
+          UV_EXTRAS: ${{ steps.extras.outputs.flag }}
+        run: uv sync $UV_EXTRAS $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path (uv sync creates one)
+        shell: bash
+
+      - name: Skip notice (no pyproject.toml)
+        if: steps.detect.outputs.state == 'skip'
+        run: |
+          echo "## SonarCloud Analysis Skipped" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "No pyproject.toml at repo root, nothing to analyze." >> $GITHUB_STEP_SUMMARY
 
       - name: Run tests with coverage
         id: coverage
+        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
         env:
           SOURCE_DIRECTORY: ${{ inputs.source-directory }}
           PYTEST_ARGS: ${{ inputs.pytest-args }}
@@ -265,7 +343,9 @@ jobs:
             COV_SRC="."
           fi
 
-          # Run pytest with coverage
+          # The install step above (uv-locked or uv-no-lock) guaranteed `uv.lock` exists,
+          # so literal `--frozen` here is safe on both detect-state branches.
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
           uv run --frozen $NO_BUILD_FLAG pytest \
             --cov="$COV_SRC" \
             --cov-report=xml:coverage.xml \
@@ -279,6 +359,7 @@ jobs:
         continue-on-error: true
 
       - name: Verify coverage report
+        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
         run: |
           if [ ! -f coverage.xml ]; then
             echo "::warning::Coverage report not found. Tests may have failed completely."
@@ -302,6 +383,7 @@ jobs:
           fi
 
       - name: SonarCloud Scan
+        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
         uses: SonarSource/sonarqube-scan-action@7006c4492b2e0ee0f816d36501671557c97f5995  # v8.1.0  # nosemgrep: detected-sonarqube-docs-api-key  # FP -- see #37
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -318,12 +400,14 @@ jobs:
             ${{ inputs.additional-sonar-args }}
 
       - name: Wait for SonarCloud Processing
+        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
         run: |
           echo "⏳ Waiting for SonarCloud to process results..."
           sleep 10
 
       - name: Check Quality Gate
         id: quality_gate
+        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
         uses: sonarsource/sonarqube-quality-gate-action@cf038b0e0cdecfa9e56c198bbb7d21d751d62c3b  # v1.2.0  # nosemgrep: detected-sonarqube-docs-api-key  # FP -- see #37
         timeout-minutes: 5
         env:
@@ -331,7 +415,7 @@ jobs:
         continue-on-error: ${{ !inputs.fail-on-quality-gate }}
 
       - name: Quality Gate Summary
-        if: always()
+        if: always() && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock')
         env:
           SONAR_PROJECT_KEY: ${{ inputs.sonar-project-key }}
         run: |
@@ -371,7 +455,7 @@ jobs:
           echo "View detailed results at: $DASHBOARD_URL" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload coverage artifacts
-        if: always()
+        if: always() && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock')
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: sonarcloud-coverage-${{ github.run_id }}
@@ -382,7 +466,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Fail on Quality Gate
-        if: inputs.fail-on-quality-gate && steps.quality_gate.outcome == 'failure'
+        if: inputs.fail-on-quality-gate && steps.quality_gate.outcome == 'failure' && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock')
         env:
           SONAR_PROJECT_KEY: ${{ inputs.sonar-project-key }}
         run: |
