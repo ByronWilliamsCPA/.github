@@ -63,6 +63,11 @@ jobs:
       NO_BUILD_FLAG: ${{ inputs.no-build && '--no-build' || '' }}
     permissions:
       contents: read
+    # Expose the detected state so the deploy job can gate on it. Without this,
+    # the deploy job sees `needs: build` succeed even when state=skip (only the
+    # skip-notice step runs) and then fails at download-artifact lookup time.
+    outputs:
+      state: ${{ steps.detect.outputs.state }}
 
     steps:
       - name: Harden Runner
@@ -159,7 +164,11 @@ jobs:
 
   deploy:
     name: Deploy to GitHub Pages
-    if: ${{ inputs.deploy-to-pages && github.ref == 'refs/heads/main' }}
+    # #EDGE: deploy must explicitly require build to have produced artifacts. The build
+    # job succeeds even when state=skip (only the skip-notice step runs), so a plain
+    # `needs: build` is not enough to block deploy from calling download-artifact
+    # against a `documentation-site` artifact that was never uploaded.
+    if: ${{ inputs.deploy-to-pages && github.ref == 'refs/heads/main' && needs.build.outputs.state != 'skip' }}
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 15
