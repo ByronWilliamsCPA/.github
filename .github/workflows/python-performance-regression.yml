@@ -267,16 +267,18 @@ jobs:
           echo "No pyproject.toml at repo root, nothing to benchmark." >> $GITHUB_STEP_SUMMARY
 
       # The install step above guaranteed uv.lock exists on the uv-locked path; on the
-      # uv-no-lock path, `uv sync` created one. Literal --frozen is safe on both. The
-      # NOSONAR(S8541) suppression for the dynamic $NO_BUILD_FLAG is same-line per
-      # SonarCloud's standard NOSONAR mechanism.
+      # uv-no-lock path, `uv sync` created one. Literal --frozen is safe on both.
+      # Pattern B (preceding-line NOSONAR inside `run: |`) is acceptable here because
+      # every uv invocation in the block carries literal --frozen and only S8541
+      # (--no-build dynamic) needs suppression.
       - name: Generate Synthetic Test Data
         if: inputs.generate-synthetic-data && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock')
         env:
           TEST_DATA_DIR: ${{ inputs.test-data-directory }}
         run: |
           mkdir -p "$TEST_DATA_DIR"
-          uv run --frozen $NO_BUILD_FLAG python scripts/generate_test_data.py  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          uv run --frozen $NO_BUILD_FLAG python scripts/generate_test_data.py
           echo "Synthetic test data generated in $TEST_DATA_DIR"
           ls -lh "$TEST_DATA_DIR" | head -20
 
@@ -323,10 +325,11 @@ jobs:
           echo "✅ Benchmark script found: $BENCHMARK_SCRIPT"
 
       # The install step above guaranteed uv.lock exists on both detect-state branches,
-      # so literal --frozen is safe throughout this block. uv run invocations are
-      # collapsed to single lines so each carries a same-line NOSONAR(S8541) for the
-      # dynamic $NO_BUILD_FLAG; S8544 does not fire because literal --frozen is
-      # structurally present on every line.
+      # so literal --frozen is safe throughout this block. This run: | shell logic is
+      # genuinely multi-line (capability detection branching with three argv variants),
+      # so we keep the block scalar and use Pattern B (preceding-line NOSONAR(S8541)
+      # for the dynamic $NO_BUILD_FLAG). S8544 does not fire here because literal
+      # --frozen is structurally present on every line.
       - name: Run PR Benchmarks
         id: pr_bench
         if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
@@ -341,44 +344,53 @@ jobs:
 
           # Check if script supports --output argument
           SUPPORTS_OUTPUT=false
-          if uv run --frozen $NO_BUILD_FLAG python "$BENCHMARK_SCRIPT" --help 2>&1 | grep -q -- '--output'; then  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          if uv run --frozen $NO_BUILD_FLAG python "$BENCHMARK_SCRIPT" --help 2>&1 | grep -q -- '--output'; then
             SUPPORTS_OUTPUT=true
             echo "Script supports --output argument"
           fi
 
           # Check if script supports --warmup/--iterations arguments
           SUPPORTS_ITERATIONS=false
-          if uv run --frozen $NO_BUILD_FLAG python "$BENCHMARK_SCRIPT" --help 2>&1 | grep -q -- '--iterations'; then  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          if uv run --frozen $NO_BUILD_FLAG python "$BENCHMARK_SCRIPT" --help 2>&1 | grep -q -- '--iterations'; then
             SUPPORTS_ITERATIONS=true
             echo "Script supports --warmup/--iterations arguments"
           fi
 
-          # Run benchmark with detected capabilities. The uv run invocations are
-          # collapsed onto single lines so each carries a same-line NOSONAR(S8541)
-          # suppression for the dynamic $NO_BUILD_FLAG; SonarCloud's NOSONAR
-          # mechanism is same-line, not preceding-line.
+          # Run benchmark with detected capabilities
           if [ "$SUPPORTS_OUTPUT" = "true" ] && [ "$SUPPORTS_ITERATIONS" = "true" ]; then
             # Full interface support
             # shellcheck disable=SC2086
-            uv run --frozen $NO_BUILD_FLAG python "$BENCHMARK_SCRIPT" --warmup "$WARMUP_ITERATIONS" --iterations "$BENCHMARK_ITERATIONS" --output /tmp/pr_benchmark.json $BENCHMARK_ARGS || {  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
-              echo "Benchmark execution failed, creating fallback results"
-              echo "{\"$PRIMARY_METRIC\": 0, \"status\": \"failed\"}" > /tmp/pr_benchmark.json
-            }
+            # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+            uv run --frozen $NO_BUILD_FLAG python "$BENCHMARK_SCRIPT" \
+              --warmup "$WARMUP_ITERATIONS" \
+              --iterations "$BENCHMARK_ITERATIONS" \
+              --output /tmp/pr_benchmark.json \
+              $BENCHMARK_ARGS || {
+                echo "Benchmark execution failed, creating fallback results"
+                echo "{\"$PRIMARY_METRIC\": 0, \"status\": \"failed\"}" > /tmp/pr_benchmark.json
+              }
           elif [ "$SUPPORTS_OUTPUT" = "true" ]; then
             # Only --output supported
             # shellcheck disable=SC2086
-            uv run --frozen $NO_BUILD_FLAG python "$BENCHMARK_SCRIPT" --output /tmp/pr_benchmark.json $BENCHMARK_ARGS || {  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
-              echo "Benchmark execution failed, creating fallback results"
-              echo "{\"$PRIMARY_METRIC\": 0, \"status\": \"failed\"}" > /tmp/pr_benchmark.json
-            }
+            # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+            uv run --frozen $NO_BUILD_FLAG python "$BENCHMARK_SCRIPT" \
+              --output /tmp/pr_benchmark.json \
+              $BENCHMARK_ARGS || {
+                echo "Benchmark execution failed, creating fallback results"
+                echo "{\"$PRIMARY_METRIC\": 0, \"status\": \"failed\"}" > /tmp/pr_benchmark.json
+              }
           else
             # Minimal interface - capture stdout as JSON
             echo "Script uses stdout for output (no --output flag)"
             # shellcheck disable=SC2086
-            uv run --frozen $NO_BUILD_FLAG python "$BENCHMARK_SCRIPT" $BENCHMARK_ARGS > /tmp/pr_benchmark.json 2>&1 || {  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
-              echo "Benchmark execution failed, creating fallback results"
-              echo "{\"$PRIMARY_METRIC\": 0, \"status\": \"failed\"}" > /tmp/pr_benchmark.json
-            }
+            # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+            uv run --frozen $NO_BUILD_FLAG python "$BENCHMARK_SCRIPT" \
+              $BENCHMARK_ARGS > /tmp/pr_benchmark.json 2>&1 || {
+                echo "Benchmark execution failed, creating fallback results"
+                echo "{\"$PRIMARY_METRIC\": 0, \"status\": \"failed\"}" > /tmp/pr_benchmark.json
+              }
           fi
 
           if [ -f /tmp/pr_benchmark.json ]; then
@@ -415,23 +427,27 @@ jobs:
       # main's tree, so uv.lock presence MUST be re-checked. The `detect` step ran against
       # the PR-branch worktree and cannot describe main: if the PR adds uv.lock to a repo
       # that previously had none (or removes one), trusting steps.detect.outputs.state
-      # picks the wrong install path. #CRITICAL: inline `[ -f uv.lock ]` always reflects
-      # the current worktree, so it is the only correct gate at this point in the flow.
-      - name: Install dependencies on main
-        if: steps.baseline_source.outputs.source == 'generated' && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock')
+      # picks the wrong install path. #CRITICAL: `hashFiles('uv.lock')` re-evaluates per
+      # step against the current worktree (returns '' when the file is absent, a hash
+      # when present), so it is the only correct gate at this point in the flow. Split
+      # into two single-line `run:` steps so each carries Pattern A inline NOSONAR
+      # (the most reliable suppression form per docs/sonarcloud-nosonar-patterns.md).
+      - name: Install dependencies on main (uv with lockfile)
+        if: steps.baseline_source.outputs.source == 'generated' && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock') && hashFiles('uv.lock') != ''
         env:
           EXTRA_FLAGS: ${{ steps.extras.outputs.flags }}
-        run: |
-          if [ -f uv.lock ]; then
-            uv sync $EXTRA_FLAGS --frozen $NO_BUILD_FLAG  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
-          else
-            uv sync $EXTRA_FLAGS $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock on main (uv sync creates one)
-          fi
+        run: uv sync $EXTRA_FLAGS --frozen $NO_BUILD_FLAG  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
         shell: bash
 
-      # Same NOSONAR rationale as the PR-branch benchmark block: every uv run carries
-      # literal --frozen so only S8541 (dynamic $NO_BUILD_FLAG) needs suppression, on
-      # the same line per SonarCloud's standard NOSONAR mechanism.
+      - name: Install dependencies on main (uv without lockfile)
+        if: steps.baseline_source.outputs.source == 'generated' && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock') && hashFiles('uv.lock') == ''
+        env:
+          EXTRA_FLAGS: ${{ steps.extras.outputs.flags }}
+        run: uv sync $EXTRA_FLAGS $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock on main (uv sync creates one)
+        shell: bash
+
+      # Same Pattern B rationale as the PR-branch benchmark block: multi-line capability
+      # detection with literal --frozen on every uv run; only S8541 needs suppression.
       - name: Run Baseline Benchmarks
         if: steps.baseline_source.outputs.source == 'generated' && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock')
         env:
@@ -445,37 +461,47 @@ jobs:
 
           # Check if script supports --output argument
           SUPPORTS_OUTPUT=false
-          if uv run --frozen $NO_BUILD_FLAG python "$BENCHMARK_SCRIPT" --help 2>&1 | grep -q -- '--output'; then  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          if uv run --frozen $NO_BUILD_FLAG python "$BENCHMARK_SCRIPT" --help 2>&1 | grep -q -- '--output'; then
             SUPPORTS_OUTPUT=true
           fi
 
           # Check if script supports --warmup/--iterations arguments
           SUPPORTS_ITERATIONS=false
-          if uv run --frozen $NO_BUILD_FLAG python "$BENCHMARK_SCRIPT" --help 2>&1 | grep -q -- '--iterations'; then  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          if uv run --frozen $NO_BUILD_FLAG python "$BENCHMARK_SCRIPT" --help 2>&1 | grep -q -- '--iterations'; then
             SUPPORTS_ITERATIONS=true
           fi
 
-          # Run benchmark with detected capabilities. Same Pattern A rationale as the
-          # PR-branch benchmark block above: uv run args collapsed to single line so a
-          # same-line NOSONAR(S8541) suppression for $NO_BUILD_FLAG is possible.
+          # Run benchmark with detected capabilities
           if [ "$SUPPORTS_OUTPUT" = "true" ] && [ "$SUPPORTS_ITERATIONS" = "true" ]; then
             # shellcheck disable=SC2086
-            uv run --frozen $NO_BUILD_FLAG python "$BENCHMARK_SCRIPT" --warmup "$WARMUP_ITERATIONS" --iterations "$BENCHMARK_ITERATIONS" --output /tmp/baseline_benchmark.json $BENCHMARK_ARGS || {  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
-              echo "Baseline benchmark failed, using fallback"
-              echo "{\"$PRIMARY_METRIC\": 0, \"status\": \"failed\"}" > /tmp/baseline_benchmark.json
-            }
+            # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+            uv run --frozen $NO_BUILD_FLAG python "$BENCHMARK_SCRIPT" \
+              --warmup "$WARMUP_ITERATIONS" \
+              --iterations "$BENCHMARK_ITERATIONS" \
+              --output /tmp/baseline_benchmark.json \
+              $BENCHMARK_ARGS || {
+                echo "Baseline benchmark failed, using fallback"
+                echo "{\"$PRIMARY_METRIC\": 0, \"status\": \"failed\"}" > /tmp/baseline_benchmark.json
+              }
           elif [ "$SUPPORTS_OUTPUT" = "true" ]; then
             # shellcheck disable=SC2086
-            uv run --frozen $NO_BUILD_FLAG python "$BENCHMARK_SCRIPT" --output /tmp/baseline_benchmark.json $BENCHMARK_ARGS || {  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
-              echo "Baseline benchmark failed, using fallback"
-              echo "{\"$PRIMARY_METRIC\": 0, \"status\": \"failed\"}" > /tmp/baseline_benchmark.json
-            }
+            # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+            uv run --frozen $NO_BUILD_FLAG python "$BENCHMARK_SCRIPT" \
+              --output /tmp/baseline_benchmark.json \
+              $BENCHMARK_ARGS || {
+                echo "Baseline benchmark failed, using fallback"
+                echo "{\"$PRIMARY_METRIC\": 0, \"status\": \"failed\"}" > /tmp/baseline_benchmark.json
+              }
           else
             # shellcheck disable=SC2086
-            uv run --frozen $NO_BUILD_FLAG python "$BENCHMARK_SCRIPT" $BENCHMARK_ARGS > /tmp/baseline_benchmark.json 2>&1 || {  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
-              echo "Baseline benchmark failed, using fallback"
-              echo "{\"$PRIMARY_METRIC\": 0, \"status\": \"failed\"}" > /tmp/baseline_benchmark.json
-            }
+            # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+            uv run --frozen $NO_BUILD_FLAG python "$BENCHMARK_SCRIPT" \
+              $BENCHMARK_ARGS > /tmp/baseline_benchmark.json 2>&1 || {
+                echo "Baseline benchmark failed, using fallback"
+                echo "{\"$PRIMARY_METRIC\": 0, \"status\": \"failed\"}" > /tmp/baseline_benchmark.json
+              }
           fi
 
           if [ -f /tmp/baseline_benchmark.json ]; then
@@ -492,9 +518,9 @@ jobs:
           echo "Committed Baseline:"
           cat /tmp/baseline_benchmark.json | python3 -m json.tool
 
-      # Python heredoc inside `run: |`; same-line NOSONAR(S8541) on the `uv run`
-      # line covers the dynamic $NO_BUILD_FLAG, and literal --frozen prevents S8544
-      # from firing.
+      # Python heredoc inside `run: |` is a genuinely multi-line shell construct; we
+      # keep the block scalar and apply Pattern B (preceding-line NOSONAR(S8541) for
+      # the dynamic $NO_BUILD_FLAG; literal --frozen prevents S8544 from firing).
       - name: Compare Performance
         id: compare
         if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
@@ -503,7 +529,8 @@ jobs:
           REGRESSION_THRESHOLD: ${{ inputs.regression-threshold }}
           IMPROVEMENT_THRESHOLD: ${{ inputs.improvement-threshold }}
         run: |
-          uv run --frozen $NO_BUILD_FLAG python - <<'EOF'  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          uv run --frozen $NO_BUILD_FLAG python - <<'EOF'
           import json
           import os
           from pathlib import Path
