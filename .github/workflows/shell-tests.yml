@@ -9,7 +9,7 @@
 #
 # Run locally:
 #   git submodule update --init --recursive
-#   ./tests/libs/bats-core/bin/bats tests/update-pinned-actions.bats
+#   ./tests/libs/bats-core/bin/bats tests/*.bats
 # ============================================================================
 
 name: Shell Tests
@@ -52,4 +52,12 @@ jobs:
           submodules: recursive
 
       - name: Run bats tests
-        run: ./tests/libs/bats-core/bin/bats tests/update-pinned-actions.bats
+        # Discover all .bats files under tests/ rather than naming a single
+        # file. Naming tests/update-pinned-actions.bats hid a class of bugs:
+        # tests added under tests/fleet-audit-sha-pins.bats (and any future
+        # *.bats sibling) were never executed by CI, so STRICT_AUDIT and
+        # REPO_LIMIT regressions could ship green. find + -print0/-exec keeps
+        # this glob-injection-safe and POSIX-clean.
+        run: |
+          find tests -maxdepth 1 -name '*.bats' -print0 \
+            | xargs -0 ./tests/libs/bats-core/bin/bats

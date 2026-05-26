@@ -13,10 +13,29 @@
 #                    message written to stderr
 # Exit code: 0 even when violations or errors are present (this is a report,
 # not a gate). Errors are surfaced via the sentinel row plus stderr.
+# Exception: STRICT_AUDIT (below) overrides this and exits 2 on any incomplete
+# audit. A bad REPO_LIMIT value exits 1 immediately before any audit work.
+#
+# Environment overrides:
+#   REPO_LIMIT     Max repos fetched per org via `gh repo list` (default 1000).
+#                  Lower it for testing; raise it if your fleet exceeds 1000
+#                  repos. Must be a positive integer; the script exits 1 with
+#                  an error if not. The script emits a stderr WARN when the
+#                  result count equals REPO_LIMIT (saturation, audit may be
+#                  truncated).
+#   STRICT_AUDIT   When truthy (1, true, or yes; case-insensitive), exit 2 at
+#                  the end of the run if any API failure produced a
+#                  `repo,error` row, any org's `gh repo list` failed, or any
+#                  org's repo count saturated REPO_LIMIT. Use this in CI
+#                  gates that should fail closed when the audit is
+#                  incomplete. The default (unset / "0" / "false" / "no")
+#                  preserves report-only semantics.
 #
 # Usage:
 #   ./scripts/fleet-audit-sha-pins.sh --org ByronWilliamsCPA [--org williaby] \
 #     [--skip-owners ByronWilliamsCPA,williaby] [--output audit.csv]
+#   STRICT_AUDIT=1 ./scripts/fleet-audit-sha-pins.sh --org ByronWilliamsCPA
+#   REPO_LIMIT=3 ./scripts/fleet-audit-sha-pins.sh --org ByronWilliamsCPA
 # =============================================================================
 
 set -euo pipefail
@@ -96,12 +115,39 @@ is_skipped_owner() {
     esac
 }
 
-REPO_LIMIT=1000
+# REPO_LIMIT defaults to 1000 but may be overridden via environment for tests
+# and for fleets that grow beyond the default. Validate as a positive integer
+# up front so the loop below does not blow up inside `[[ ... -eq $REPO_LIMIT ]]`
+# under `set -euo pipefail` when the operator passes a typo (`REPO_LIMIT=abc`).
+REPO_LIMIT="${REPO_LIMIT:-1000}"
+if [[ ! "$REPO_LIMIT" =~ ^[1-9][0-9]*$ ]]; then
+    echo "ERROR: REPO_LIMIT must be a positive integer (got: '$REPO_LIMIT')" >&2
+    exit 1
+fi
+
+# Tracks whether the audit was incomplete due to API errors or saturation;
+# STRICT_AUDIT consults this at exit to decide whether to fail closed.
+audit_incomplete=false
 
 for org in "${ORGS[@]}"; do
-    mapfile -t repos < <(gh repo list "$org" --limit "$REPO_LIMIT" --json name --jq '.[].name')
+    # Capture `gh repo list` rc via a tmpfile rather than process substitution.
+    # `mapfile -t repos < <(gh repo list ...)` would discard a non-zero rc
+    # (auth loss, rate-limit mid-run, transient API hiccup), leaving `repos`
+    # empty and the org silently contributing zero rows without flagging
+    # the audit as incomplete. That defeats STRICT_AUDIT.
+    repo_list_tmp="$(mktemp)"
+    if ! gh repo list "$org" --limit "$REPO_LIMIT" --json name --jq '.[].name' \
+            > "$repo_list_tmp" 2>/dev/null; then
+        echo "WARN: $org: gh repo list failed; org skipped, audit incomplete" >&2
+        audit_incomplete=true
+        rm -f "$repo_list_tmp"
+        continue
+    fi
+    mapfile -t repos < "$repo_list_tmp"
+    rm -f "$repo_list_tmp"
     if [[ ${#repos[@]} -eq $REPO_LIMIT ]]; then
         echo "WARN: $org returned exactly $REPO_LIMIT repos; audit may be truncated. Raise REPO_LIMIT or page through results." >&2
+        audit_incomplete=true
     fi
     for repo in "${repos[@]}"; do
         full="$org/$repo"
@@ -113,6 +159,11 @@ for org in "${ORGS[@]}"; do
         if ! gh_api_safe "repos/$full/contents/.github/workflows" '.[].path'; then
             echo "WARN: $full: workflows listing failed: $GH_API_BODY" >&2
             emit "$full,error"
+            # STRICT_AUDIT contract: every "$full,error" sentinel emitted must
+            # flag the audit as incomplete. The per-file-fetch error path
+            # below sets this flag too; both branches must stay in sync or
+            # STRICT_AUDIT can exit 0 while error rows are present.
+            audit_incomplete=true
             continue
         fi
         if [[ "$GH_API_STATUS" == "missing" ]] || [[ -z "$GH_API_BODY" ]]; then
@@ -147,6 +198,12 @@ for org in "${ORGS[@]}"; do
             fi
             [[ -z "$content" ]] && continue
             while IFS= read -r line; do
+                # Strip a trailing CR before regex matching. Workflow files
+                # checked out on Windows or fetched through proxies can
+                # carry CRLF endings; without this, BASH_REMATCH[4] would
+                # capture a literal \r at the end of refs like "v4$'\r'",
+                # failing the 40-hex SHA test and inflating violations.
+                line="${line%$'\r'}"
                 # Skip comment lines
                 [[ "$line" =~ ^[[:space:]]*# ]] && continue
                 if [[ "$line" =~ $TAG_OR_BRANCH_RE ]]; then
@@ -167,8 +224,21 @@ for org in "${ORGS[@]}"; do
 
         if [[ "$api_error" == true ]]; then
             emit "$full,error"
+            audit_incomplete=true
         else
             emit "$full,$violations"
         fi
     done
 done
+
+# Fail closed when STRICT_AUDIT is enabled. The default flow remains
+# report-only (exit 0) so existing CI consumers do not break. Accept the
+# common truthy spellings (1, true, yes) case-insensitively rather than the
+# literal "1" alone; "STRICT_AUDIT=true" silently degrading to report-only
+# was a documented portability footgun.
+strict_audit_lower="${STRICT_AUDIT:-0}"
+strict_audit_lower="${strict_audit_lower,,}"
+if [[ "$strict_audit_lower" =~ ^(1|true|yes)$ && "$audit_incomplete" == true ]]; then
+    echo "ERROR: STRICT_AUDIT=1 and the audit was incomplete (API errors and/or REPO_LIMIT saturation). Exiting non-zero." >&2
+    exit 2
+fi

@@ -12,8 +12,9 @@ for ByronWilliamsCPA. It contains:
 - Org-level profile (`profile/README.md`)
 
 There is no Python package and no build system in this repo. The Bats test suite
-under `tests/` covers `scripts/update-pinned-actions.sh` (run via `.github/workflows/shell-tests.yml`);
-the other scripts in `scripts/` do not yet have automated tests.
+under `tests/` covers both `scripts/update-pinned-actions.sh` and
+`scripts/fleet-audit-sha-pins.sh` (all `tests/*.bats` files run via
+`.github/workflows/shell-tests.yml`).
 
 ## Model Selection
 
