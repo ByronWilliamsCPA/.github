@@ -1,22 +1,27 @@
 # SonarCloud NOSONAR Behavior in GitHub Actions YAML
 
-**Date:** 2026-05-25
-**Author:** Claude Code (empirical observations from PR #157 remediation)
-**Scope:** Empirical findings on which NOSONAR placement patterns are honored by SonarCloud's `githubactions` rule set, derived from a live remediation attempt that flagged the limits of preceding-line suppression. Targeted at teams maintaining reusable GitHub Actions workflows where rules like `githubactions:S8541` (`--no-build`) and `githubactions:S8544` (`--frozen`) require deliberate suppression with rationale.
+**Date:** 2026-05-25 (initial); strengthened 2026-05-26 with Wave 1C findings from PR #166
+**Author:** Claude Code (empirical observations from PR #157 remediation, strengthened by PR #166)
+**Scope:** Empirical findings on which NOSONAR placement patterns are honored by SonarCloud's `githubactions` rule set, derived from live remediation attempts that flagged the limits of suppression inside `run: |` block scalars. Targeted at teams maintaining reusable GitHub Actions workflows where rules like `githubactions:S8541` (`--no-build`) and `githubactions:S8544` (`--frozen`) require deliberate suppression with rationale.
 
 ---
 
 ## TL;DR
 
-Two NOSONAR placement patterns appear in our reusable workflows. Their effectiveness is NOT equivalent. Use this table when adding new suppressions.
+Four NOSONAR placement patterns have been empirically tested in our reusable workflows. Their effectiveness is NOT equivalent. Use this table when adding new suppressions.
 
 | Placement | Example | S8541 honored? | S8544 honored? | Notes |
 |---|---|---|---|---|
-| Inline on YAML `run:` line | `run: uv sync --all-extras $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): ...` | Yes | Yes | Used at [`python-compatibility.yml:302`](../.github/workflows/python-compatibility.yml#L302); proven on main. Comma-separated rule list accepted. |
-| Preceding-line bash `#` comment inside `\|` block scalar, **with literal `--frozen` on the next line** | `# NOSONAR(S8541): ...\n  uv run --frozen $NO_BUILD_FLAG ...` | Yes | N/A (no S8544 fires when literal --frozen present) | Used at [`python-compatibility.yml:336-337`](../.github/workflows/python-compatibility.yml#L336-L337); proven on main. |
-| Preceding-line bash `#` comment inside `\|` block scalar, **with dynamic `$FROZEN_FLAG`** | `# NOSONAR(S8541,S8544): ...\n  uv run $FROZEN_FLAG $NO_BUILD_FLAG ...` | Not tested in isolation | **NOT honored** | Attempted at [`python-fips-compatibility.yml:209-210` and `:219-220`](../.github/workflows/python-fips-compatibility.yml#L209) in PR #157 commit `e797676`. SonarCloud continued to flag both S8541 and S8544 on the `uv run` lines after the suppression landed. |
+| **Inline on single-line YAML `run:`** | `run: uv sync --all-extras $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): ...` | Yes | Yes | The ONLY reliable placement. Used at [`python-compatibility.yml:302`](../.github/workflows/python-compatibility.yml#L302), [`python-sonarcloud.yml`](../.github/workflows/python-sonarcloud.yml) (PR #166), proven on main across multiple workflows. Comma-separated rule list accepted. |
+| Preceding-line bash `#` comment inside `\|` block scalar, **with literal `--frozen` on next line** | `# NOSONAR(S8541): ...\n  uv run --frozen $NO_BUILD_FLAG ...` | Yes (apparently; see hypothesis) | N/A (no S8544 fires when literal `--frozen` present) | Used at [`python-compatibility.yml:336-337`](../.github/workflows/python-compatibility.yml#L336-L337); appears to work because the line itself is otherwise clean. Fragile; prefer single-line shape. |
+| Preceding-line bash `#` comment inside `\|` block scalar, **with dynamic `$FROZEN_FLAG`** | `# NOSONAR(S8541,S8544): ...\n  uv run $FROZEN_FLAG $NO_BUILD_FLAG ...` | Not tested in isolation | **NOT honored** | Attempted at [`python-fips-compatibility.yml:209-210` and `:219-220`](../.github/workflows/python-fips-compatibility.yml#L209) in PR #157 commit `e797676`. SonarCloud continued to flag both S8541 and S8544. |
+| **Inline-trailing NOSONAR inside `\|` block scalar** (NEW Wave 1C 2026-05-26) | `uv sync --all-extras --frozen $NO_BUILD_FLAG  # NOSONAR(S8541)` inside a `run: \|` multi-line block | **NOT honored** | **NOT honored** | Attempted at PR #166 commit `bb31ec1`: three `uv sync` lines with comma-separated inline-trailing NOSONAR inside a `run: \|` block. Gate stayed ERROR with 5 vulns. Fix required structural rewrite to single-line `run:` shape. |
 
-**Rule of thumb**: Inline-on-YAML-line suppression works for any rule combination. Preceding-line suppression appears to work only when the offending line has the literal token visible (so SonarCloud's pattern matcher already sees the safe code and the NOSONAR is just dressing for the orthogonal rule). When the line itself triggers the rule (dynamic flag), preceding-line NOSONAR is unreliable; restructure the code so the literal is visible.
+**Rule of thumb (strengthened 2026-05-26)**: **Only single-line `run:` shape reliably honors NOSONAR.** Any placement (preceding-line OR inline-trailing) inside a `run: |` block scalar is unreliable for the `githubactions` ruleset. When you need to suppress S8541/S8544:
+
+1. **Preferred:** Restructure the step so the `uv` invocation is the entire value of a single-line `run:` field. Use Pattern A inline.
+2. **If multi-line shell logic is unavoidable:** Ensure the `uv` lines have literal `--frozen` (the literal alone often satisfies S8544 without any NOSONAR), and treat preceding-line `# NOSONAR(S8541)` as best-effort. Verify the SonarCloud gate per PR; do not assume the suppression took effect.
+3. **For dynamic flag selection** (e.g. uv-locked vs uv-no-lock): split into two `if:`-guarded steps, each single-line, each with literal flags and inline Pattern A.
 
 ---
 
@@ -73,15 +78,26 @@ The literal text of the four remaining open issues:
 
 ---
 
-## Hypothesis
+## Hypothesis (strengthened by Wave 1C empirical findings 2026-05-26)
 
-Two possibilities, neither yet confirmed by SonarCloud documentation:
+The original hypothesis (preceding-line NOSONAR unreliable when the line uses dynamic flags) has been strengthened by additional empirical evidence: **no NOSONAR placement inside a `run: |` block scalar is reliable, regardless of literal vs dynamic flags or position (preceding vs inline-trailing).**
 
-1. **Preceding-line NOSONAR is not honored at all by the `githubactions` rule set, but it works for S8541 in particular cases** because the line below ALSO satisfies the rule on its own (literal `--frozen` is visible, so S8544 never fires regardless of the comment, and S8541 happens to also be tolerated because the line is otherwise clean). In other words, the apparent "success" of preceding-line NOSONAR on `python-compatibility.yml:336-337` is a coincidence of the line itself being inherently safer.
+The supporting evidence comes from PR #166 (Wave 1C of the CI Repair Sprint), which iterated three times to converge on a passing gate:
 
-2. **The comma-separated rule-list syntax `NOSONAR(S8541,S8544)` is parsed differently in preceding-line position than in inline position.** SonarCloud's general NOSONAR docs accept comma lists, but the YAML/githubactions scanner may parse the comment differently when it occurs inside a block scalar.
+1. **Commit `556a09f`:** split-install pattern with literal `--frozen` on `uv-locked` path and preceding-line `# NOSONAR(S8541)`; `uv-no-lock` path used multi-line `run: |` with preceding-line `# NOSONAR(S8541,S8544)`. Gate ERROR (5 vulns).
+2. **Commit `bb31ec1`:** moved NOSONAR from preceding-line to inline-trailing on each `uv sync` line inside the same `run: |` block. Gate still ERROR (5 vulns). This is the new finding: inline-trailing inside a block scalar is also ignored.
+3. **Commit `251ba35`:** extracted a `Resolve extras flag` step that emits `steps.extras.outputs.flag`, then collapsed both install steps to single-line `run:` with inline NOSONAR (Pattern A). Gate OK, vulns 0.
 
-Either way, the practical implication is the same: **do not rely on preceding-line NOSONAR to suppress S8544 when the line itself contains a dynamic flag.**
+Three candidate explanations, all consistent with the evidence:
+
+1. **The `githubactions` rule set lexes each command line inside `run: |` in isolation** and does not associate adjacent comment lines (above or trailing) with the command. Only when the entire `run:` value is a single shell expression does the NOSONAR comment lex as belonging to the same logical line.
+2. **SonarCloud's `githubactions` ruleset may apply NOSONAR at the YAML-field level, not the shell-line level.** The single-line `run:` shape exposes the comment to the YAML parser; the multi-line block scalar buries it.
+
+Comma-separated rule-list syntax was initially suspected as a third candidate, but Wave 1C tested both `# NOSONAR(S8541,S8544)` and `# NOSONAR S8541` forms inside `run: |` blocks and neither was honored. The syntax form is not the variable; placement inside a block scalar is.
+
+The practical implication has changed: **do not rely on NOSONAR inside `run: |` blocks for any rule combination.** Restructure to single-line `run:` (Pattern A) or accept the gate failure and document it.
+
+Lines `python-compatibility.yml:336-337` (preceding-line inside `run: |` with literal `--frozen` for S8541) still pass on main. The conservative interpretation: when the line itself is structurally safe (literal `--frozen` prevents S8544 from firing at all), the unhonored S8541 suppression doesn't matter because S8541 may not have fired in the first place. Treat this as an incidental pass, not a reliable pattern.
 
 ---
 
@@ -97,7 +113,7 @@ Either way, the practical implication is the same: **do not rely on preceding-li
 
 This places the NOSONAR on the same physical YAML line as the offending command. SonarCloud's parser handles it predictably and accepts comma-separated rule lists. Use this when the entire command fits on one line.
 
-**Pattern B (acceptable for multi-line commands): make the literal visible, then suppress only S8541 with a preceding-line comment**
+**Pattern B (fragile; use only when single-line shape is impossible): preceding-line NOSONAR with literal flags**
 
 ```yaml
 run: |
@@ -107,18 +123,31 @@ run: |
     --arg-b
 ```
 
-Requires that an install step run before this block so `uv.lock` exists and `--frozen` is structurally safe. The literal `--frozen` in the command prevents S8544 from firing; the preceding-line `# NOSONAR(S8541)` covers `--no-build` (which is dynamic via `$NO_BUILD_FLAG`).
+Requires that an install step run before this block so `uv.lock` exists and `--frozen` is structurally safe. The literal `--frozen` in the command prevents S8544 from firing structurally; the preceding-line `# NOSONAR(S8541)` is best-effort suppression for `--no-build` (which is dynamic via `$NO_BUILD_FLAG`).
 
-**Anti-pattern (avoid): preceding-line NOSONAR with both flags dynamic**
+**Wave 1C strengthened guidance:** Even Pattern B's preceding-line suppression may not be honored by SonarCloud's `githubactions` ruleset. The line below appears to pass because the literal `--frozen` keeps S8544 from firing AND S8541 may also not fire for reasons that aren't fully understood. Treat any successful Pattern B placement as an incidental pass. **Always verify the SonarCloud quality gate per PR; do not assume the suppression took effect.**
 
-```yaml
-run: |
-  # NOSONAR(S8541,S8544): --no-build via input; --frozen via FROZEN_FLAG
-  uv run $FROZEN_FLAG $NO_BUILD_FLAG python "$SCRIPT_PATH" \
-    --arg-a
-```
+**Anti-patterns (avoid): any NOSONAR inside `run: |` blocks**
 
-This is what PR #157 commit `e797676` tried. SonarCloud continues to flag both rules. Either restructure to expose a literal `--frozen` (Pattern B) or rewrite the multi-line command as a single line and use Pattern A.
+Two empirically confirmed anti-patterns, both inside `run: |` block scalars:
+
+1. **Preceding-line NOSONAR with dynamic `$FROZEN_FLAG`** (PR #157 commit `e797676`):
+
+   ```yaml
+   run: |
+     # NOSONAR(S8541,S8544): --no-build via input; --frozen via FROZEN_FLAG
+     uv run $FROZEN_FLAG $NO_BUILD_FLAG python "$SCRIPT_PATH"
+   ```
+
+2. **Inline-trailing NOSONAR on each line inside `run: |`** (PR #166 commit `bb31ec1`):
+
+   ```yaml
+   run: |
+     uv sync --all-extras --frozen $NO_BUILD_FLAG  # NOSONAR(S8541)
+     uv sync --all-extras $NO_BUILD_FLAG  # NOSONAR(S8541,S8544)
+   ```
+
+Both leave SonarCloud flagging the rules. The structural fix for both is identical: restructure to single-line `run:` (Pattern A) by splitting into `if:`-guarded steps and/or extracting flag-computation into output-emitting helper steps.
 
 ---
 
@@ -130,7 +159,33 @@ The most reliable way to suppress S8544 is to remove the dynamic flag entirely. 
 
 **Option 2: collapse to single-line run command + inline NOSONAR.** Rewrite `uv run $FROZEN_FLAG $NO_BUILD_FLAG python "$SCRIPT_PATH" \\ $A \\ $B` as a single YAML line, then add `# NOSONAR(S8541,S8544): ...` at the end of that line. Cost: line-length warnings from yamllint if the command is long; reduced readability.
 
-For PR #157, Option 1 was selected to mirror the sibling pattern exactly.
+For PR #157, Option 1 was selected to mirror the sibling pattern exactly. For PR #166 (Wave 1C), a third option was required because the workflow already had upstream flag-computation logic that could not be cleanly inlined:
+
+**Option 3 (PR #166 pattern): extract flag computation into an output-emitting helper step, then collapse to single-line `run:`.** When the workflow needs to derive a flag dynamically (e.g., from a workflow input that maps to `--extra` arguments), put the derivation logic in a separate step that emits `steps.<id>.outputs.<name>`, then reference it from the install step's single-line `run:`:
+
+```yaml
+- name: Resolve extras flag
+  id: extras
+  if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
+  env:
+    EXTRA_DEPENDENCIES: ${{ inputs.extra-dependencies }}
+  run: |
+    if [ -n "$EXTRA_DEPENDENCIES" ]; then
+      echo "flag=--extra $EXTRA_DEPENDENCIES" >> "$GITHUB_OUTPUT"
+    else
+      echo "flag=--all-extras" >> "$GITHUB_OUTPUT"
+    fi
+
+- name: Install dependencies (uv-locked)
+  if: steps.detect.outputs.state == 'uv-locked'
+  env:
+    UV_EXTRAS: ${{ steps.extras.outputs.flag }}
+  run: uv sync $UV_EXTRAS --frozen $NO_BUILD_FLAG  # NOSONAR(S8541): --no-build via input
+```
+
+**Critical: both `${{ inputs.* }}` and `${{ steps.*.outputs.* }}` must be routed through an `env:` block, never interpolated directly into a shell script.** Direct interpolation is a workflow injection vector (Trail of Bits / GitHub Actions hardening: caller-controlled strings become attacker-controlled at workflow expansion time). The actual PR #166 pattern at [`python-sonarcloud.yml:272-319`](../.github/workflows/python-sonarcloud.yml#L272-L319) carries a `#CRITICAL` RAD annotation explaining the same point; mirror that pattern, do not shortcut it.
+
+Cost: one extra step in the job, plus an `env:` block on each step that consumes a workflow input or earlier step output. Benefit: the `uv sync` install step is single-line, inline NOSONAR works reliably, and the only remaining `run: |` block is the helper step that does not need NOSONAR suppression at all.
 
 ---
 
@@ -162,5 +217,6 @@ Both calls work without authentication for public projects. The pre-commit hook 
 
 - Sibling workflow with proven suppression patterns: [`python-compatibility.yml`](../.github/workflows/python-compatibility.yml)
 - PR that introduced the failing pattern: [#157](https://github.com/ByronWilliamsCPA/.github/pull/157)
+- PR that strengthened the rule (inline-trailing-inside-block also fails) and established the Option 3 helper-step refactor pattern: [#166](https://github.com/ByronWilliamsCPA/.github/pull/166)
 - Related historical fix (sibling SonarCloud remediation): commit `eecbaa3b281b1a39df59466b199d1fb31f638f7f` on branch `chore/python-compatibility-detect-poetry-uv`
 - Original `--no-build` input feature: [PR #112](https://github.com/ByronWilliamsCPA/.github/pull/112)
