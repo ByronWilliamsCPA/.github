@@ -74,8 +74,11 @@ gh_api_safe() {
         return 0
     fi
     # gh prints messages like "gh: Not Found (HTTP 404)" on stderr; we
-    # captured them via 2>&1 so they live in $raw.
-    if [[ "$raw" == *"HTTP 404"* || "$raw" == *"Not Found"* ]]; then
+    # captured them via 2>&1 so they live in $raw. Anchor on the exact
+    # "(HTTP 404)" parenthesized form rather than the broader "Not Found"
+    # substring so a 5xx response or upstream proxy page that happens to
+    # contain "Not Found" cannot be misclassified as a missing resource.
+    if [[ "$raw" == *"(HTTP 404)"* ]]; then
         GH_API_STATUS="missing"
         GH_API_BODY=""
         return 0
@@ -128,8 +131,20 @@ for org in "${ORGS[@]}"; do
                 api_error=true
                 break
             fi
-            [[ "$GH_API_STATUS" == "missing" ]] && continue
-            content=$(echo "$GH_API_BODY" | base64 -d 2>/dev/null || true)
+            if [[ "$GH_API_STATUS" == "missing" ]]; then
+                # The directory listing returned this path but the file
+                # fetch returned 404. This is a race (file deleted between
+                # calls) or a token-scope mismatch. Log but do not flip the
+                # repo to error: the listing was authoritative, this single
+                # file is the anomaly.
+                echo "WARN: $full:$path: listed but 404 on fetch (race or auth scope?)" >&2
+                continue
+            fi
+            if ! content=$(echo "$GH_API_BODY" | base64 -d 2>/dev/null); then
+                echo "WARN: $full:$path: base64 decode failed" >&2
+                api_error=true
+                break
+            fi
             [[ -z "$content" ]] && continue
             while IFS= read -r line; do
                 # Skip comment lines
