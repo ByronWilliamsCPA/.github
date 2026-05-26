@@ -1,0 +1,24 @@
+# tests/fixtures/workflows/tag-pinned.yml
+# Synthetic workflow used only by Bats tests. Mixes the four ref styles
+# the --pin-tags mode must handle correctly.
+name: Fixture - mixed pin styles
+
+on: push
+
+jobs:
+  example:
+    runs-on: ubuntu-latest
+    steps:
+      # Tag-pinned third-party (must be converted)
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+
+      # Already SHA-pinned third-party (must be left alone)
+      - uses: actions/cache@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  # v4.0.0
+
+      # First-party org ref (must be left alone, governed by CI-056)
+      - uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
+      - uses: williaby/.github/.github/workflows/release-tag.yml@v1
+
+      # Branch-pinned third-party (must FAIL audit and be reported, not silently converted)
+      - uses: some-org/some-action@main
