@@ -99,11 +99,14 @@ on:
 
     outputs:
       mutation-score:
-        description: 'The achieved mutation score percentage'
+        description: 'The achieved mutation score percentage (0 when skipped)'
         value: ${{ jobs.mutation-testing.outputs.score }}
       passed:
-        description: 'Whether the mutation threshold was met'
+        description: 'Whether the mutation threshold was met (true when skipped, so downstream gates pass through)'
         value: ${{ jobs.mutation-testing.outputs.passed }}
+      skipped:
+        description: 'true when the job skipped mutation testing (no pyproject.toml); false otherwise'
+        value: ${{ jobs.mutation-testing.outputs.skipped }}
 
 permissions: {}
 
@@ -118,8 +121,13 @@ jobs:
       contents: read
       pull-requests: write
     outputs:
-      score: ${{ steps.analyze.outputs.score }}
-      passed: ${{ steps.analyze.outputs.passed }}
+      # On the skip path the `analyze` step is gated off, so its outputs evaluate to
+      # the empty string. Coalesce to `set-skip-outputs` so downstream callers always
+      # receive deterministic values rather than empty strings that silently fail
+      # `passed == 'true'` conditionals.
+      score: ${{ steps.analyze.outputs.score || steps.set-skip-outputs.outputs.score }}
+      passed: ${{ steps.analyze.outputs.passed || steps.set-skip-outputs.outputs.passed }}
+      skipped: ${{ steps.set-skip-outputs.outputs.skipped || 'false' }}
 
     steps:
       - name: Harden Runner
@@ -193,12 +201,25 @@ jobs:
         run: uv sync --all-extras $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path (uv sync creates one)
         shell: bash
 
-      - name: Skip notice (no pyproject.toml)
+      # Skip path emits deterministic outputs so downstream callers can branch
+      # cleanly. `passed=true` is intentional: the workflow's default behavior is
+      # `fail-under-threshold: false` (advisory mutation score, not a hard gate),
+      # so "skipped" should pass downstream `if: needs.mutation.outputs.passed
+      # == 'true'` checks. Sophisticated callers can additionally check
+      # `outputs.skipped == 'true'` to distinguish "skipped" from "tested and passed".
+      - name: Set skip outputs and notice
+        id: set-skip-outputs
         if: steps.detect.outputs.state == 'skip'
         run: |
-          echo "## Mutation Testing Skipped" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "No pyproject.toml at repo root, nothing to mutate." >> $GITHUB_STEP_SUMMARY
+          echo "score=0" >> "$GITHUB_OUTPUT"
+          echo "passed=true" >> "$GITHUB_OUTPUT"
+          echo "skipped=true" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Mutation Testing Skipped"
+            echo ""
+            echo "No pyproject.toml at repo root, nothing to mutate."
+          } >> "$GITHUB_STEP_SUMMARY"
+        shell: bash
 
       - name: Run mutation testing
         id: mutmut
@@ -236,11 +257,19 @@ jobs:
           import os
           import sys
 
-          # Try to parse mutmut results
+          # Try to parse mutmut results. Honor --frozen and $NO_BUILD_FLAG here too
+          # so this nested `uv run` matches the install/run steps above; otherwise
+          # callers passing `no-build: true` would silently see builds run on this
+          # invocation, and the lockfile guarantee would not extend to it.
           try:
               import subprocess
+              no_build_flag = os.environ.get('NO_BUILD_FLAG', '').strip()
+              cmd = ['uv', 'run', '--frozen']
+              if no_build_flag:
+                  cmd.append(no_build_flag)
+              cmd.extend(['mutmut', 'results', '--json'])
               result = subprocess.run(
-                  ['uv', 'run', 'mutmut', 'results', '--json'],
+                  cmd,
                   capture_output=True, text=True
               )
 
