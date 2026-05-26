@@ -136,7 +136,7 @@ jobs:
           fi
 
       - name: Pre-Commit Summary
-        if: always()
+        if: always() && steps.detect.outputs.state != 'skip'
         run: |
           echo "## Pre-Commit Hook Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
