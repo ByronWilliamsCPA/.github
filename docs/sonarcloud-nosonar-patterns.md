@@ -13,7 +13,7 @@ Four NOSONAR placement patterns have been empirically tested in our reusable wor
 | Placement | Example | S8541 honored? | S8544 honored? | Notes |
 |---|---|---|---|---|
 | **Inline on single-line YAML `run:`** | `run: uv sync --all-extras $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): ...` | Yes | Yes | Most reliable placement. Used at [`python-compatibility.yml:302`](../.github/workflows/python-compatibility.yml#L302), `python-sonarcloud.yml` (PR #166), proven on main across multiple workflows. Comma-separated rule list accepted. |
-| Preceding-line bash `#` comment inside `\|` block scalar, **single rule S8541, literal `--frozen` on next line** | `# NOSONAR(S8541): ...\n  uv run --frozen $NO_BUILD_FLAG ...` | Yes | N/A (literal `--frozen` prevents S8544 from firing) | Used at [`python-compatibility.yml:336-337`](../.github/workflows/python-compatibility.yml#L336-L337); re-validated by PR #172 (python-mutation, 3 uv lines) and PR #173 (python-performance-regression, 11 uv lines across 4 blocks). Empirical reliability: 3-for-3 successful applications when conditions are met. |
+| Preceding-line bash `#` comment inside `\|` block scalar, **single rule S8541, literal `--frozen` on next line** | `# NOSONAR(S8541): ...\n  uv run --frozen $NO_BUILD_FLAG ...` | Yes | N/A (literal `--frozen` prevents S8544 from firing) | Used at [`python-compatibility.yml:336-337`](../.github/workflows/python-compatibility.yml#L336-L337); re-validated by PR #172 (python-mutation, merged, 3 uv lines) and PR #173 (python-performance-regression, pre-merge gate passing at time of writing, 11 uv lines across 5 blocks). Empirical reliability when conditions are met: 2 merged applications (`python-compatibility.yml`, PR #172) plus 1 pre-merge gate pass (PR #173). |
 | Preceding-line bash `#` comment inside `\|` block scalar, **with dynamic `$FROZEN_FLAG`** | `# NOSONAR(S8541,S8544): ...\n  uv run $FROZEN_FLAG $NO_BUILD_FLAG ...` | **NOT honored** | **NOT honored** | Attempted at [`python-fips-compatibility.yml:209-210` and `:219-220`](../.github/workflows/python-fips-compatibility.yml#L209) in PR #157 commit `e797676`. SonarCloud continued to flag both. The dynamic `$FROZEN_FLAG` is the failure mode, not the preceding-line placement. |
 | **Comma-separated NOSONAR(S8541,S8544) inside `\|` block scalar** | `# NOSONAR(S8541,S8544): ...\n  uv sync ...` | **NOT honored** | **NOT honored** | PR #166 commit `bb31ec1` Wave 1C. The multi-rule list inside `run: \|` is unreliable regardless of position. Use single-line shape or split into separate preceding-line `# NOSONAR(S8541)` per line. |
 | **Inline-trailing NOSONAR inside `\|` block scalar** | `uv sync --all-extras --frozen $NO_BUILD_FLAG  # NOSONAR(S8541)` inside a `run: \|` block | **NOT honored** | **NOT honored** | PR #166 commit `bb31ec1` Wave 1C: inline-trailing NOSONAR is dropped by the YAML/ruleset interaction. Use preceding-line form instead. |
@@ -28,7 +28,7 @@ What does NOT work (avoid):
 - Inline-trailing NOSONAR on uv lines inside `run: |` block.
 - Dynamic `$FROZEN_FLAG` anywhere; the env-var indirection breaks pattern-matching.
 
-**Always verify the SonarCloud quality gate per PR.** Pattern B's reliability conditions are narrow; a PR that meets them should pass, but the lint stack does not predict SonarCloud behavior. One push-wait-verify cycle per change.
+**Always verify the SonarCloud quality gate per PR.** See "Verification protocol" below; the details are repeated there.
 
 ---
 
@@ -85,9 +85,9 @@ The literal text of the four remaining open issues:
 
 ---
 
-## Hypothesis (strengthened by Wave 1C empirical findings 2026-05-26)
+## Hypothesis (Wave 1C strengthened 2026-05-26; nuanced by Wave 2B/2C 2026-05-26)
 
-The original hypothesis (preceding-line NOSONAR unreliable when the line uses dynamic flags) has been strengthened by additional empirical evidence: **no NOSONAR placement inside a `run: |` block scalar is reliable, regardless of literal vs dynamic flags or position (preceding vs inline-trailing).**
+The original hypothesis (preceding-line NOSONAR unreliable when the line uses dynamic flags) was strengthened by Wave 1C evidence into a broad claim that no NOSONAR placement inside a `run: |` block scalar is reliable. Wave 2B (PR #172) and Wave 2C (PR #173) then re-validated a narrower working condition: **preceding-line single-rule `# NOSONAR(S8541)` inside a `run: |` block IS reliable when every uv line in the block uses literal `--frozen` and the suppression list contains only `S8541` (no comma-separated multi-rule form, no dynamic `$FROZEN_FLAG`).** The remaining failure modes documented below still hold for all other forms.
 
 The supporting evidence comes from PR #166 (Wave 1C of the CI Repair Sprint), which iterated three times to converge on a passing gate:
 
@@ -102,9 +102,9 @@ Three candidate explanations, all consistent with the evidence:
 
 Comma-separated rule-list syntax was initially suspected as a third candidate, but Wave 1C tested both `# NOSONAR(S8541,S8544)` and `# NOSONAR S8541` forms inside `run: |` blocks and neither was honored. The syntax form is not the variable; placement inside a block scalar is.
 
-The practical implication has changed: **do not rely on NOSONAR inside `run: |` blocks for any rule combination.** Restructure to single-line `run:` (Pattern A) or accept the gate failure and document it.
+The practical implication (Wave 1C framing): **avoid comma-separated NOSONAR, inline-trailing NOSONAR, and dynamic `$FROZEN_FLAG` inside `run: |` blocks; restructure to single-line `run:` (Pattern A) when any of those would otherwise be needed.** Wave 2B/2C re-validation has since established that preceding-line single-rule `# NOSONAR(S8541)` with literal `--frozen` on every uv line IS reliable inside `run: |` blocks; see Pattern B below for the conditions.
 
-Lines `python-compatibility.yml:336-337` (preceding-line inside `run: |` with literal `--frozen` for S8541) still pass on main. The conservative interpretation: when the line itself is structurally safe (literal `--frozen` prevents S8544 from firing at all), the unhonored S8541 suppression doesn't matter because S8541 may not have fired in the first place. Treat this as an incidental pass, not a reliable pattern.
+Lines `python-compatibility.yml:336-337` (preceding-line inside `run: |` with literal `--frozen` for S8541) still pass on main. Under the original Wave 1C "no NOSONAR inside `run: |` is reliable" framing, this looked like an incidental pass. Under the Wave 2B/2C nuance, it is a deliberate Pattern B application that meets all three reliability conditions; the conservative interpretation has been superseded.
 
 ---
 
@@ -138,11 +138,11 @@ Requires that an install step run before this block so `uv.lock` exists and `--f
 2. **NOSONAR is single-rule `S8541` only,** not comma-separated `(S8541,S8544)`. The multi-rule list inside `run: |` is unreliable; S8544 is already prevented structurally by the literal `--frozen`, so single-rule suppression is sufficient.
 3. **The NOSONAR is on the preceding line,** not inline-trailing. Inline-trailing inside `run: |` blocks is empirically unreliable.
 
-Empirical reliability of Pattern B when all three conditions hold: 3-for-3 across `python-compatibility.yml`, PR #172 (python-mutation), PR #173 (python-performance-regression). The Wave 1C "lucky non-failure" framing has been superseded by this evidence.
+Empirical reliability of Pattern B when all three conditions hold: 2 merged applications (`python-compatibility.yml`, PR #172 python-mutation) plus 1 pre-merge gate pass (PR #173 python-performance-regression, 11 uv lines across 5 blocks). The Wave 1C framing, which had treated Pattern B's success on `python-compatibility.yml` as an incidental pass and warned against any reliance on it, has been superseded by this evidence.
 
 **Always verify the SonarCloud quality gate per PR.** Pattern B's conditions are narrow; a PR that meets them should pass, but the lint stack (actionlint, yamllint) does not predict SonarCloud behavior. One push-wait-verify cycle per change.
 
-**Anti-patterns (avoid): any NOSONAR inside `run: |` blocks**
+**Anti-patterns (avoid): unreliable NOSONAR forms inside `run: |` blocks**
 
 Two empirically confirmed anti-patterns, both inside `run: |` block scalars:
 
