@@ -3,14 +3,19 @@
 #
 # This workflow:
 #   - Generates CycloneDX SBOM
-#   - Scans for vulnerabilities with Trivy
+#   - Scans for vulnerabilities with Trivy (gating), Grype (advisory parallel-run),
+#     and OSV-Scanner (gating, fast keyless SBOM-ingest gate)
 #   - Checks license compliance
-#   - Uploads SARIF to GitHub Security tab
+#   - Uploads SARIF to GitHub Security tab (3 categories: trivy, grype, osv-sbom-runtime-deps)
 #
 # Triggered by:
 #   - Push to main branch
 #   - Release creation
 #   - Weekly schedule
+#
+# Optional toggles (defaults shown):
+#   - run-osv: true         # OSV-Scanner SBOM-ingest gate; set false to disable
+#   - grype-config-path: '.grype.yaml'  # path to Grype config (CVE ignores etc.)
 
 name: SBOM
 

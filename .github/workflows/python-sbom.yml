@@ -13,7 +13,9 @@
 #
 # Features:
 #   - CycloneDX SBOM generation
-#   - Trivy vulnerability scanning
+#   - Trivy vulnerability scanning (gating, SBOM-ingest)
+#   - Grype vulnerability scanning (advisory parallel-run; see issue #152)
+#   - OSV-Scanner vulnerability scanning (fast keyless gate, SBOM-ingest)
 #   - License compliance checking
 #   - SARIF upload to GitHub Security tab
 # ============================================================================
@@ -68,6 +70,11 @@ on:
         required: false
         type: string
         default: '.grype.yaml'
+      run-osv:
+        description: 'Run OSV-Scanner against the SBOM artifact as a fast, keyless CI gate. No API key required; covers transitive dependencies.'
+        required: false
+        type: boolean
+        default: true
 
     # Optional secrets - callers may pass these even if unused by this workflow
     # This prevents startup_failure when callers pass extra secrets
@@ -445,6 +452,91 @@ jobs:
           name: grype-sarif
           path: ${{ steps.grype-sarif.outputs.sarif }}
           retention-days: 7
+          if-no-files-found: warn
+
+  # ============================================================================
+  # Job 2c: Scan Runtime Dependencies (OSV-Scanner - fast keyless gate)
+  # ============================================================================
+  # OSV-Scanner ingests the shared SBOM artifact produced by generate-sbom so
+  # both tools share one source of truth and no second resolver pass occurs.
+  # Benefits over Trivy/Grype for this slot: sub-second on typical Python
+  # dependency graphs, no API key required, and cross-database coverage (OSV,
+  # NVD, GitHub Advisory, PyPI Advisory) that catches transitives sometimes
+  # missed by Snyk free tier. Gating by default; opt out with run-osv: false.
+  #
+  # #CRITICAL: security-events: write is required for upload-sarif. This
+  # permission is inherited by the caller in a reusable workflow context.
+  # #VERIFY: confirm `osv-sbom-runtime-deps` category appears separately in
+  # Security > Code scanning alerts after the first run alongside Trivy and
+  # Grype categories.
+  # ============================================================================
+  scan-runtime-osv:
+    name: Scan Runtime Dependencies (OSV-Scanner)
+    needs: generate-sbom
+    if: inputs.run-osv && (needs.generate-sbom.outputs.state == 'uv-locked' || needs.generate-sbom.outputs.state == 'uv-no-lock')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5  # v2.19.3
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository (for SARIF context)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          sparse-checkout: |
+            .git
+
+      - name: Download SBOM artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: sboms
+
+      # Primary gating scan: table format for readable log output.
+      # continue-on-error mirrors fail-on-vulnerabilities so the gate is
+      # consistent with Trivy's exit-code behavior.
+      # #ASSUME: osv-scanner exits 1 when vulnerabilities are found, 0 for
+      # clean, 127 for unexpected error. continue-on-error only suppresses
+      # non-zero exits; step-level failure is still visible in the log.
+      - name: OSV-Scanner SBOM scan (runtime)
+        uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2  # v2.3.8
+        continue-on-error: ${{ !inputs.fail-on-vulnerabilities }}
+        with:
+          scan-args: |-
+            --sbom=sbom-runtime.json
+
+      # Secondary SARIF run: always non-gating; output written to file for
+      # Security tab upload. Runs even if the gating step above failed.
+      - name: OSV-Scanner SBOM scan (runtime - SARIF report)
+        id: osv-sarif
+        if: always()
+        uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2  # v2.3.8
+        continue-on-error: true
+        with:
+          scan-args: |-
+            --sbom=sbom-runtime.json
+            --format=sarif
+            --output=osv-sbom-runtime.sarif
+
+      - name: Upload OSV-Scanner results to GitHub Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@9e0d7b8d25671d64c341c19c0152d693099fb5ba  # v4.35.5
+        continue-on-error: true
+        with:
+          sarif_file: osv-sbom-runtime.sarif
+          category: osv-sbom-runtime-deps
+
+      - name: Upload OSV-Scanner SARIF artifact
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: osv-sbom-sarif
+          path: osv-sbom-runtime.sarif
+          retention-days: ${{ inputs.artifact-retention-days }}
           if-no-files-found: warn
 
   # ============================================================================

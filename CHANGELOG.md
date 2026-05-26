@@ -12,6 +12,26 @@ are no numbered releases.
 
 ### Added
 
+- `python-sbom.yml`: OSV-Scanner runs alongside Trivy and Grype as a third
+  SBOM-ingest sibling job (`scan-runtime-osv`) for fast keyless CVE coverage
+  per issue #152 follow-up. Adds new optional input `run-osv` (default `true`)
+  that lets callers opt out. The job ingests the same `sbom-runtime.json`
+  artifact that Trivy and Grype use, so no second resolver pass occurs.
+  SARIF is uploaded under category `osv-sbom-runtime-deps`, surfacing
+  alongside Trivy and Grype categories on the Security > Code scanning tab.
+  Reuses the OSV-Scanner action SHA already pinned in
+  `python-security-analysis.yml` (no new third-party surface). Gating mirrors
+  Trivy: when `fail-on-vulnerabilities: true` (the default), an OSV finding
+  fails the workflow. Caller surface is backwards-compatible; one new check
+  entry appears in PR Checks UI for repos that keep the default.
+- `sbom-nightly.yml`: org-level nightly workflow that calls `python-sbom.yml`
+  on a daily 02:17 UTC schedule plus `workflow_dispatch`. Skips cleanly in
+  `.github` (no `pyproject.toml`); serves as the reference pattern for
+  downstream repos that want nightly CVE database coverage between PR builds.
+  Documents the schedule-trigger snippet downstream repos can paste into
+  their own `python-sbom.yml` caller workflows so vulnerabilities disclosed
+  after the last PR build are caught within 24 hours.
+
 - `python-sbom.yml`: Grype scanning runs alongside Trivy as a non-gating sibling
   job (`scan-runtime-grype`) for a 30-day parity window per issue #152. Adds new
   optional input `grype-config-path` (default `.grype.yaml`) and a
