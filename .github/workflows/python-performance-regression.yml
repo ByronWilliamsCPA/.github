@@ -215,9 +215,24 @@ jobs:
         run: |
           FLAGS=""
           if [ -n "$EXTRA_DEPENDENCIES" ]; then
+            # Normalize whitespace separators (spaces, tabs, or newlines from
+            # YAML block scalars) to one extra-name per line. `tr -s` squeezes
+            # consecutive whitespace so blank tokens never reach the loop.
             while IFS= read -r dep; do
-              [[ -n "$dep" ]] && FLAGS="$FLAGS --extra $dep"
-            done < <(echo "$EXTRA_DEPENDENCIES" | tr ' ' '\n')
+              if [ -z "$dep" ]; then
+                continue
+              fi
+              # #CRITICAL PEP 508 extra-name allowlist: letters, digits, dot,
+              # underscore, hyphen. Caller-controlled `inputs.extra-dependencies`
+              # flows unquoted into `uv sync $EXTRA_FLAGS` downstream; rejecting
+              # malformed names here prevents glob expansion, unintended argv
+              # tokens, and accidental word-splitting on stray bytes.
+              if [[ ! "$dep" =~ ^[A-Za-z0-9._-]+$ ]]; then
+                echo "::error::extra-dependencies value '$dep' rejected: must match ^[A-Za-z0-9._-]+\$ (PEP 508 extra name)"
+                exit 1
+              fi
+              FLAGS="$FLAGS --extra $dep"
+            done < <(echo "$EXTRA_DEPENDENCIES" | tr -s ' \t\n' '\n')
           fi
           # Trim leading whitespace; emit single-line for safe word-splitting downstream.
           FLAGS="${FLAGS# }"
@@ -268,6 +283,7 @@ jobs:
           ls -lh "$TEST_DATA_DIR" | head -20
 
       - name: Validate Benchmark Script
+        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
         env:
           BENCHMARK_SCRIPT: ${{ inputs.benchmark-script }}
           PRIMARY_METRIC: ${{ inputs.primary-metric }}
@@ -408,21 +424,23 @@ jobs:
           fi
 
       # Baseline-on-main install path. After `git checkout origin/main` the worktree is on
-      # main's tree, so uv.lock presence has to be re-checked. We branch on detect.state
-      # for the install path (matches the PR-branch install above), then the downstream
-      # uv run lines can use literal --frozen with Pattern B (preceding-line NOSONAR).
-      - name: Install dependencies on main (uv with lockfile)
-        if: steps.baseline_source.outputs.source == 'generated' && steps.detect.outputs.state == 'uv-locked'
+      # main's tree, so uv.lock presence MUST be re-checked. The `detect` step ran against
+      # the PR-branch worktree and cannot describe main: if the PR adds uv.lock to a repo
+      # that previously had none (or removes one), trusting steps.detect.outputs.state
+      # picks the wrong install path. #CRITICAL: inline `[ -f uv.lock ]` always reflects
+      # the current worktree, so it is the only correct gate at this point in the flow.
+      - name: Install dependencies on main
+        if: steps.baseline_source.outputs.source == 'generated' && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock')
         env:
           EXTRA_FLAGS: ${{ steps.extras.outputs.flags }}
-        run: uv sync $EXTRA_FLAGS --frozen $NO_BUILD_FLAG  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
-        shell: bash
-
-      - name: Install dependencies on main (uv without lockfile)
-        if: steps.baseline_source.outputs.source == 'generated' && steps.detect.outputs.state == 'uv-no-lock'
-        env:
-          EXTRA_FLAGS: ${{ steps.extras.outputs.flags }}
-        run: uv sync $EXTRA_FLAGS $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path (uv sync creates one)
+        run: |
+          if [ -f uv.lock ]; then
+            # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+            uv sync $EXTRA_FLAGS --frozen $NO_BUILD_FLAG
+          else
+            # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock on main (uv sync creates one)
+            uv sync $EXTRA_FLAGS $NO_BUILD_FLAG
+          fi
         shell: bash
 
       # Same Pattern B rationale as the PR-branch benchmark block: multi-line capability
@@ -507,13 +525,11 @@ jobs:
           PRIMARY_METRIC: ${{ inputs.primary-metric }}
           REGRESSION_THRESHOLD: ${{ inputs.regression-threshold }}
           IMPROVEMENT_THRESHOLD: ${{ inputs.improvement-threshold }}
-          FAIL_ON_REGRESSION: ${{ inputs.fail-on-regression }}
         run: |
           # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
           uv run --frozen $NO_BUILD_FLAG python - <<'EOF'
           import json
           import os
-          import sys
           from pathlib import Path
 
           # Load results
@@ -585,12 +601,14 @@ jobs:
               f.write(f"primary_metric={primary_metric}\n")
               f.write(f"summary_metrics={json.dumps(summary_metrics)}\n")
 
-          # Exit with error if regression detected and fail-on-regression is true
-          fail_on_regression = os.environ.get("FAIL_ON_REGRESSION", "false").lower() == "true"
-          if regression_detected and fail_on_regression:
-              sys.exit(1)
-          else:
-              sys.exit(0)
+          # Compare must always exit 0 so subsequent steps (Post PR Comment,
+          # Performance Summary) run even on regression. The dedicated `Fail on
+          # Regression` step at the end of the job consumes
+          # `steps.compare.outputs.regression_detected` and is the single
+          # authoritative place that fails the job when fail-on-regression is
+          # true. Two failure paths (here AND the trailing step) is a design
+          # smell: the trailing step is unreachable on regression and the PR
+          # comment is suppressed in exactly the case where it matters most.
           EOF
 
       - name: Post PR Comment
