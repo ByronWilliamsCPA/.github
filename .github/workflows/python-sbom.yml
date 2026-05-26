@@ -94,6 +94,8 @@ jobs:
     timeout-minutes: 10
     env:
       NO_BUILD_FLAG: ${{ inputs.no-build && '--no-build' || '' }}
+    outputs:
+      state: ${{ steps.detect.outputs.state }}
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5  # v2.19.3
@@ -114,13 +116,59 @@ jobs:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
 
-      - name: Install dependencies
-        run: uv sync --frozen $NO_BUILD_FLAG
+      # Detect the repo state before attempting uv sync. The reusable workflow is uv-only
+      # by org policy (poetry repos are being converted to uv in separate work), but it is
+      # still called by some repos that don't have a pyproject.toml (template / docs-only
+      # forks) and by uv-managed repos that haven't yet committed a uv.lock. Hardcoding
+      # `uv sync --frozen` failed for both categories. Auto-detection skips cleanly when
+      # pyproject is absent and drops --frozen when no lockfile exists yet. Poetry repos
+      # are explicitly rejected with an actionable error.
+      - name: Detect repo state
+        id: detect
+        run: |
+          if [ ! -f pyproject.toml ]; then
+            echo "state=skip" >> $GITHUB_OUTPUT
+            echo "::notice::No pyproject.toml found at repo root; SBOM generation will be skipped. Remove the python-sbom.yml caller from this repo if it does not need a Python SBOM."
+          elif [ -f poetry.lock ] || grep -qE '^\[tool\.poetry(\.|])' pyproject.toml; then
+            echo "state=poetry-not-supported" >> $GITHUB_OUTPUT
+            echo "::error::This repo uses Poetry. The python-sbom.yml reusable workflow is uv-only by org policy. Convert this repo to uv before re-enabling Python SBOM automation."
+            exit 1
+          elif [ -f uv.lock ]; then
+            echo "state=uv-locked" >> $GITHUB_OUTPUT
+            echo "Detected: uv with lockfile"
+          else
+            echo "state=uv-no-lock" >> $GITHUB_OUTPUT
+            echo "Detected: uv without lockfile (PEP 621 pyproject.toml only); will sync without --frozen"
+          fi
+        shell: bash
+
+      - name: Install dependencies (uv with lockfile)
+        if: steps.detect.outputs.state == 'uv-locked'
+        run: uv sync --frozen $NO_BUILD_FLAG  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+        shell: bash
+
+      # SonarCloud cannot follow the $NO_BUILD_FLAG env-var indirection, and by design no
+      # uv.lock exists yet on this path until this step generates one. Inline NOSONAR with
+      # rationale; the uv-locked install step above keeps the literal --frozen visible.
+      - name: Install dependencies (uv without lockfile)
+        if: steps.detect.outputs.state == 'uv-no-lock'
+        run: uv sync $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path
+        shell: bash
+
+      - name: Skip notice (no pyproject.toml)
+        if: steps.detect.outputs.state == 'skip'
+        run: |
+          echo "## SBOM Generation Skipped" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "No pyproject.toml at repo root, nothing to scan." >> $GITHUB_STEP_SUMMARY
 
       - name: Install cyclonedx-bom
+        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
         run: uv pip install --no-build 'cyclonedx-bom==7.3.0'
+        shell: bash
 
       - name: Generate runtime SBOM (production dependencies)
+        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
         run: |
           .venv/bin/cyclonedx-py environment \
             --output-format JSON \
@@ -135,6 +183,7 @@ jobs:
           echo "SBOM generated: $(wc -c < "$GITHUB_WORKSPACE/sbom-runtime.json") bytes"
 
       - name: Verify SBOM files before upload
+        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
         run: |
           echo "Working directory : $(pwd)"
           echo "GITHUB_WORKSPACE  : $GITHUB_WORKSPACE"
@@ -142,6 +191,7 @@ jobs:
           find "$GITHUB_WORKSPACE" -maxdepth 1 -name "sbom-*.json" -ls
 
       - name: Upload SBOM artifacts
+        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: sboms
@@ -155,6 +205,7 @@ jobs:
   scan-runtime:
     name: Scan Runtime Dependencies
     needs: generate-sbom
+    if: needs.generate-sbom.outputs.state == 'uv-locked' || needs.generate-sbom.outputs.state == 'uv-no-lock'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -227,6 +278,7 @@ jobs:
   license-compliance:
     name: License Compliance Check
     needs: generate-sbom
+    if: needs.generate-sbom.outputs.state == 'uv-locked' || needs.generate-sbom.outputs.state == 'uv-no-lock'
     runs-on: ubuntu-latest
     permissions:
       contents: read
