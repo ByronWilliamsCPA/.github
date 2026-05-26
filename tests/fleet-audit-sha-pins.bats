@@ -192,3 +192,59 @@ STUB
   assert_output --partial "ByronWilliamsCPA/repo-no-workflows,0"
   refute_output --partial "ByronWilliamsCPA/repo-no-workflows,error"
 }
+
+@test "audit --skip-owners with regex metacharacters does not silently skip violations" {
+  # Under the legacy regex-based skip check, --skip-owners '.*' would have
+  # matched every owner and silently zeroed all violations. The literal
+  # case-match in is_skipped_owner must treat '.*' as a literal owner name
+  # (which no GitHub account is named) and still count the two violations
+  # in repo-dirty.
+  _write_gh_stub
+  run "$SCRIPT" --org ByronWilliamsCPA --skip-owners '.*' --output "$TEST_TMPDIR/out.csv"
+  assert_success
+
+  run cat "$TEST_TMPDIR/out.csv"
+  assert_output --partial "ByronWilliamsCPA/repo-dirty,2"
+  refute_output --partial "ByronWilliamsCPA/repo-dirty,0"
+}
+
+@test "audit emits 'error' sentinel when one file fetches OK and another fails (mixed success)" {
+  # The workflows listing succeeds with two files; the first content fetch
+  # returns a violation, the second returns 429. The api_error flag must
+  # propagate so the repo row is 'error', not a misleading partial count.
+  local dirty_b64
+  dirty_b64=$(printf 'on: push\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n' | base64 -w0)
+
+  cat > "$TEST_TMPDIR/bin/gh" <<STUB
+#!/usr/bin/env bash
+if [[ "\$1 \$2" == "auth status" ]]; then exit 0; fi
+if [[ "\$1" == "repo" && "\$2" == "list" ]]; then
+  _apply_jq_flag '[{"name":"repo-partial-fail"}]' "\$@"
+  exit 0
+fi
+if [[ "\$1" == "api" ]]; then
+  endpoint="\$2"
+  if [[ "\$endpoint" == "repos/ByronWilliamsCPA/repo-partial-fail/contents/.github/workflows" ]]; then
+    _apply_jq_flag '[{"name":"a.yml","path":".github/workflows/a.yml","type":"file"},{"name":"b.yml","path":".github/workflows/b.yml","type":"file"}]' "\$@"
+    exit 0
+  fi
+  if [[ "\$endpoint" == "repos/ByronWilliamsCPA/repo-partial-fail/contents/.github/workflows/a.yml" ]]; then
+    _apply_jq_flag '{"name":"a.yml","encoding":"base64","content":"${dirty_b64}"}' "\$@"
+    exit 0
+  fi
+  if [[ "\$endpoint" == "repos/ByronWilliamsCPA/repo-partial-fail/contents/.github/workflows/b.yml" ]]; then
+    echo "gh: API rate limit exceeded for user (HTTP 429)" >&2
+    exit 1
+  fi
+fi
+exit 0
+STUB
+  chmod +x "$TEST_TMPDIR/bin/gh"
+
+  run "$SCRIPT" --org ByronWilliamsCPA --output "$TEST_TMPDIR/out.csv"
+  assert_success
+
+  run cat "$TEST_TMPDIR/out.csv"
+  assert_output --partial "ByronWilliamsCPA/repo-partial-fail,error"
+  refute_output --partial "ByronWilliamsCPA/repo-partial-fail,1"
+}

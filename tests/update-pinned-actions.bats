@@ -797,3 +797,45 @@ EOF
     "$pin_tags_dir/tag-pinned.yml"
   assert_failure
 }
+
+@test "--pin-tags --apply preserves & and | literal in tag-name comment" {
+  # Git ref naming permits & and | in tag names; both characters are sed
+  # metacharacters (& expands the matched pattern in the replacement, |
+  # is the sed delimiter used by this script). The safe_tag escape block
+  # must keep them literal in the trailing comment, and escape_sed_pat
+  # must keep current_tag from being interpreted as a regex if any tag
+  # ever ships with these characters in its current pin.
+  local SPECIAL_TAG='v4.5.0+amp&pipe|x'
+  local SPECIAL_SHA='cccccccccccccccccccccccccccccccccccccccc'  # pragma: allowlist secret -- 40-char fixture, not a real SHA
+  cat > "$GH_BIN/gh" <<EOF
+#!/usr/bin/env bash
+set -e
+case "\$*" in
+  *"release list --repo actions/checkout"*)
+    _apply_jq_flag '[{"tagName":"$SPECIAL_TAG"}]' "\$@" ;;
+  *"release list --repo actions/setup-python"*)
+    _apply_jq_flag '[{"tagName":"v5.2.0"}]' "\$@" ;;
+  *"actions/checkout"*"git/refs/tags/"*)
+    _apply_jq_flag '{"object":{"type":"commit","sha":"$SPECIAL_SHA"}}' "\$@" ;;
+  *"actions/setup-python"*"git/refs/tags/v5.2.0"*)
+    _apply_jq_flag '{"object":{"type":"commit","sha":"$SETUP_PYTHON_V5_LATEST_SHA"}}' "\$@" ;;
+  *"auth status"*) exit 0 ;;
+  *) echo "unexpected gh call: \$*" >&2; exit 1 ;;
+esac
+EOF
+  chmod +x "$GH_BIN/gh"
+
+  pin_tags_dir="$TEST_TMPDIR/pin_tags_workdir"
+  mkdir -p "$pin_tags_dir"
+  cp "$FIXTURES/tag-pinned.yml" "$pin_tags_dir/"
+
+  run "$SCRIPT" --pin-tags --apply --workflows-dir "$pin_tags_dir"
+  assert_success
+
+  # The literal special tag, including & and |, must appear verbatim in the
+  # trailing comment. If safe_tag's escaping is removed, sed would expand &
+  # to the matched ref or treat | as a field terminator.
+  run grep -F "actions/checkout@$SPECIAL_SHA  # $SPECIAL_TAG" \
+    "$pin_tags_dir/tag-pinned.yml"
+  assert_success
+}
