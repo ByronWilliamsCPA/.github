@@ -1,6 +1,6 @@
 # Handoff: Issue #168, merge_group security-gate coverage gap
 
-> **Status**: Open, ready to assign
+> **Status**: Resolved by PR #178 (Option 1 selected)
 > **Date prepared**: 2026-05-26
 > **Audience**: Incoming team picking up the merge_queue rollout (parent issue #154)
 > **Estimated effort**: 1 hr (Option 1), half-day (Option 2), zero now / unbounded later (Option 3)
@@ -25,6 +25,8 @@ The other four sub-scans (CodeQL, Bandit, OSV-Scanner, OWASP Dependency-Check) a
 ## 3. Current state, with line references
 
 **File**: [`workflow-templates/python-security-analysis.yml`](../../workflow-templates/python-security-analysis.yml)
+
+> Line numbers below reference the **pre-PR-178** state of the file (the state this section documented before the comment expansion shipped). After PR #178 the cited lines shift to: 30-47 (DESIGN DECISION block, formerly KNOWN LIMITATION), 146-152 (dependency-security `if:`), 227-231 (osv-scanner job, now preceded by a role-marker comment added in PR #178), and 404-439 (security-gate aggregator). Use search-by-keyword in the current file to navigate.
 
 The known-limitation comment is documented in the trigger block:
 
@@ -154,7 +156,7 @@ This decision can be made in 5 minutes by checking the standards manifest (CI-04
 2. Edit [`workflow-templates/python-security-analysis.yml`](../../workflow-templates/python-security-analysis.yml) lines 30-45:
    - Replace the "Follow-up: track dedicated dependency-CVE check ..." sentence with one that states OSV-Scanner is the canonical merge_group dependency check.
    - Make the dep-review-is-PR-only behavior an explicit design decision, not a known limitation.
-3. (Optional) Add an `if: github.event_name == 'merge_group'` echo step to `osv-scanner` job that prints "Running as the merge_group dependency-CVE check" so operators see the role in logs.
+3. (Optional, not implemented in PR #178) Add an `if: github.event_name == 'merge_group'` echo step to `osv-scanner` job that prints "Running as the merge_group dependency-CVE check" so operators see the role in logs. PR #178 used a YAML role-marker comment above the job (lines 223-226 post-PR) in place of a run-time echo; the role is visible in the file rather than in run logs. If runtime visibility becomes important, open a follow-up issue to add the echo step.
 4. Run `pre-commit run --files workflow-templates/python-security-analysis.yml` (must pass: yamllint, no-em-dash, secrets scans, commitizen).
 5. Sign and push: `git commit -S` with conventional commit `docs(security-analysis): document OSV-Scanner as merge_group dependency-CVE check (#168)`.
 6. Open PR against `main`. Reference #168 and #154 in the body.
@@ -226,8 +228,12 @@ git add workflow-templates/python-security-analysis.yml && git commit -S -m "doc
 git push -u origin claude/issue-168-merge-group-osv && gh pr create --base main --fill
 ```
 
-## 12. Open question for receiving team
+## 12. Open question for receiving team (resolved in PR #178)
 
 > Is GPL-2.0/GPL-3.0 license enforcement on `merge_group` runs a hard requirement, or is it acceptable to leave license-policy checks at PR time only?
 
-Answer determines Option 1 vs Option 2. Recommend the receiving team make this call in their first 5 minutes, then proceed.
+Answer determined Option 1 vs Option 2. The receiving team resolved this in PR #178.
+
+### Resolution
+
+PR-only is acceptable. `python-sbom.yml`'s `license-compliance` job is `fail-on-forbidden-licenses: false` (warn-only) and only runs on `push:main`, `release`, and the weekly schedule. `dependency-review-action`'s `deny-licenses: GPL-2.0, GPL-3.0` is therefore the only fail-on license policy in the repo, and it lives at PR review time. The queued PR's deps were already enforced at that gate; replicating the check on the speculative merge ref adds no security signal because license findings are PR-review policy, not exploitable speculative-merge regressions. Option 1 selected; resolved in PR #178.
