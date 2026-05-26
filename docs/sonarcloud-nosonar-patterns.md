@@ -91,12 +91,13 @@ The supporting evidence comes from PR #166 (Wave 1C of the CI Repair Sprint), wh
 Three candidate explanations, all consistent with the evidence:
 
 1. **The `githubactions` rule set lexes each command line inside `run: |` in isolation** and does not associate adjacent comment lines (above or trailing) with the command. Only when the entire `run:` value is a single shell expression does the NOSONAR comment lex as belonging to the same logical line.
-2. **The comma-separated rule-list syntax** is parsed differently inside a `run: |` block; the scanner may strip comments before applying the rule. Tested both `# NOSONAR(S8541,S8544)` and `# NOSONAR S8541` forms in `run: |` blocks; neither was honored in Wave 1C.
-3. **SonarCloud's `githubactions` ruleset may apply NOSONAR at the YAML-field level, not the shell-line level.** The single-line `run:` shape exposes the comment to the YAML parser; the multi-line block scalar buries it.
+2. **SonarCloud's `githubactions` ruleset may apply NOSONAR at the YAML-field level, not the shell-line level.** The single-line `run:` shape exposes the comment to the YAML parser; the multi-line block scalar buries it.
+
+Comma-separated rule-list syntax was initially suspected as a third candidate, but Wave 1C tested both `# NOSONAR(S8541,S8544)` and `# NOSONAR S8541` forms inside `run: |` blocks and neither was honored. The syntax form is not the variable; placement inside a block scalar is.
 
 The practical implication has changed: **do not rely on NOSONAR inside `run: |` blocks for any rule combination.** Restructure to single-line `run:` (Pattern A) or accept the gate failure and document it.
 
-Lines `python-compatibility.yml:336-337` (preceding-line inside `run: |` with literal `--frozen` for S8541) still pass on main. The conservative interpretation: when the line itself is structurally safe (literal `--frozen` prevents S8544 from firing at all), the unhonored S8541 suppression doesn't matter because S8541 may not have fired in the first place. Treat this as a lucky non-failure, not a reliable pattern.
+Lines `python-compatibility.yml:336-337` (preceding-line inside `run: |` with literal `--frozen` for S8541) still pass on main. The conservative interpretation: when the line itself is structurally safe (literal `--frozen` prevents S8544 from firing at all), the unhonored S8541 suppression doesn't matter because S8541 may not have fired in the first place. Treat this as an incidental pass, not a reliable pattern.
 
 ---
 
@@ -124,7 +125,7 @@ run: |
 
 Requires that an install step run before this block so `uv.lock` exists and `--frozen` is structurally safe. The literal `--frozen` in the command prevents S8544 from firing structurally; the preceding-line `# NOSONAR(S8541)` is best-effort suppression for `--no-build` (which is dynamic via `$NO_BUILD_FLAG`).
 
-**Wave 1C strengthened guidance:** Even Pattern B's preceding-line suppression may not be honored by SonarCloud's `githubactions` ruleset. The line below appears to pass because the literal `--frozen` keeps S8544 from firing AND S8541 may also not fire for reasons that aren't fully understood. Treat any successful Pattern B placement as a lucky non-failure. **Always verify the SonarCloud quality gate per PR; do not assume the suppression took effect.**
+**Wave 1C strengthened guidance:** Even Pattern B's preceding-line suppression may not be honored by SonarCloud's `githubactions` ruleset. The line below appears to pass because the literal `--frozen` keeps S8544 from firing AND S8541 may also not fire for reasons that aren't fully understood. Treat any successful Pattern B placement as an incidental pass. **Always verify the SonarCloud quality gate per PR; do not assume the suppression took effect.**
 
 **Anti-patterns (avoid): any NOSONAR inside `run: |` blocks**
 
@@ -166,19 +167,25 @@ For PR #157, Option 1 was selected to mirror the sibling pattern exactly. For PR
 - name: Resolve extras flag
   id: extras
   if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
+  env:
+    EXTRA_DEPENDENCIES: ${{ inputs.extra-dependencies }}
   run: |
-    if [ -n "${{ inputs.extras }}" ]; then
-      echo "flag=--extra ${{ inputs.extras }}" >> $GITHUB_OUTPUT
+    if [ -n "$EXTRA_DEPENDENCIES" ]; then
+      echo "flag=--extra $EXTRA_DEPENDENCIES" >> "$GITHUB_OUTPUT"
     else
-      echo "flag=--all-extras" >> $GITHUB_OUTPUT
+      echo "flag=--all-extras" >> "$GITHUB_OUTPUT"
     fi
 
 - name: Install dependencies (uv-locked)
   if: steps.detect.outputs.state == 'uv-locked'
-  run: uv sync ${{ steps.extras.outputs.flag }} --frozen $NO_BUILD_FLAG  # NOSONAR(S8541): --no-build via input
+  env:
+    UV_EXTRAS: ${{ steps.extras.outputs.flag }}
+  run: uv sync $UV_EXTRAS --frozen $NO_BUILD_FLAG  # NOSONAR(S8541): --no-build via input
 ```
 
-Cost: one extra step in the job. Benefit: single-line install step, inline NOSONAR works reliably, no `run: |` block at all.
+**Critical: both `${{ inputs.* }}` and `${{ steps.*.outputs.* }}` must be routed through an `env:` block, never interpolated directly into a shell script.** Direct interpolation is a workflow injection vector (Trail of Bits / GitHub Actions hardening: caller-controlled strings become attacker-controlled at workflow expansion time). The actual PR #166 pattern at [`python-sonarcloud.yml:272-319`](../.github/workflows/python-sonarcloud.yml#L272-L319) carries a `#CRITICAL` RAD annotation explaining the same point; mirror that pattern, do not shortcut it.
+
+Cost: one extra step in the job, plus an `env:` block on each step that consumes a workflow input or earlier step output. Benefit: the `uv sync` install step is single-line, inline NOSONAR works reliably, and the only remaining `run: |` block is the helper step that does not need NOSONAR suppression at all.
 
 ---
 
@@ -210,7 +217,6 @@ Both calls work without authentication for public projects. The pre-commit hook 
 
 - Sibling workflow with proven suppression patterns: [`python-compatibility.yml`](../.github/workflows/python-compatibility.yml)
 - PR that introduced the failing pattern: [#157](https://github.com/ByronWilliamsCPA/.github/pull/157)
-- PR that strengthened the rule with inline-trailing-inside-block-also-fails finding: [#166](https://github.com/ByronWilliamsCPA/.github/pull/166)
-- PR that established the Option 3 helper-step refactor pattern: [#166](https://github.com/ByronWilliamsCPA/.github/pull/166)
+- PR that strengthened the rule (inline-trailing-inside-block also fails) and established the Option 3 helper-step refactor pattern: [#166](https://github.com/ByronWilliamsCPA/.github/pull/166)
 - Related historical fix (sibling SonarCloud remediation): commit `eecbaa3b281b1a39df59466b199d1fb31f638f7f` on branch `chore/python-compatibility-detect-poetry-uv`
 - Original `--no-build` input feature: [PR #112](https://github.com/ByronWilliamsCPA/.github/pull/112)
