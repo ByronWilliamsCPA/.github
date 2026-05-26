@@ -88,6 +88,8 @@ are no numbered releases.
 - `.secrets.baseline`: detect-secrets baseline with 5 SHA-pin false positives in `.pre-commit-config.yaml`
 - `scorecard.yml`: add `self-scorecard` direct job with `publish_results: true` and `id-token: write`; runs `ossf/scorecard-action` without the reusable wrapper so the OIDC token `repository` claim resolves to `ByronWilliamsCPA/.github` (see ADR-001); includes SCORECARD_TOKEN guard, harden-runner, and job summary step
 - `.codecov.yml`: Codecov configuration for `ByronWilliamsCPA/.github` with 80% project and 90% patch coverage targets
+- `--pin-tags` mode in `scripts/update-pinned-actions.sh` to convert `@vN` tag refs to 40-character commit SHA pins. Closes #153.
+- `scripts/fleet-audit-sha-pins.sh` for read-only enumeration of third-party tag/branch refs across both orgs.
 
 ### Changed
 
@@ -167,6 +169,7 @@ are no numbered releases.
 - `python-publish-pypi.yml`, `python-reuse.yml`: remediate SonarCloud S8541 and S8544 in tool install steps; `uv run --with pip-audit==2.10.0` and `uv run --with bandit[toml]==1.9.4` flagged S8541 for executing arbitrary build scripts from source distributions; `pip install --only-binary :all: reuse==5.0.2` flagged S8544 for unlocked transitive dependencies; replace with `uv pip install --no-build 'pkg==version'` plus direct invocation; add conditional `astral-sh/setup-uv` step to `python-reuse.yml` so `uv` is available when `generate-spdx: true`
 - Fix script injection vulnerability in `python-codecov.yml`: move `inputs.coverage-files` to env var before shell use (SonarCloud S7630)
 - Pin `slsa-framework/slsa-github-generator` to full commit SHA in `python-slsa.yml` (SonarCloud S7637)
+- Swept consumer repos to pin third-party GitHub Actions by commit SHA. Defends against retroactive tag-pointer manipulation (CVE-2025-30066 class). Per-repo PRs filed; CI-060 promoted to `severity: important` in the standards manifest after sweep completes.
 
 ## [2026-04-13]
 
