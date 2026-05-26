@@ -101,28 +101,17 @@ echo "  Dir  : $WORKFLOWS_DIR"
 echo ""
 
 # ---------------------------------------------------------------------------
-# Escape sed BRE/ERE pattern metacharacters in a string so it can be used
-# as a literal sed pattern. The sed delimiter (|) is also escaped because
-# the substitutions below use `s|...|...|` form. Backslash is escaped first
-# so subsequent substitutions do not double-escape it.
+# Escape ERE metacharacters and the sed delimiter (|) in a string so it
+# can be used as a literal sed pattern under `sed -E`. Implemented via
+# sed rather than ${var//pat/rep} because the parameter-expansion form
+# has a parser gotcha when the replacement contains `{` or `}`: the
+# expansion's closing `}` consumes the wrong brace and the outer `}`
+# leaks into the result.
+# Bracket expression rules: `]` is first so it is literal; `\` must be
+# escaped (sed sees `\\` as literal `\`).
 # ---------------------------------------------------------------------------
 escape_sed_pat() {
-    local s="$1"
-    s="${s//\\/\\\\}"
-    s="${s//./\\.}"
-    s="${s//\*/\\*}"
-    s="${s//\^/\\^}"
-    s="${s//\$/\\\$}"
-    s="${s//+/\\+}"
-    s="${s//\?/\\?}"
-    s="${s//(/\\(}"
-    s="${s//)/\\)}"
-    s="${s//[/\\[}"
-    s="${s//]/\\]}"
-    s="${s//\{/\\{}"
-    s="${s//\}/\\}}"
-    s="${s//|/\\|}"
-    printf '%s' "$s"
+    printf '%s' "$1" | sed -e 's/[][\\.^$*+?(){}|]/\\&/g'
 }
 
 # ---------------------------------------------------------------------------
