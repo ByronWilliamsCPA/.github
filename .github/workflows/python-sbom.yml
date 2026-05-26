@@ -165,6 +165,7 @@ jobs:
       - name: Install cyclonedx-bom
         if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
         run: uv pip install --no-build 'cyclonedx-bom==7.3.0'
+        shell: bash
 
       - name: Generate runtime SBOM (production dependencies)
         if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
