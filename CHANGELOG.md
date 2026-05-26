@@ -41,6 +41,10 @@ are no numbered releases.
   (`REPO_LIMIT="${REPO_LIMIT:-1000}"`), letting tests exercise the
   saturation WARN with a small stub-friendly value and giving operators an
   escape hatch for fleets that grow beyond the default.
+- `scripts/fleet-audit-sha-pins.sh`: `STRICT_AUDIT` now accepts the
+  case-insensitive truthy spellings `1`, `true`, and `yes`; previously only
+  the literal `"1"` was honoured and `STRICT_AUDIT=true` silently degraded
+  to report-only.
 
 ### Breaking Changes
 
@@ -190,6 +194,12 @@ are no numbered releases.
 - `tests/update-pinned-actions.bats`, `tests/fleet-audit-sha-pins.bats`: add eight new test cases covering the hardening above. The five from the original PR #175 follow-up commit (inline-comment conversion, custom `--owner-allowlist`, two-step annotated-tag dereferencing, audit emits `repo,error` on non-404 failure, audit treats 404 on the workflows directory as a legitimate zero) are joined by three regression-vector tests: sed-escape of `&` and `|` characters in tag-name comments, `--skip-owners` with regex metacharacters still counts violations, and mixed-success inner-loop (one workflow file fetches OK, a second fails, repo row flips to `error` not a partial numeric count).
 - `scripts/update-pinned-actions.sh`: `resolve_tag_sha` now validates that the `gh api` composite jq response contains non-empty, non-`"null"` values for `.object.type` and `.object.sha`. The previous code accepted the literal string `"null"` (emitted by `jq -r` for missing fields) as a successful resolution, which produced patterns like `actions/checkout@null` that the caller wrote into the workflow file. The same guard now also fires after the second annotated-tag dereferencing call. Action refs that fail validation are marked SKIPPED rather than written with a malformed SHA.
 - `tests/fleet-audit-sha-pins.bats`, `tests/update-pinned-actions.bats`: add nine more regression-vector tests guarding the Suggested-tier fixes. fleet-audit gains: REPO_LIMIT saturation WARN with env-overridable REPO_LIMIT, STRICT_AUDIT=1 fail-closed on saturation, STRICT_AUDIT=1 fail-closed on per-repo error, STRICT_AUDIT=1 clean-run regression guard, SKIP_OWNERS edge cases (single value, empty, double internal commas). update-pinned-actions gains: extract_branch_pins reports comment-annotated branch refs, --pin-tags --apply succeeds with only-first-party fixtures, --pin-tags --apply skips when annotated-tag dereferencing returns missing `.object.sha`.
+- `scripts/fleet-audit-sha-pins.sh`: workflows-listing failure path now sets `audit_incomplete=true` before continuing, matching the per-file-fetch error path. The previous code emitted a `repo,error` sentinel but left the flag unset, so `STRICT_AUDIT=1` could exit 0 even when error rows were present. Verified by the new `STRICT_AUDIT=1 exits non-zero on workflows-listing failure` regression test. (Critical from the PR #177 self-review.)
+- `.github/workflows/shell-tests.yml`: bats runner now discovers all `tests/*.bats` files via `find ... -print0 | xargs -0`. Previously it named only `tests/update-pinned-actions.bats`, so the 13 cases in `tests/fleet-audit-sha-pins.bats` (including the STRICT_AUDIT and REPO_LIMIT regression cases added in PR #176 and PR #177) never ran in CI. (Critical from the PR #177 self-review.)
+- `scripts/fleet-audit-sha-pins.sh`: `gh repo list` invocation now captures stdout to a temp file rather than reading through process substitution, so the command's exit code surfaces. An auth-loss or rate-limit hit during enumeration now flags the audit as incomplete and emits a stderr WARN; previously the failure was discarded and the org silently contributed zero rows.
+- `scripts/fleet-audit-sha-pins.sh`: validate `REPO_LIMIT` as a positive integer up front and exit 1 with a clear error message when it is empty, zero, negative, or non-numeric. Previously a bad value would crash mid-loop inside `[[ ... -eq $REPO_LIMIT ]]` under `set -euo pipefail`.
+- `scripts/update-pinned-actions.sh`: `resolve_tag_sha` null guards now emit a stderr WARN before returning empty, so operators can distinguish a malformed GitHub API response from a missing tag. The action is still marked SKIPPED; only the diagnostic surface changes.
+- `scripts/fleet-audit-sha-pins.sh`: strip trailing CR from each line before regex matching in the violation counter, so workflow files checked out on Windows or proxied through CRLF-normalizing intermediaries no longer leak `\r` into `BASH_REMATCH[4]` and inflate violation counts.
 
 ### Security
 

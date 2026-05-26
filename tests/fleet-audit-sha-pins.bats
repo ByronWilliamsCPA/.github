@@ -346,11 +346,16 @@ STUB
 @test "audit --skip-owners with empty string does not skip anything" {
   # Empty SKIP_OWNERS becomes the case pattern ",,". No real owner string
   # matches that, so both violations in repo-dirty must still be counted.
+  # Positive controls: clean repo row must still be 0, and no spurious
+  # "skipping owner ''" WARN may leak (a future regression on the case
+  # framing would match empty owners on every ref).
   _write_gh_stub
   run "$SCRIPT" --org ByronWilliamsCPA --skip-owners '' --output "$TEST_TMPDIR/out.csv"
   assert_success
+  refute_output --partial "skipping owner"
   run cat "$TEST_TMPDIR/out.csv"
   assert_output --partial "ByronWilliamsCPA/repo-dirty,2"
+  assert_output --partial "ByronWilliamsCPA/repo-clean,0"
 }
 
 @test "audit --skip-owners with double internal commas still matches listed owners" {
@@ -365,4 +370,143 @@ STUB
   assert_success
   run cat "$TEST_TMPDIR/out.csv"
   assert_output --partial "ByronWilliamsCPA/repo-dirty,0"
+}
+
+@test "audit exits 1 when REPO_LIMIT is non-numeric" {
+  # The validation guard fires before any audit work. The script must reject
+  # garbage values up-front rather than crashing inside the `[[ -eq ]]` test
+  # under set -euo pipefail.
+  _write_gh_stub
+  REPO_LIMIT=abc run "$SCRIPT" --org ByronWilliamsCPA --output "$TEST_TMPDIR/out.csv"
+  [[ "$status" -eq 1 ]] || { echo "expected exit 1 for non-numeric REPO_LIMIT, got $status"; return 1; }
+  assert_output --partial "ERROR: REPO_LIMIT must be a positive integer"
+}
+
+@test "audit exits 1 when REPO_LIMIT is zero" {
+  # Zero would silently truncate the audit to no repos; the validator must
+  # require a positive integer (^[1-9][0-9]*$), not just any integer.
+  _write_gh_stub
+  REPO_LIMIT=0 run "$SCRIPT" --org ByronWilliamsCPA --output "$TEST_TMPDIR/out.csv"
+  [[ "$status" -eq 1 ]] || { echo "expected exit 1 for zero REPO_LIMIT, got $status"; return 1; }
+  assert_output --partial "ERROR: REPO_LIMIT must be a positive integer"
+}
+
+@test "audit treats REPO_LIMIT='' (empty) as use-default-1000" {
+  # Bash semantics: `${REPO_LIMIT:-1000}` substitutes the default when the
+  # variable is unset OR null/empty. So `REPO_LIMIT=''` is equivalent to
+  # not setting it -- the script should fall back to 1000 and run normally,
+  # not reject. This documents the intended behavior so a future
+  # refactor that switches to `${REPO_LIMIT-1000}` (no colon, treats empty
+  # as a literal value) is caught by CI.
+  _write_gh_stub
+  REPO_LIMIT='' run "$SCRIPT" --org ByronWilliamsCPA --output "$TEST_TMPDIR/out.csv"
+  assert_success
+  refute_output --partial "ERROR: REPO_LIMIT"
+}
+
+@test "audit STRICT_AUDIT=1 exits non-zero when gh repo list fails" {
+  # mapfile via process substitution was previously swallowing the rc.
+  # Now `gh repo list` is captured to a tmpfile and the rc surfaces; an
+  # auth-loss or rate-limit mid-enumeration must mark the audit incomplete
+  # and exit 2 under STRICT_AUDIT.
+  cat > "$TEST_TMPDIR/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+if [[ "$1 $2" == "auth status" ]]; then exit 0; fi
+if [[ "$1" == "repo" && "$2" == "list" ]]; then
+  echo "gh: rate limit exceeded for user (HTTP 429)" >&2
+  exit 1
+fi
+exit 0
+STUB
+  chmod +x "$TEST_TMPDIR/bin/gh"
+
+  STRICT_AUDIT=1 run "$SCRIPT" --org ByronWilliamsCPA --output "$TEST_TMPDIR/out.csv"
+  [[ "$status" -eq 2 ]] || { echo "expected exit 2 under STRICT_AUDIT with repo-list failure, got $status"; return 1; }
+  assert_output --partial "WARN: ByronWilliamsCPA: gh repo list failed"
+  assert_output --partial "ERROR: STRICT_AUDIT"
+}
+
+@test "audit default flow stays exit 0 when gh repo list fails (report-only)" {
+  # Regression guard for the same path WITHOUT STRICT_AUDIT: the script must
+  # still exit 0 so existing report-only consumers do not break, even when
+  # an org enumeration fails. The WARN must still be emitted.
+  cat > "$TEST_TMPDIR/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+if [[ "$1 $2" == "auth status" ]]; then exit 0; fi
+if [[ "$1" == "repo" && "$2" == "list" ]]; then
+  echo "gh: rate limit exceeded for user (HTTP 429)" >&2
+  exit 1
+fi
+exit 0
+STUB
+  chmod +x "$TEST_TMPDIR/bin/gh"
+
+  run "$SCRIPT" --org ByronWilliamsCPA --output "$TEST_TMPDIR/out.csv"
+  assert_success
+  assert_output --partial "WARN: ByronWilliamsCPA: gh repo list failed"
+}
+
+@test "audit STRICT_AUDIT=true (string) is treated as truthy" {
+  # The Suggested-tier review flagged that STRICT_AUDIT=1 only matched the
+  # literal "1"; "true", "yes", and case variants would silently degrade to
+  # report-only. Confirm the widened predicate accepts "true" via the same
+  # repo-list-failure path used above.
+  cat > "$TEST_TMPDIR/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+if [[ "$1 $2" == "auth status" ]]; then exit 0; fi
+if [[ "$1" == "repo" && "$2" == "list" ]]; then
+  echo "gh: rate limit exceeded for user (HTTP 429)" >&2
+  exit 1
+fi
+exit 0
+STUB
+  chmod +x "$TEST_TMPDIR/bin/gh"
+
+  STRICT_AUDIT=true run "$SCRIPT" --org ByronWilliamsCPA --output "$TEST_TMPDIR/out.csv"
+  [[ "$status" -eq 2 ]] || { echo "expected exit 2 under STRICT_AUDIT=true, got $status"; return 1; }
+}
+
+@test "audit STRICT_AUDIT=YES (case-insensitive truthy) is treated as truthy" {
+  cat > "$TEST_TMPDIR/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+if [[ "$1 $2" == "auth status" ]]; then exit 0; fi
+if [[ "$1" == "repo" && "$2" == "list" ]]; then
+  echo "gh: rate limit exceeded for user (HTTP 429)" >&2
+  exit 1
+fi
+exit 0
+STUB
+  chmod +x "$TEST_TMPDIR/bin/gh"
+
+  STRICT_AUDIT=YES run "$SCRIPT" --org ByronWilliamsCPA --output "$TEST_TMPDIR/out.csv"
+  [[ "$status" -eq 2 ]] || { echo "expected exit 2 under STRICT_AUDIT=YES, got $status"; return 1; }
+}
+
+@test "audit STRICT_AUDIT=1 exits non-zero on workflows-listing failure (Critical #1 regression)" {
+  # This is the path that previously emitted "$full,error" + continue
+  # without setting audit_incomplete. Stub `gh repo list` to succeed, but
+  # `gh api` (workflows listing) to return a non-404 error. With the fix,
+  # the workflows-listing failure path must now flag audit_incomplete and
+  # STRICT_AUDIT=1 must exit 2.
+  cat > "$TEST_TMPDIR/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+if [[ "$1 $2" == "auth status" ]]; then exit 0; fi
+if [[ "$1" == "repo" && "$2" == "list" ]]; then
+  _apply_jq_flag '[{"name":"repo-down"}]' "$@"
+  exit 0
+fi
+if [[ "$1" == "api" ]]; then
+  echo "gh: API rate limit exceeded for user (HTTP 429)" >&2
+  exit 1
+fi
+exit 0
+STUB
+  chmod +x "$TEST_TMPDIR/bin/gh"
+
+  STRICT_AUDIT=1 run "$SCRIPT" --org ByronWilliamsCPA --output "$TEST_TMPDIR/out.csv"
+  [[ "$status" -eq 2 ]] || { echo "expected exit 2 on workflows-listing 429 under STRICT_AUDIT, got $status"; return 1; }
+  assert_output --partial "WARN: ByronWilliamsCPA/repo-down: workflows listing failed"
+  assert_output --partial "ERROR: STRICT_AUDIT"
+  run cat "$TEST_TMPDIR/out.csv"
+  assert_output --partial "ByronWilliamsCPA/repo-down,error"
 }

@@ -863,7 +863,10 @@ YML
   assert_success
   # The branch ref must appear in the WARN block even though it carries
   # an inline "# tracking head" comment that the old regex would have
-  # treated as the line terminator.
+  # treated as the line terminator. Anchor the assertion to the WARN
+  # header so a future regression that merely echoed the fixture name
+  # or unrelated context can't pass this test silently.
+  assert_output --partial "WARN: branch ref detected"
   assert_output --partial "some-org/branch-action@main"
 }
 
@@ -939,6 +942,57 @@ EOF
   assert_failure
   # actions/setup-python had a clean lightweight-tag path; it should be
   # converted normally
+  run grep -F "actions/setup-python@$SETUP_PYTHON_V5_LATEST_SHA" \
+    "$pin_tags_dir/tag-pinned.yml"
+  assert_success
+}
+
+@test "--pin-tags --apply skips when first git/refs/tags call returns null .object.type" {
+  # The Suggested-tier follow-up review noted only the SECOND-call null guard
+  # was tested. This exercises the FIRST-call guard (added at
+  # scripts/update-pinned-actions.sh:138): when the initial
+  # `repos/$repo/git/refs/tags/$tag` response has a malformed `.object`
+  # (e.g., `null`), jq -r emits the literal "null" for both fields and
+  # `resolve_tag_sha` must mark the action SKIPPED rather than writing
+  # `@null` into the workflow file. The stderr WARN added alongside the
+  # guard must also fire so operators can distinguish malformed responses
+  # from "tag does not exist".
+  cat > "$GH_BIN/gh" <<EOF
+#!/usr/bin/env bash
+set -e
+case "\$*" in
+  *"release list --repo actions/checkout"*)
+    _apply_jq_flag '[{"tagName":"v4.3.0"}]' "\$@" ;;
+  *"release list --repo actions/setup-python"*)
+    _apply_jq_flag '[{"tagName":"v5.2.0"}]' "\$@" ;;
+  *"actions/checkout"*"git/refs/tags/v4.3.0"*)
+    # Malformed: .object is null, so jq emits "null|null".
+    _apply_jq_flag '{"object":null}' "\$@" ;;
+  *"actions/setup-python"*"git/refs/tags/v5.2.0"*)
+    _apply_jq_flag '{"object":{"type":"commit","sha":"$SETUP_PYTHON_V5_LATEST_SHA"}}' "\$@" ;;
+  *"auth status"*) exit 0 ;;
+  *) echo "unexpected gh call: \$*" >&2; exit 1 ;;
+esac
+EOF
+  chmod +x "$GH_BIN/gh"
+
+  pin_tags_dir="$TEST_TMPDIR/pin_tags_workdir"
+  mkdir -p "$pin_tags_dir"
+  cp "$FIXTURES/tag-pinned.yml" "$pin_tags_dir/"
+
+  run "$SCRIPT" --pin-tags --apply --workflows-dir "$pin_tags_dir"
+  assert_success
+  assert_output --partial "SKIP: cannot resolve SHA"
+  # The new WARN must fire on the first-call null-object path.
+  assert_output --partial "null/empty .object.type or .object.sha"
+
+  # actions/checkout was malformed: original v4 ref must remain.
+  run grep -F "actions/checkout@v4" "$pin_tags_dir/tag-pinned.yml"
+  assert_success
+  # The literal string "null" must NOT have leaked into the workflow file.
+  run grep -F "actions/checkout@null" "$pin_tags_dir/tag-pinned.yml"
+  assert_failure
+  # actions/setup-python had a clean lightweight-tag path; converted normally.
   run grep -F "actions/setup-python@$SETUP_PYTHON_V5_LATEST_SHA" \
     "$pin_tags_dir/tag-pinned.yml"
   assert_success

@@ -134,8 +134,10 @@ resolve_tag_sha() {
     # jq emits the literal string "null" under -r when a referenced field
     # is missing or null. Treat that as a resolution failure so the caller
     # marks the action SKIPPED rather than writing "actions/checkout@null"
-    # into the workflow file.
+    # into the workflow file. Emit a stderr WARN so operators can
+    # distinguish "tag doesn't exist" from "malformed GitHub API response."
     if [[ -z "$obj_type" || -z "$obj_sha" || "$obj_type" == "null" || "$obj_sha" == "null" ]]; then
+        echo "WARN: $repo: $tag: null/empty .object.type or .object.sha; marking SKIPPED" >&2
         echo ""
         return
     fi
@@ -144,6 +146,7 @@ resolve_tag_sha() {
         # Annotated tag: resolve tag object to its target commit SHA
         obj_sha=$(gh api "repos/$repo/git/tags/$obj_sha" --jq '.object.sha' 2>/dev/null) || { echo ""; return; }
         if [[ -z "$obj_sha" || "$obj_sha" == "null" ]]; then
+            echo "WARN: $repo: $tag: annotated tag dereferenced to null .object.sha; marking SKIPPED" >&2
             echo ""
             return
         fi
@@ -303,6 +306,9 @@ pin_tags_main() {
         #       delimiter changes to `/` (or any other char), this set must
         #       be updated to match. The matching pattern-side escape lives
         #       in escape_sed_pat() below.
+        # Maintenance note: if the sed delimiter ever changes from `|`, both
+        # the replacement-side escape set here AND the pattern-side
+        # escape_sed_pat() function below must be updated together.
         safe_tag="${latest_tag//\\/\\\\}"
         safe_tag="${safe_tag//&/\\&}"
         safe_tag="${safe_tag//|/\\|}"
