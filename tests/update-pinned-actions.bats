@@ -707,3 +707,135 @@ EOF
   run grep -F "some-org/some-action@main" "$pin_tags_dir/tag-pinned.yml"
   assert_success
 }
+
+@test "--pin-tags converts refs that already have an inline comment" {
+  _write_gh_stub_pin_tags
+  pin_tags_dir="$TEST_TMPDIR/pin_tags_workdir"
+  mkdir -p "$pin_tags_dir"
+  cat > "$pin_tags_dir/inline-comment.yml" <<'YML'
+name: Fixture
+on: push
+jobs:
+  example:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4  # using v4 stable
+      - uses: actions/setup-python@v5
+YML
+
+  run "$SCRIPT" --pin-tags --apply --workflows-dir "$pin_tags_dir"
+  assert_success
+  # The trailing inline comment is dropped; new SHA + tag comment replaces it
+  run grep -F "actions/checkout@$CHECKOUT_V4_LATEST_SHA  # $CHECKOUT_V4_LATEST_TAG" \
+    "$pin_tags_dir/inline-comment.yml"
+  assert_success
+  # No remnant of the old "using v4 stable" comment
+  run grep -F "using v4 stable" "$pin_tags_dir/inline-comment.yml"
+  assert_failure
+}
+
+@test "--pin-tags honors a custom --owner-allowlist" {
+  _write_gh_stub_pin_tags
+  pin_tags_dir="$TEST_TMPDIR/pin_tags_workdir"
+  mkdir -p "$pin_tags_dir"
+  cp "$FIXTURES/tag-pinned.yml" "$pin_tags_dir/"
+
+  # Add "actions" to the allowlist so actions/checkout becomes first-party
+  run "$SCRIPT" --pin-tags --apply --owner-allowlist actions \
+    --workflows-dir "$pin_tags_dir"
+  assert_success
+
+  # actions/checkout@v4 is now treated as first-party, so it stays as a tag ref
+  run grep -F "actions/checkout@v4" "$pin_tags_dir/tag-pinned.yml"
+  assert_success
+  # actions/setup-python@v5 likewise untouched
+  run grep -F "actions/setup-python@v5" "$pin_tags_dir/tag-pinned.yml"
+  assert_success
+}
+
+# Stub for --pin-tags + annotated-tag dereferencing.
+# Two-step resolution: refs/tags -> tag object SHA, then git/tags -> commit SHA.
+_write_gh_stub_pin_tags_annotated() {
+  local annotated_sha="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"  # pragma: allowlist secret
+  local commit_sha="$CHECKOUT_V4_LATEST_SHA"
+  cat > "$GH_BIN/gh" <<EOF
+#!/usr/bin/env bash
+set -e
+case "\$*" in
+  *"release list --repo actions/checkout"*)
+    _apply_jq_flag '[{"tagName":"v4.3.0"}]' "\$@" ;;
+  *"release list --repo actions/setup-python"*)
+    _apply_jq_flag '[{"tagName":"v5.2.0"}]' "\$@" ;;
+  *"actions/checkout"*"git/refs/tags/v4.3.0"*)
+    _apply_jq_flag '{"object":{"type":"tag","sha":"${annotated_sha}"}}' "\$@" ;;
+  *"actions/checkout"*"git/tags/${annotated_sha}"*)
+    _apply_jq_flag '{"object":{"sha":"${commit_sha}"}}' "\$@" ;;
+  *"actions/setup-python"*"git/refs/tags/v5.2.0"*)
+    _apply_jq_flag '{"object":{"type":"commit","sha":"$SETUP_PYTHON_V5_LATEST_SHA"}}' "\$@" ;;
+  *"auth status"*) exit 0 ;;
+  *) echo "unexpected gh call: \$*" >&2; exit 1 ;;
+esac
+EOF
+  chmod +x "$GH_BIN/gh"
+}
+
+@test "--pin-tags resolves annotated tags via two-step dereferencing" {
+  _write_gh_stub_pin_tags_annotated
+  pin_tags_dir="$TEST_TMPDIR/pin_tags_workdir"
+  mkdir -p "$pin_tags_dir"
+  cp "$FIXTURES/tag-pinned.yml" "$pin_tags_dir/"
+
+  run "$SCRIPT" --pin-tags --apply --workflows-dir "$pin_tags_dir"
+  assert_success
+
+  # The dereferenced commit SHA must appear, not the intermediate tag-object SHA
+  run grep -F "actions/checkout@$CHECKOUT_V4_LATEST_SHA  # $CHECKOUT_V4_LATEST_TAG" \
+    "$pin_tags_dir/tag-pinned.yml"
+  assert_success
+  # The annotated tag-object SHA must NOT leak into the file
+  run grep -F "@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb" \
+    "$pin_tags_dir/tag-pinned.yml"
+  assert_failure
+}
+
+@test "--pin-tags --apply preserves & and | literal in tag-name comment" {
+  # Git ref naming permits & and | in tag names; both characters are sed
+  # metacharacters (& expands the matched pattern in the replacement, |
+  # is the sed delimiter used by this script). The safe_tag escape block
+  # must keep them literal in the trailing comment, and escape_sed_pat
+  # must keep current_tag from being interpreted as a regex if any tag
+  # ever ships with these characters in its current pin.
+  local SPECIAL_TAG='v4.5.0+amp&pipe|x'
+  local SPECIAL_SHA='cccccccccccccccccccccccccccccccccccccccc'  # pragma: allowlist secret -- 40-char fixture, not a real SHA
+  cat > "$GH_BIN/gh" <<EOF
+#!/usr/bin/env bash
+set -e
+case "\$*" in
+  *"release list --repo actions/checkout"*)
+    _apply_jq_flag '[{"tagName":"$SPECIAL_TAG"}]' "\$@" ;;
+  *"release list --repo actions/setup-python"*)
+    _apply_jq_flag '[{"tagName":"v5.2.0"}]' "\$@" ;;
+  *"actions/checkout"*"git/refs/tags/"*)
+    _apply_jq_flag '{"object":{"type":"commit","sha":"$SPECIAL_SHA"}}' "\$@" ;;
+  *"actions/setup-python"*"git/refs/tags/v5.2.0"*)
+    _apply_jq_flag '{"object":{"type":"commit","sha":"$SETUP_PYTHON_V5_LATEST_SHA"}}' "\$@" ;;
+  *"auth status"*) exit 0 ;;
+  *) echo "unexpected gh call: \$*" >&2; exit 1 ;;
+esac
+EOF
+  chmod +x "$GH_BIN/gh"
+
+  pin_tags_dir="$TEST_TMPDIR/pin_tags_workdir"
+  mkdir -p "$pin_tags_dir"
+  cp "$FIXTURES/tag-pinned.yml" "$pin_tags_dir/"
+
+  run "$SCRIPT" --pin-tags --apply --workflows-dir "$pin_tags_dir"
+  assert_success
+
+  # The literal special tag, including & and |, must appear verbatim in the
+  # trailing comment. If safe_tag's escaping is removed, sed would expand &
+  # to the matched ref or treat | as a field terminator.
+  run grep -F "actions/checkout@$SPECIAL_SHA  # $SPECIAL_TAG" \
+    "$pin_tags_dir/tag-pinned.yml"
+  assert_success
+}

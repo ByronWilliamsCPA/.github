@@ -101,15 +101,35 @@ echo "  Dir  : $WORKFLOWS_DIR"
 echo ""
 
 # ---------------------------------------------------------------------------
+# Escape ERE metacharacters and the sed delimiter (|) in a string so it
+# can be used as a literal sed pattern under `sed -E`. Implemented via
+# sed rather than ${var//pat/rep} because the parameter-expansion form
+# has a parser gotcha when the replacement contains `{` or `}`: the
+# expansion's closing `}` consumes the wrong brace and the outer `}`
+# leaks into the result.
+# Bracket expression rules: `]` is first so it is literal; `\` must be
+# escaped (sed sees `\\` as literal `\`).
+# ---------------------------------------------------------------------------
+escape_sed_pat() {
+    printf '%s' "$1" | sed -e 's/[][\\.^$*+?(){}|]/\\&/g'
+}
+
+# ---------------------------------------------------------------------------
 # Resolve a tag to its commit SHA (handles annotated + lightweight tags)
 # ---------------------------------------------------------------------------
 resolve_tag_sha() {
     local repo="$1"
     local tag="$2"
 
-    local obj_type obj_sha
-    obj_type=$(gh api "repos/$repo/git/refs/tags/$tag" --jq '.object.type' 2>/dev/null) || { echo ""; return; }
-    obj_sha=$(gh api "repos/$repo/git/refs/tags/$tag" --jq '.object.sha' 2>/dev/null) || { echo ""; return; }
+    # Fetch type and sha in a single API call so a force-push or rate-limit
+    # hit between two separate fetches of the same ref cannot return
+    # disagreeing values. The composite jq expression separates the two
+    # fields with a `|`; tag types and SHAs never contain that character.
+    local pair obj_type obj_sha
+    pair=$(gh api "repos/$repo/git/refs/tags/$tag" \
+        --jq '"\(.object.type)|\(.object.sha)"' 2>/dev/null) || { echo ""; return; }
+    obj_type="${pair%%|*}"
+    obj_sha="${pair#*|}"
 
     if [[ "$obj_type" == "tag" ]]; then
         # Annotated tag: resolve tag object to its target commit SHA
@@ -123,33 +143,76 @@ resolve_tag_sha() {
 # Extract tag-pinned third-party action references
 # Emits one record per line: "owner/repo[/sub]|tag"
 # Skips owners in $OWNER_ALLOWLIST and branch refs (handled separately).
+# Accepts trailing whitespace and optional "# comment" so refs annotated
+# with an inline comment are not silently bypassed by the converter.
 # ---------------------------------------------------------------------------
 extract_tag_pins() {
-    local allowlist_pattern
-    allowlist_pattern="^($(echo "$OWNER_ALLOWLIST" | tr ',' '|'))/"
+    local raw grep_rc
+    # Capture grep separately so we can distinguish "no matches" (rc=1, OK)
+    # from real failures (rc>=2: unreadable dir, permission denied, regex
+    # error). The previous `{ ...; } || true` form conflated both into
+    # silent success, which contradicts the script's audit-honesty goal.
+    raw=$(grep -rhE '^[[:space:]]*[#-]?[[:space:]]*uses:[[:space:]]+[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+(/[a-zA-Z0-9_./-]*)?@v[0-9]+(\.[0-9]+)*([[:space:]]+#.*)?[[:space:]]*$' \
+        "$WORKFLOWS_DIR"/ 2>/dev/null) && grep_rc=0 || grep_rc=$?
+    if [[ $grep_rc -ge 2 ]]; then
+        echo "WARN: extract_tag_pins: grep failed rc=$grep_rc on $WORKFLOWS_DIR" >&2
+        return 1
+    fi
+    [[ -z "$raw" ]] && return 0
 
-    grep -rhE '^[[:space:]]*[#-]?[[:space:]]*uses:[[:space:]]+[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+(/[a-zA-Z0-9_./-]*)?@v[0-9]+(\.[0-9]+)*[[:space:]]*$' \
-        "$WORKFLOWS_DIR"/ 2>/dev/null \
+    # Pass OWNER_ALLOWLIST verbatim to awk and do literal-string lookup
+    # against the owner segment. Operator-supplied regex metacharacters
+    # (`.`, `*`, `|`, etc.) are not interpreted: a value like `.*` is a
+    # literal hash key and only matches an owner literally named `.*`.
+    printf '%s\n' "$raw" \
         | grep -vE '^\s*#' \
-        | sed -E 's/^[[:space:]]*-?[[:space:]]*uses:[[:space:]]+//; s/[[:space:]]*$//' \
-        | awk -F'@' -v skip="$allowlist_pattern" '
-            $1 !~ skip { print $1 "|" $2 }
+        | sed -E 's/^[[:space:]]*-?[[:space:]]*uses:[[:space:]]+//; s/[[:space:]]+#.*$//; s/[[:space:]]*$//' \
+        | awk -F'@' -v allowlist="$OWNER_ALLOWLIST" '
+            BEGIN {
+                n = split(allowlist, parts, ",")
+                for (i = 1; i <= n; i++) {
+                    if (parts[i] != "") skip[parts[i]] = 1
+                }
+            }
+            {
+                slash = index($1, "/")
+                owner = (slash > 0) ? substr($1, 1, slash - 1) : $1
+                if (!(owner in skip)) print $1 "|" $2
+            }
           ' \
         | sort -u
 }
 
 # ---------------------------------------------------------------------------
 # Extract branch-pinned third-party action references (reported, not converted)
+# Accepts trailing whitespace and optional "# comment".
 # ---------------------------------------------------------------------------
 extract_branch_pins() {
-    local allowlist_pattern
-    allowlist_pattern="^($(echo "$OWNER_ALLOWLIST" | tr ',' '|'))/"
+    local raw grep_rc
+    raw=$(grep -rhE '^[[:space:]]*-?[[:space:]]*uses:[[:space:]]+[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+(/[a-zA-Z0-9_./-]*)?@(main|master|HEAD|develop)([[:space:]]+#.*)?[[:space:]]*$' \
+        "$WORKFLOWS_DIR"/ 2>/dev/null) && grep_rc=0 || grep_rc=$?
+    if [[ $grep_rc -ge 2 ]]; then
+        echo "WARN: extract_branch_pins: grep failed rc=$grep_rc on $WORKFLOWS_DIR" >&2
+        return 1
+    fi
+    [[ -z "$raw" ]] && return 0
 
-    grep -rhE '^[[:space:]]*-?[[:space:]]*uses:[[:space:]]+[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+(/[a-zA-Z0-9_./-]*)?@(main|master|HEAD|develop)[[:space:]]*$' \
-        "$WORKFLOWS_DIR"/ 2>/dev/null \
+    printf '%s\n' "$raw" \
         | grep -vE '^\s*#' \
-        | sed -E 's/^[[:space:]]*-?[[:space:]]*uses:[[:space:]]+//; s/[[:space:]]*$//' \
-        | awk -F'@' -v skip="$allowlist_pattern" '$1 !~ skip { print $0 }' \
+        | sed -E 's/^[[:space:]]*-?[[:space:]]*uses:[[:space:]]+//; s/[[:space:]]+#.*$//; s/[[:space:]]*$//' \
+        | awk -F'@' -v allowlist="$OWNER_ALLOWLIST" '
+            BEGIN {
+                n = split(allowlist, parts, ",")
+                for (i = 1; i <= n; i++) {
+                    if (parts[i] != "") skip[parts[i]] = 1
+                }
+            }
+            {
+                slash = index($1, "/")
+                owner = (slash > 0) ? substr($1, 1, slash - 1) : $1
+                if (!(owner in skip)) print $0
+            }
+          ' \
         | sort -u
 }
 
@@ -177,9 +240,8 @@ pin_tags_main() {
 
     [[ -z "$pins" ]] && return 0
 
-    local CHANGE_LOG
+    # CHANGE_LOG is script-scope; the top-level EXIT trap handles cleanup.
     CHANGE_LOG=$(mktemp)
-    trap 'rm -f "$CHANGE_LOG"' RETURN
 
     printf "%-65s   %s\n" "Action@Tag" "Target SHA"
     printf '%0.s-' {1..90}; echo ""
@@ -219,13 +281,30 @@ pin_tags_main() {
 
     # Apply
     while IFS='|' read -r full_action current_tag new_sha latest_tag; do
-        local _pat _rep
-        _pat="${full_action//\//\\/}@${current_tag}"
-        _rep="${full_action//\//\\/}@${new_sha}  # ${latest_tag}"
+        local _pat _rep safe_tag safe_action safe_current_tag
+        # Escape sed-replacement metacharacters in latest_tag (the replacement
+        # side). Order matters: backslash first.
+        safe_tag="${latest_tag//\\/\\\\}"
+        safe_tag="${safe_tag//&/\\&}"
+        safe_tag="${safe_tag//|/\\|}"
+        # Escape sed pattern metacharacters in BOTH the action ref and the
+        # current tag before building _pat. A semver tag like "v4.2.1"
+        # contains literal dots that would otherwise match any character;
+        # a tag containing | (the sed delimiter) would terminate the pattern
+        # field and append unintended sed commands.
+        safe_action=$(escape_sed_pat "$full_action")
+        safe_current_tag=$(escape_sed_pat "$current_tag")
+        _pat="${safe_action}@${safe_current_tag}"
+        # The replacement side does not need pattern escaping for the action
+        # ref because sed replacements treat / as literal when the delimiter
+        # is |. Keep the legacy `/` escape for clarity.
+        _rep="${full_action//\//\\/}@${new_sha}  # ${safe_tag}"
         while IFS= read -r wf_file; do
             local tmp_wf
             tmp_wf=$(mktemp)
-            sed -E "s|${_pat}([[:space:]]*)$|${_rep}|g" "$wf_file" > "$tmp_wf"
+            # Match the action ref to end of line, dropping any existing
+            # inline comment so the new "  # <tag>" replaces it cleanly.
+            sed -E "s|${_pat}([[:space:]]+#.*)?[[:space:]]*$|${_rep}|g" "$wf_file" > "$tmp_wf"
             mv "$tmp_wf" "$wf_file"
         done < <(grep -rl "${full_action}@${current_tag}" "$WORKFLOWS_DIR"/ 2>/dev/null)
     done < "$CHANGE_LOG"
@@ -237,6 +316,16 @@ pin_tags_main() {
 # Extract unique pinned action references from all workflow files
 # Pattern: uses: owner/repo[/subpath]@<40-char-sha>  # vX.Y.Z
 # ---------------------------------------------------------------------------
+# Register cleanup before either mode runs so pin_tags_main and the legacy
+# flow share a single trap. Variables start empty; each mode assigns its
+# own mktemp targets. The trap tolerates unset paths via :-.
+UNIQUE_ACTIONS_FILE=""
+CHANGE_LOG=""
+# Use ${VAR:+"$VAR"} so the trap expands to nothing when the variable is
+# empty. `rm -f ""` is a no-op on GNU coreutils but emits a warning on
+# BSD rm (macOS), and a literal "" argument can confuse some shells.
+trap 'rm -f ${UNIQUE_ACTIONS_FILE:+"$UNIQUE_ACTIONS_FILE"} ${CHANGE_LOG:+"$CHANGE_LOG"}' EXIT
+
 if [[ "$PIN_TAGS" = true ]]; then
     pin_tags_main
     exit 0
@@ -244,7 +333,6 @@ fi
 
 UNIQUE_ACTIONS_FILE=$(mktemp)
 CHANGE_LOG=$(mktemp)
-trap 'rm -f "$UNIQUE_ACTIONS_FILE" "$CHANGE_LOG"' EXIT
 
 grep -rh "uses:" "$WORKFLOWS_DIR"/ \
     | grep -oE '[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+(/[a-zA-Z0-9_./-]*)?@[a-f0-9]{40}[[:space:]]+#[[:space:]]+v[0-9]+(\.[0-9.]+)*' \
