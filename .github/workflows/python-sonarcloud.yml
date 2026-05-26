@@ -291,8 +291,13 @@ jobs:
         shell: bash
 
       # Install paths split by detect.outputs.state so SonarCloud sees literal `--frozen`
-      # on the uv-locked path (S8544 cannot fire). The uv-no-lock path inlines NOSONAR for
-      # both S8541 (--no-build via input) and S8544 (no uv.lock by design on this path).
+      # on the uv-locked path (S8544 cannot fire there). Both install lines still carry
+      # NOSONAR(S8541) because $NO_BUILD_FLAG is a dynamic env var by design (the no-build:
+      # workflow input lets PEP 517 callers opt-in to building). The uv-no-lock path also
+      # carries NOSONAR(S8544) because no uv.lock exists at that point by design (uv sync
+      # creates one). Empirically S8541 fires on the uv-locked path here even though it
+      # does not in #156/#158/#160; the difference is that this workflow's install step
+      # uses dynamic $NO_BUILD_FLAG, which the rule matches as a missing literal --no-build.
       #
       # #CRITICAL: steps.extras.outputs.flag derives from inputs.extra-dependencies, which
       # is caller-controlled. The flag MUST be passed through an env var (UV_EXTRAS) rather
@@ -304,7 +309,7 @@ jobs:
         if: steps.detect.outputs.state == 'uv-locked'
         env:
           UV_EXTRAS: ${{ steps.extras.outputs.flag }}
-        run: uv sync $UV_EXTRAS --frozen $NO_BUILD_FLAG
+        run: uv sync $UV_EXTRAS --frozen $NO_BUILD_FLAG  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
         shell: bash
 
       - name: Install dependencies (uv without lockfile)
