@@ -123,34 +123,45 @@ resolve_tag_sha() {
 # Extract tag-pinned third-party action references
 # Emits one record per line: "owner/repo[/sub]|tag"
 # Skips owners in $OWNER_ALLOWLIST and branch refs (handled separately).
+# Accepts trailing whitespace and optional "# comment" so refs annotated
+# with an inline comment are not silently bypassed by the converter.
 # ---------------------------------------------------------------------------
 extract_tag_pins() {
     local allowlist_pattern
     allowlist_pattern="^($(echo "$OWNER_ALLOWLIST" | tr ',' '|'))/"
 
-    grep -rhE '^[[:space:]]*[#-]?[[:space:]]*uses:[[:space:]]+[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+(/[a-zA-Z0-9_./-]*)?@v[0-9]+(\.[0-9]+)*[[:space:]]*$' \
-        "$WORKFLOWS_DIR"/ 2>/dev/null \
-        | grep -vE '^\s*#' \
-        | sed -E 's/^[[:space:]]*-?[[:space:]]*uses:[[:space:]]+//; s/[[:space:]]*$//' \
-        | awk -F'@' -v skip="$allowlist_pattern" '
-            $1 !~ skip { print $1 "|" $2 }
-          ' \
-        | sort -u
+    # The trailing `|| true` keeps the function safe under `set -euo pipefail`
+    # when grep finds zero matches (a clean repo with no tag-pinned refs).
+    {
+        grep -rhE '^[[:space:]]*[#-]?[[:space:]]*uses:[[:space:]]+[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+(/[a-zA-Z0-9_./-]*)?@v[0-9]+(\.[0-9]+)*([[:space:]]+#.*)?[[:space:]]*$' \
+            "$WORKFLOWS_DIR"/ 2>/dev/null \
+            | grep -vE '^\s*#' \
+            | sed -E 's/^[[:space:]]*-?[[:space:]]*uses:[[:space:]]+//; s/[[:space:]]+#.*$//; s/[[:space:]]*$//' \
+            | awk -F'@' -v skip="$allowlist_pattern" '
+                $1 !~ skip { print $1 "|" $2 }
+              ' \
+            | sort -u
+    } || true
 }
 
 # ---------------------------------------------------------------------------
 # Extract branch-pinned third-party action references (reported, not converted)
+# Accepts trailing whitespace and optional "# comment".
 # ---------------------------------------------------------------------------
 extract_branch_pins() {
     local allowlist_pattern
     allowlist_pattern="^($(echo "$OWNER_ALLOWLIST" | tr ',' '|'))/"
 
-    grep -rhE '^[[:space:]]*-?[[:space:]]*uses:[[:space:]]+[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+(/[a-zA-Z0-9_./-]*)?@(main|master|HEAD|develop)[[:space:]]*$' \
-        "$WORKFLOWS_DIR"/ 2>/dev/null \
-        | grep -vE '^\s*#' \
-        | sed -E 's/^[[:space:]]*-?[[:space:]]*uses:[[:space:]]+//; s/[[:space:]]*$//' \
-        | awk -F'@' -v skip="$allowlist_pattern" '$1 !~ skip { print $0 }' \
-        | sort -u
+    # The trailing `|| true` keeps the function safe under `set -euo pipefail`
+    # when no branch-pinned refs are present.
+    {
+        grep -rhE '^[[:space:]]*-?[[:space:]]*uses:[[:space:]]+[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+(/[a-zA-Z0-9_./-]*)?@(main|master|HEAD|develop)([[:space:]]+#.*)?[[:space:]]*$' \
+            "$WORKFLOWS_DIR"/ 2>/dev/null \
+            | grep -vE '^\s*#' \
+            | sed -E 's/^[[:space:]]*-?[[:space:]]*uses:[[:space:]]+//; s/[[:space:]]+#.*$//; s/[[:space:]]*$//' \
+            | awk -F'@' -v skip="$allowlist_pattern" '$1 !~ skip { print $0 }' \
+            | sort -u
+    } || true
 }
 
 # ---------------------------------------------------------------------------
@@ -177,9 +188,8 @@ pin_tags_main() {
 
     [[ -z "$pins" ]] && return 0
 
-    local CHANGE_LOG
+    # CHANGE_LOG is script-scope; the top-level EXIT trap handles cleanup.
     CHANGE_LOG=$(mktemp)
-    trap 'rm -f "$CHANGE_LOG"' RETURN
 
     printf "%-65s   %s\n" "Action@Tag" "Target SHA"
     printf '%0.s-' {1..90}; echo ""
@@ -219,13 +229,20 @@ pin_tags_main() {
 
     # Apply
     while IFS='|' read -r full_action current_tag new_sha latest_tag; do
-        local _pat _rep
+        local _pat _rep safe_tag
+        # Escape sed-replacement metacharacters in latest_tag before splicing
+        # it into the substitution string. Order matters: backslash first.
+        safe_tag="${latest_tag//\\/\\\\}"
+        safe_tag="${safe_tag//&/\\&}"
+        safe_tag="${safe_tag//|/\\|}"
         _pat="${full_action//\//\\/}@${current_tag}"
-        _rep="${full_action//\//\\/}@${new_sha}  # ${latest_tag}"
+        _rep="${full_action//\//\\/}@${new_sha}  # ${safe_tag}"
         while IFS= read -r wf_file; do
             local tmp_wf
             tmp_wf=$(mktemp)
-            sed -E "s|${_pat}([[:space:]]*)$|${_rep}|g" "$wf_file" > "$tmp_wf"
+            # Match the action ref to end of line, dropping any existing
+            # inline comment so the new "  # <tag>" replaces it cleanly.
+            sed -E "s|${_pat}([[:space:]]+#.*)?[[:space:]]*$|${_rep}|g" "$wf_file" > "$tmp_wf"
             mv "$tmp_wf" "$wf_file"
         done < <(grep -rl "${full_action}@${current_tag}" "$WORKFLOWS_DIR"/ 2>/dev/null)
     done < "$CHANGE_LOG"
@@ -237,6 +254,13 @@ pin_tags_main() {
 # Extract unique pinned action references from all workflow files
 # Pattern: uses: owner/repo[/subpath]@<40-char-sha>  # vX.Y.Z
 # ---------------------------------------------------------------------------
+# Register cleanup before either mode runs so pin_tags_main and the legacy
+# flow share a single trap. Variables start empty; each mode assigns its
+# own mktemp targets. The trap tolerates unset paths via :-.
+UNIQUE_ACTIONS_FILE=""
+CHANGE_LOG=""
+trap 'rm -f "${UNIQUE_ACTIONS_FILE:-}" "${CHANGE_LOG:-}"' EXIT
+
 if [[ "$PIN_TAGS" = true ]]; then
     pin_tags_main
     exit 0
@@ -244,7 +268,6 @@ fi
 
 UNIQUE_ACTIONS_FILE=$(mktemp)
 CHANGE_LOG=$(mktemp)
-trap 'rm -f "$UNIQUE_ACTIONS_FILE" "$CHANGE_LOG"' EXIT
 
 grep -rh "uses:" "$WORKFLOWS_DIR"/ \
     | grep -oE '[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+(/[a-zA-Z0-9_./-]*)?@[a-f0-9]{40}[[:space:]]+#[[:space:]]+v[0-9]+(\.[0-9.]+)*' \
