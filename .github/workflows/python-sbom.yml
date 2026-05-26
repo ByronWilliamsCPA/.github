@@ -29,7 +29,7 @@ on:
         type: string
         default: '3.12'
       fail-on-vulnerabilities:
-        description: 'Fail workflow on CRITICAL/HIGH vulnerabilities'
+        description: 'Fail workflow on CRITICAL/HIGH vulnerabilities. Parallel-run: applies to Trivy only; Grype always runs non-gating (see issue #152).'
         required: false
         type: boolean
         default: true
@@ -54,7 +54,7 @@ on:
         type: boolean
         default: false
       trivyignore-path:
-        description: 'Path to .trivyignore file for suppressing known CVEs (relative to repo root)'
+        description: 'Path to .trivyignore file for suppressing known CVEs (relative to repo root). DEPRECATED: removed at Trivy cutover (see issue #152).'
         required: false
         type: string
         default: '.trivyignore'
@@ -63,6 +63,11 @@ on:
         required: false
         type: boolean
         default: true
+      grype-config-path:
+        description: 'Path to Grype config file (CVE ignore rules etc.) relative to repo root.'
+        required: false
+        type: string
+        default: '.grype.yaml'
 
     # Optional secrets - callers may pass these even if unused by this workflow
     # This prevents startup_failure when callers pass extra secrets
@@ -272,6 +277,176 @@ jobs:
           sarif_file: trivy-runtime-results.sarif
           category: trivy-runtime-deps
 
+      # Upload SARIF as a workflow artifact so the parity-summary job (added
+      # 2026-05-25 for issue #152) can compare Trivy findings against Grype
+      # findings. Removed at Trivy cutover along with the parity-summary job.
+      - name: Upload Trivy SARIF artifact (for parity-summary)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: trivy-sarif
+          path: trivy-runtime-results.sarif
+          retention-days: 7
+          if-no-files-found: warn
+
+  # ============================================================================
+  # Job 2b: Scan Runtime Dependencies (Grype - advisory, parallel-run)
+  # ============================================================================
+  # Added 2026-05-25 per issue #152. Runs alongside scan-runtime (Trivy) for a
+  # 30-day parity window. Grype is non-gating via `continue-on-error: true` at
+  # the JOB level (not step level): genuine action failures still surface as a
+  # failed step in the logs, but the job result is `success` so the workflow
+  # caller never blocks on Grype. `fail-build: false` on the action separately
+  # prevents Grype from failing when it finds vulnerabilities. At Trivy cutover
+  # this job is promoted to gating (remove the job-level continue-on-error) and
+  # the Trivy job is removed in a separate PR.
+  # ============================================================================
+  scan-runtime-grype:
+    name: Scan Runtime Dependencies (Grype - advisory)
+    needs: generate-sbom
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true  # parallel-run: never block caller on Grype, but let individual steps fail visibly
+    permissions:
+      contents: read
+      security-events: write  # Required for SARIF upload
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5  # v2.19.3
+        with:
+          egress-policy: audit
+
+      # #CRITICAL: grype-config-path is a caller-supplied string that flows into
+      # both sparse-checkout patterns and anchore/scan-action's `config:` arg.
+      # Reject path traversal (`..`) and absolute paths before they reach either
+      # sink. This is more portable than relying on git sparse-checkout cone-mode
+      # default behavior, which varies across git versions.
+      # #VERIFY: confirm during day-30 checkpoint that legitimate caller paths
+      # (`.grype.yaml`, `configs/.grype.yaml`) still pass validation.
+      - name: Validate grype-config-path input
+        env:
+          GRYPE_CONFIG_PATH: ${{ inputs.grype-config-path }}
+        run: |
+          set -euo pipefail
+          case "$GRYPE_CONFIG_PATH" in
+            /*)
+              echo "::error::grype-config-path must be a relative path; got: $GRYPE_CONFIG_PATH"
+              exit 1
+              ;;
+            *..*)
+              echo "::error::grype-config-path must not contain '..' segments; got: $GRYPE_CONFIG_PATH"
+              exit 1
+              ;;
+          esac
+          echo "grype-config-path validated: $GRYPE_CONFIG_PATH"
+
+      # Checkout to get the Grype config file and provide git context for SARIF upload.
+      # The sparse-checkout uses the caller-configured grype-config-path so a custom
+      # path (e.g., configs/.grype.yaml) is fetched too. Path is validated above.
+      - name: Checkout repository (for grype config and SARIF context)
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          sparse-checkout: |
+            ${{ inputs.grype-config-path }}
+            .git
+
+      - name: Download SBOM artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: sboms
+
+      - name: Check for Grype config file
+        id: grypeconfig
+        env:
+          GRYPE_CONFIG_PATH: ${{ inputs.grype-config-path }}
+        run: |
+          set -euo pipefail
+          if [ -f "$GRYPE_CONFIG_PATH" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Found Grype config at: $GRYPE_CONFIG_PATH"
+            cat "$GRYPE_CONFIG_PATH"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "No Grype config file found at: $GRYPE_CONFIG_PATH"
+          fi
+
+      # Translate Trivy-style severity CSV to Grype's monotonic cutoff.
+      # Grype's severity-cutoff fails at-or-above the named severity.
+      # We pick the lowest severity in the CSV so the gate is equivalent to
+      # the Trivy allowlist for the common contiguous-range case.
+      # #ASSUME: callers use contiguous CSV ranges from the top (CRITICAL,HIGH).
+      # #VERIFY: day-30 checkpoint spot-checks 3-5 callers for non-contiguous use.
+      - name: Translate severity threshold for Grype
+        id: severity
+        env:
+          INPUT_SEVERITY: ${{ inputs.severity-threshold }}
+        run: |
+          set -euo pipefail
+          lowered=$(echo "$INPUT_SEVERITY" | tr '[:upper:]' '[:lower:]')
+          cutoff=""
+          for level in negligible low medium high critical; do
+            if echo ",$lowered," | grep -q ",$level,"; then
+              cutoff="$level"
+              break
+            fi
+          done
+          if [ -z "$cutoff" ]; then
+            cutoff="high"
+            echo "::warning::severity-threshold did not match known Grype severity; defaulting to 'high'"
+          fi
+          echo "cutoff=$cutoff" >> $GITHUB_OUTPUT
+          echo "Translated '$INPUT_SEVERITY' -> Grype severity-cutoff '$cutoff'"
+
+      # Non-gating semantic is now provided at the JOB level via
+      # `continue-on-error: true` on `scan-runtime-grype`. Removing the
+      # step-level `continue-on-error` here means a genuine action failure
+      # (binary crash, DB download timeout, malformed SBOM input) surfaces
+      # as a red step in the logs instead of being silently masked.
+      - name: Grype SBOM scan (runtime)
+        id: grype-table
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2  # v7.4.0
+        with:
+          sbom: sbom-runtime.json
+          fail-build: false  # parallel-run: do not fail on vulnerabilities found
+          severity-cutoff: ${{ steps.severity.outputs.cutoff }}
+          output-format: table
+          config: ${{ steps.grypeconfig.outputs.exists == 'true' && inputs.grype-config-path || '' }}
+
+      # #CRITICAL: SARIF upload category MUST differ from Trivy's `trivy-runtime-deps`
+      # or codeql-action/upload-sarif overwrites the prior upload in the Security tab.
+      # #VERIFY: after first run, confirm both `trivy-runtime-deps` and
+      # `grype-runtime-deps` categories appear under Security > Code scanning alerts.
+      - name: Grype SBOM scan (runtime - SARIF report)
+        id: grype-sarif
+        if: always()
+        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2  # v7.4.0
+        with:
+          sbom: sbom-runtime.json
+          fail-build: false
+          severity-cutoff: ${{ steps.severity.outputs.cutoff }}
+          output-format: sarif
+          config: ${{ steps.grypeconfig.outputs.exists == 'true' && inputs.grype-config-path || '' }}
+
+      - name: Upload Grype results to GitHub Security tab
+        if: always() && steps.grype-sarif.outputs.sarif != ''
+        uses: github/codeql-action/upload-sarif@9e0d7b8d25671d64c341c19c0152d693099fb5ba  # v4.35.5
+        continue-on-error: true  # Don't fail if Code Scanning not enabled on repo
+        with:
+          sarif_file: ${{ steps.grype-sarif.outputs.sarif }}
+          category: grype-runtime-deps
+
+      # Upload SARIF as a workflow artifact so the parity-summary job can
+      # compare Grype findings against Trivy findings. `if-no-files-found: warn`
+      # avoids failing the job if the scan step did not produce SARIF.
+      - name: Upload Grype SARIF artifact (for parity-summary)
+        if: always() && steps.grype-sarif.outputs.sarif != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: grype-sarif
+          path: ${{ steps.grype-sarif.outputs.sarif }}
+          retention-days: 7
+          if-no-files-found: warn
+
   # ============================================================================
   # Job 3: License Compliance Check
   # ============================================================================
@@ -347,3 +522,162 @@ jobs:
           echo '```json' >> $GITHUB_STEP_SUMMARY
           echo "$FORBIDDEN_LICENSES" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
+  # Job 4: Parity Summary (Trivy vs Grype, parallel-run only)
+  # ============================================================================
+  # Removed at Trivy cutover. See issue #152.
+  #
+  # Compares the actual SARIF findings emitted by the two scanners, not just
+  # the job results. Job results alone are insufficient because Grype is
+  # configured as non-gating (continue-on-error at job level + fail-build:
+  # false on the action) and therefore reports `success` regardless of
+  # findings. Comparing job results would produce "match" 100% of the time
+  # and defeat the purpose of the 30-day parity window.
+  #
+  # SARIF artifacts are uploaded by scan-runtime (`trivy-sarif`) and
+  # scan-runtime-grype (`grype-sarif`). This job downloads both, extracts the
+  # rule IDs (CVE-* identifiers), and emits a set-diff to the step summary.
+  #
+  # #EDGE: if either scan job is cancelled or its SARIF artifact is missing
+  # (e.g., the scan action genuinely crashed), the corresponding side of the
+  # comparison reports "no SARIF available" and the job notes the gap in the
+  # summary rather than failing.
+  # ============================================================================
+  parity-summary:
+    name: Trivy vs Grype Parity Summary
+    needs: [scan-runtime, scan-runtime-grype]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions: {}
+    timeout-minutes: 2
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5  # v2.19.3
+        with:
+          egress-policy: audit
+
+      - name: Download Trivy SARIF artifact
+        id: download-trivy
+        if: always()
+        continue-on-error: true  # Tolerate missing artifact; summary reports the gap
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: trivy-sarif
+          path: trivy-sarif
+
+      - name: Download Grype SARIF artifact
+        id: download-grype
+        if: always()
+        continue-on-error: true  # Tolerate missing artifact; summary reports the gap
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: grype-sarif
+          path: grype-sarif
+
+      - name: Compare findings and write parity summary
+        env:
+          TRIVY_RESULT: ${{ needs.scan-runtime.result }}
+          GRYPE_RESULT: ${{ needs.scan-runtime-grype.result }}
+        run: |
+          set -euo pipefail
+
+          # Extract sorted, unique rule IDs from a SARIF file directory.
+          # SARIF rule IDs for Trivy and Grype are CVE-* identifiers, which
+          # is the granularity we want for parity comparison.
+          # Writes to a file at $1, empty if no SARIF was found.
+          extract_ids() {
+            local sarif_dir="$1"
+            local out_file="$2"
+            : > "$out_file"
+            if [ ! -d "$sarif_dir" ]; then
+              return 0
+            fi
+            # Both Trivy and Grype produce one .sarif file per scan
+            find "$sarif_dir" -type f -name '*.sarif' -print0 \
+              | xargs -0 -r jq -r '.runs[]?.results[]?.ruleId // empty' \
+              | sort -u > "$out_file"
+          }
+
+          extract_ids trivy-sarif trivy-ids.txt
+          extract_ids grype-sarif grype-ids.txt
+
+          trivy_count=$(wc -l < trivy-ids.txt | tr -d ' ')
+          grype_count=$(wc -l < grype-ids.txt | tr -d ' ')
+
+          # Findings only in one scanner (set differences).
+          comm -23 trivy-ids.txt grype-ids.txt > trivy-only.txt
+          comm -13 trivy-ids.txt grype-ids.txt > grype-only.txt
+          comm -12 trivy-ids.txt grype-ids.txt > both.txt
+
+          trivy_only_count=$(wc -l < trivy-only.txt | tr -d ' ')
+          grype_only_count=$(wc -l < grype-only.txt | tr -d ' ')
+          both_count=$(wc -l < both.txt | tr -d ' ')
+
+          trivy_artifact_status="present"
+          if [ ! -s trivy-ids.txt ] && [ "$TRIVY_RESULT" != "success" ]; then
+            trivy_artifact_status="missing (Trivy job result: $TRIVY_RESULT)"
+          elif [ ! -s trivy-ids.txt ]; then
+            trivy_artifact_status="empty (no findings, or SARIF not produced)"
+          fi
+
+          grype_artifact_status="present"
+          if [ ! -s grype-ids.txt ] && [ "$GRYPE_RESULT" != "success" ]; then
+            grype_artifact_status="missing (Grype job result: $GRYPE_RESULT)"
+          elif [ ! -s grype-ids.txt ]; then
+            grype_artifact_status="empty (no findings, or SARIF not produced)"
+          fi
+
+          {
+            echo "### Trivy vs Grype Finding Parity (issue #152)"
+            echo ""
+            echo "Compares CVE-level findings extracted from each scanner's SARIF output."
+            echo ""
+            echo "| Scanner          | Job result        | SARIF status              | Findings |"
+            echo "|------------------|-------------------|---------------------------|----------|"
+            echo "| Trivy (gating)   | $TRIVY_RESULT     | $trivy_artifact_status    | $trivy_count |"
+            echo "| Grype (advisory) | $GRYPE_RESULT     | $grype_artifact_status    | $grype_count |"
+            echo ""
+            if [ "$trivy_count" -eq 0 ] && [ "$grype_count" -eq 0 ]; then
+              if [ "$TRIVY_RESULT" = "success" ] && [ "$GRYPE_RESULT" = "success" ]; then
+                echo "Both scanners completed and reported zero findings. Parity confirmed."
+              else
+                echo "**Parity inconclusive:** at least one scanner did not produce SARIF."
+                echo "Review the failed job logs before drawing conclusions."
+              fi
+            elif [ "$trivy_only_count" -eq 0 ] && [ "$grype_only_count" -eq 0 ]; then
+              echo "**Finding sets match exactly.** $both_count CVE(s) detected by both scanners."
+            else
+              echo "**Finding-set divergence detected.**"
+              echo ""
+              echo "| Bucket                  | Count |"
+              echo "|-------------------------|-------|"
+              echo "| Detected by both        | $both_count |"
+              echo "| Trivy only (missed by Grype) | $trivy_only_count |"
+              echo "| Grype only (missed by Trivy) | $grype_only_count |"
+              if [ "$trivy_only_count" -gt 0 ]; then
+                echo ""
+                echo "<details><summary>CVEs found by Trivy only</summary>"
+                echo ""
+                echo '```'
+                head -50 trivy-only.txt
+                if [ "$trivy_only_count" -gt 50 ]; then
+                  echo "... ($((trivy_only_count - 50)) more)"
+                fi
+                echo '```'
+                echo "</details>"
+              fi
+              if [ "$grype_only_count" -gt 0 ]; then
+                echo ""
+                echo "<details><summary>CVEs found by Grype only</summary>"
+                echo ""
+                echo '```'
+                head -50 grype-only.txt
+                if [ "$grype_only_count" -gt 50 ]; then
+                  echo "... ($((grype_only_count - 50)) more)"
+                fi
+                echo '```'
+                echo "</details>"
+              fi
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
