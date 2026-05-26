@@ -246,7 +246,7 @@ jobs:
           if [ ! -f pyproject.toml ]; then
             echo "state=skip" >> $GITHUB_OUTPUT
             echo "::notice::No pyproject.toml found at repo root; SonarCloud analysis will be skipped. Remove the python-sonarcloud.yml caller from this repo if it does not need SonarCloud coverage."
-          elif [ -f poetry.lock ] || grep -qE '^\[tool\.poetry(\.|])' pyproject.toml; then
+          elif [ -f poetry.lock ] || grep -qE '^\[tool\.poetry(\.|\])' pyproject.toml; then
             echo "state=poetry-not-supported" >> $GITHUB_OUTPUT
             echo "::error::This repo uses Poetry. The python-sonarcloud.yml reusable workflow is uv-only by org policy. Convert this repo to uv before re-enabling SonarCloud analysis."
             exit 1
@@ -264,6 +264,11 @@ jobs:
       # multi-line `run: |` blocks AND inline NOSONAR inside them are ignored for
       # S8541/S8544 (empirical anti-pattern from docs/sonarcloud-nosonar-patterns.md);
       # the single-line `run:` shape is the only reliable Pattern A position.
+      # The downstream `if:` conditions on this and later steps use a positive disjunction
+      # (state == 'uv-locked' || state == 'uv-no-lock') rather than the shorter negative
+      # form (state != 'skip' && state != 'poetry-not-supported'). Keep the positive form:
+      # if an earlier step fails, steps.detect.outputs.state is the empty string '', which
+      # satisfies BOTH negative checks and would incorrectly run downstream steps.
       - name: Resolve extras flag
         id: extras
         if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
@@ -277,7 +282,9 @@ jobs:
             for dep in $EXTRA_DEPENDENCIES; do
               FLAG="$FLAG --extra $dep"
             done
-            echo "flag=$FLAG" >> $GITHUB_OUTPUT
+            # Strip the leading space added by the loop accumulator so the output value
+            # is symmetric with the --all-extras and empty branches above.
+            echo "flag=${FLAG# }" >> $GITHUB_OUTPUT
           else
             echo "flag=" >> $GITHUB_OUTPUT
           fi
@@ -286,14 +293,25 @@ jobs:
       # Install paths split by detect.outputs.state so SonarCloud sees literal `--frozen`
       # on the uv-locked path (S8544 cannot fire). The uv-no-lock path inlines NOSONAR for
       # both S8541 (--no-build via input) and S8544 (no uv.lock by design on this path).
+      #
+      # #CRITICAL: steps.extras.outputs.flag derives from inputs.extra-dependencies, which
+      # is caller-controlled. The flag MUST be passed through an env var (UV_EXTRAS) rather
+      # than interpolated directly into the run: script via ${{ ... }} template expansion;
+      # template expansion runs before bash sees the line, so unfiltered shell metacharacters
+      # would become script text (CodeQL py/code-injection). #VERIFY: each install step uses
+      # env: UV_EXTRAS: ${{ steps.extras.outputs.flag }} and references $UV_EXTRAS only.
       - name: Install dependencies (uv with lockfile)
         if: steps.detect.outputs.state == 'uv-locked'
-        run: uv sync ${{ steps.extras.outputs.flag }} --frozen $NO_BUILD_FLAG  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+        env:
+          UV_EXTRAS: ${{ steps.extras.outputs.flag }}
+        run: uv sync $UV_EXTRAS --frozen $NO_BUILD_FLAG
         shell: bash
 
       - name: Install dependencies (uv without lockfile)
         if: steps.detect.outputs.state == 'uv-no-lock'
-        run: uv sync ${{ steps.extras.outputs.flag }} $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path (uv sync creates one)
+        env:
+          UV_EXTRAS: ${{ steps.extras.outputs.flag }}
+        run: uv sync $UV_EXTRAS $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path (uv sync creates one)
         shell: bash
 
       - name: Skip notice (no pyproject.toml)
