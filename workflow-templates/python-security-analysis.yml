@@ -31,17 +31,20 @@ on:
   # Security gate must run on the queue ref so vulnerabilities introduced by
   # the speculative merge are caught before landing on main. See CI-040.
   #
-  # KNOWN LIMITATION: actions/dependency-review-action does not support
-  # merge_group events (it requires PR base/head SHAs from a pull_request
-  # context). The dependency-security job below is therefore gated to
-  # pull_request only, so dependency review remains PR-gated and is silently
-  # skipped on merge_group runs. CodeQL, Bandit, OSV-Scanner, and OWASP
-  # Dependency-Check all execute on merge_group refs, so the speculative-merge
-  # security gate retains 4 of 5 sub-scans. #VERIFY same procedure as
+  # DESIGN DECISION (resolves #168): actions/dependency-review-action runs on
+  # pull_request only, by design. It requires PR base/head SHAs from a
+  # pull_request context and provides PR-time affordances (GPL-2.0/3.0
+  # deny-license enforcement, PR comment summary) that apply at review time,
+  # not to speculative merge refs. OSV-Scanner is the canonical
+  # dependency-CVE check on merge_group: it already runs on both
+  # pull_request and merge_group (no event_name filter) and feeds the
+  # security-gate aggregator via needs:. merge_group coverage is therefore
+  # CodeQL, Bandit, OSV-Scanner, and OWASP Dependency-Check (4 SAST and
+  # dependency checks); dependency-review adds PR-time license policy and
+  # comment summary on top of that baseline. #VERIFY same procedure as
   # python-ci.yml: enable merge_queue on a sacrificial repo and confirm the
-  # check appears on the merge_group ref via
-  # gh api repos/<org>/<repo>/commits/<sha>/check-runs. Follow-up: track
-  # dedicated dependency-CVE check on merge_group as a coverage gap (issue #168).
+  # OSV Vulnerability Scanner check appears on the merge_group ref via
+  # gh api repos/<org>/<repo>/commits/<sha>/check-runs.
   merge_group:
 
 permissions: read-all
@@ -217,7 +220,10 @@ jobs:
           name: security-scan-reports
           path: bandit-report.json
 
-  # OSV-Scanner vulnerability detection
+  # OSV-Scanner vulnerability detection.
+  # Canonical merge_group dependency-CVE check (see #168 and the trigger
+  # block above); runs on both pull_request and merge_group refs because
+  # this job has no event_name filter.
   osv-scanner:
     name: OSV Vulnerability Scanner
     runs-on: ubuntu-latest
