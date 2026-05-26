@@ -248,3 +248,121 @@ STUB
   assert_output --partial "ByronWilliamsCPA/repo-partial-fail,error"
   refute_output --partial "ByronWilliamsCPA/repo-partial-fail,1"
 }
+
+@test "audit warns when gh repo list saturates REPO_LIMIT" {
+  # REPO_LIMIT is env-overridable. Stub returns exactly 3 repos and the test
+  # sets REPO_LIMIT=3; the script must emit a stderr WARN that this run may
+  # be truncated. Without the env override, exercising this WARN required
+  # arranging a 1000-repo stub.
+  cat > "$TEST_TMPDIR/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+if [[ "$1 $2" == "auth status" ]]; then exit 0; fi
+if [[ "$1" == "repo" && "$2" == "list" ]]; then
+  _apply_jq_flag '[{"name":"a"},{"name":"b"},{"name":"c"}]' "$@"
+  exit 0
+fi
+if [[ "$1" == "api" ]]; then
+  # 404 on contents/.github/workflows so each repo records 0 cleanly
+  echo "gh: Not Found (HTTP 404)" >&2
+  exit 1
+fi
+exit 0
+STUB
+  chmod +x "$TEST_TMPDIR/bin/gh"
+
+  REPO_LIMIT=3 run "$SCRIPT" --org ByronWilliamsCPA --output "$TEST_TMPDIR/out.csv"
+  assert_success
+  assert_output --partial "WARN: ByronWilliamsCPA returned exactly 3 repos"
+}
+
+@test "audit STRICT_AUDIT=1 exits non-zero on REPO_LIMIT saturation" {
+  cat > "$TEST_TMPDIR/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+if [[ "$1 $2" == "auth status" ]]; then exit 0; fi
+if [[ "$1" == "repo" && "$2" == "list" ]]; then
+  _apply_jq_flag '[{"name":"a"},{"name":"b"}]' "$@"
+  exit 0
+fi
+if [[ "$1" == "api" ]]; then
+  echo "gh: Not Found (HTTP 404)" >&2
+  exit 1
+fi
+exit 0
+STUB
+  chmod +x "$TEST_TMPDIR/bin/gh"
+
+  REPO_LIMIT=2 STRICT_AUDIT=1 run "$SCRIPT" --org ByronWilliamsCPA --output "$TEST_TMPDIR/out.csv"
+  # Script exits 2 to distinguish "audit incomplete" from a generic error
+  [[ "$status" -eq 2 ]] || { echo "expected exit 2 under STRICT_AUDIT, got $status"; return 1; }
+  assert_output --partial "ERROR: STRICT_AUDIT=1 and the audit was incomplete"
+}
+
+@test "audit STRICT_AUDIT=1 exits non-zero when any repo emits error sentinel" {
+  cat > "$TEST_TMPDIR/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+if [[ "$1 $2" == "auth status" ]]; then exit 0; fi
+if [[ "$1" == "repo" && "$2" == "list" ]]; then
+  _apply_jq_flag '[{"name":"repo-down"}]' "$@"
+  exit 0
+fi
+if [[ "$1" == "api" ]]; then
+  echo "gh: API rate limit exceeded for user (HTTP 429)" >&2
+  exit 1
+fi
+exit 0
+STUB
+  chmod +x "$TEST_TMPDIR/bin/gh"
+
+  STRICT_AUDIT=1 run "$SCRIPT" --org ByronWilliamsCPA --output "$TEST_TMPDIR/out.csv"
+  [[ "$status" -eq 2 ]] || { echo "expected exit 2 under STRICT_AUDIT, got $status"; return 1; }
+  assert_output --partial "ERROR: STRICT_AUDIT=1 and the audit was incomplete"
+  run cat "$TEST_TMPDIR/out.csv"
+  assert_output --partial "ByronWilliamsCPA/repo-down,error"
+}
+
+@test "audit STRICT_AUDIT=1 remains exit 0 on a fully clean run (no errors, no saturation)" {
+  # Regression guard: a clean run under STRICT_AUDIT must still succeed.
+  # Otherwise CI gates would fire on every healthy audit.
+  _write_gh_stub
+  STRICT_AUDIT=1 run "$SCRIPT" --org ByronWilliamsCPA --output "$TEST_TMPDIR/out.csv"
+  assert_success
+  run cat "$TEST_TMPDIR/out.csv"
+  assert_output --partial "ByronWilliamsCPA/repo-dirty,2"
+  assert_output --partial "ByronWilliamsCPA/repo-clean,0"
+}
+
+@test "audit --skip-owners with a single owner (no commas) skips correctly" {
+  # SKIP_OWNERS framing is ",$VAR," so a single value becomes ",actions,"
+  # and matches an owner literally named "actions". Verifies the case
+  # statement handles the no-comma input.
+  _write_gh_stub
+  run "$SCRIPT" --org ByronWilliamsCPA --skip-owners 'actions' --output "$TEST_TMPDIR/out.csv"
+  assert_success
+  run cat "$TEST_TMPDIR/out.csv"
+  # repo-dirty has two third-party actions/* refs; both should now be skipped
+  assert_output --partial "ByronWilliamsCPA/repo-dirty,0"
+}
+
+@test "audit --skip-owners with empty string does not skip anything" {
+  # Empty SKIP_OWNERS becomes the case pattern ",,". No real owner string
+  # matches that, so both violations in repo-dirty must still be counted.
+  _write_gh_stub
+  run "$SCRIPT" --org ByronWilliamsCPA --skip-owners '' --output "$TEST_TMPDIR/out.csv"
+  assert_success
+  run cat "$TEST_TMPDIR/out.csv"
+  assert_output --partial "ByronWilliamsCPA/repo-dirty,2"
+}
+
+@test "audit --skip-owners with double internal commas still matches listed owners" {
+  # SKIP_OWNERS=",,actions,," builds the case framing ",,,actions,,," which
+  # contains noisy empty segments. Owner "actions" must still match the
+  # ",actions," substring without confusion from the adjacent empties.
+  # Both refs in repo-dirty (actions/checkout, actions/setup-python) share
+  # owner "actions" and should both be skipped.
+  _write_gh_stub
+  run "$SCRIPT" --org ByronWilliamsCPA --skip-owners ',,actions,,' \
+    --output "$TEST_TMPDIR/out.csv"
+  assert_success
+  run cat "$TEST_TMPDIR/out.csv"
+  assert_output --partial "ByronWilliamsCPA/repo-dirty,0"
+}
