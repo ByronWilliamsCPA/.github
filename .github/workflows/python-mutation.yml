@@ -140,43 +140,78 @@ jobs:
         with:
           enable-cache: true
 
-      - name: Install dependencies
-        # Mutmut is expected to be declared in the consumer project's dev
-        # dependencies (e.g. 'mutmut>=3.3.1' in pyproject.toml's [dev]
-        # extra). Installing via 'uv sync --all-extras --frozen' uses the
-        # exact version locked in the consumer's uv.lock, which is fully
-        # reproducible AND respects each consumer's pinning. The previous
-        # standalone 'uv pip install mutmut==2.5.1 --no-build' line was
-        # both unsatisfiable (no wheels for 2.5.1) and a forced downgrade
-        # for consumers with newer mutmut releases; it is intentionally
-        # removed. If a consumer omits mutmut from their dev deps the
-        # workflow will fail loudly at 'mutmut run' with a clear
-        # ModuleNotFoundError, which is the desired explicit failure mode
-        # rather than a silent install of an arbitrary version. The
-        # workflow's CLI assumes mutmut 3.x ('mutmut run
-        # --paths-to-mutate=...'); consumers should pin accordingly.
-        #
-        # NOSONAR(githubactions:S8541): The $NO_BUILD_FLAG env (set from
-        # inputs.no-build, default 'true' -> '--no-build') is dynamic by
-        # design so consumers with PEP 517 build backends like hatchling
-        # can pass 'no-build: false' to permit editable installs of their
-        # own project from source. SonarCloud's static analyzer cannot
-        # resolve the env var to determine whether --no-build is present.
-        # The lockfile-based 'uv sync --frozen' itself constrains which
-        # dependency versions are installable (resolved versions only),
-        # so the residual risk of arbitrary setup-script execution is
-        # bounded by the consumer's audited uv.lock.
-        run: uv sync --all-extras --frozen $NO_BUILD_FLAG  # NOSONAR
+      # Detect the repo state before attempting uv sync. The reusable workflow is uv-only
+      # by org policy (poetry repos are being converted to uv in separate work), but it is
+      # still called by some repos that don't have a pyproject.toml (template / docs-only
+      # forks) and by uv-managed repos that haven't yet committed a uv.lock. Hardcoding
+      # `uv sync --frozen` failed for both categories. Auto-detection skips cleanly when
+      # pyproject is absent and drops --frozen when no lockfile exists yet. Poetry repos
+      # are explicitly rejected with an actionable error.
+      - name: Detect repo state
+        id: detect
+        run: |
+          if [ ! -f pyproject.toml ]; then
+            echo "state=skip" >> $GITHUB_OUTPUT
+            echo "::notice::No pyproject.toml found at repo root; mutation testing will be skipped. Remove the python-mutation.yml caller from this repo if it does not need mutation testing."
+          elif [ -f poetry.lock ] || grep -qE '^\[tool\.poetry(\.|])' pyproject.toml; then
+            echo "state=poetry-not-supported" >> $GITHUB_OUTPUT
+            echo "::error::This repo uses Poetry. The python-mutation.yml reusable workflow is uv-only by org policy. Convert this repo to uv before re-enabling mutation testing."
+            exit 1
+          elif [ -f uv.lock ]; then
+            echo "state=uv-locked" >> $GITHUB_OUTPUT
+            echo "Detected: uv with lockfile"
+          else
+            echo "state=uv-no-lock" >> $GITHUB_OUTPUT
+            echo "Detected: uv without lockfile (PEP 621 pyproject.toml only); will sync without --frozen"
+          fi
+        shell: bash
+
+      # Mutmut is expected to be declared in the consumer project's dev dependencies
+      # (e.g. 'mutmut>=3.3.1' in pyproject.toml's [dev] extra). Installing via
+      # 'uv sync --all-extras --frozen' uses the exact version locked in the consumer's
+      # uv.lock, which is fully reproducible AND respects each consumer's pinning. The
+      # previous standalone 'uv pip install mutmut==2.5.1 --no-build' line was both
+      # unsatisfiable (no wheels for 2.5.1) and a forced downgrade for consumers with
+      # newer mutmut releases; it is intentionally removed. If a consumer omits mutmut
+      # from their dev deps the workflow will fail loudly at 'mutmut run' with a clear
+      # ModuleNotFoundError. The workflow's CLI assumes mutmut 3.x; consumers should
+      # pin accordingly.
+      #
+      # S8541 suppression rationale: The $NO_BUILD_FLAG env (set from inputs.no-build,
+      # default 'true' -> '--no-build') is dynamic by design so consumers with PEP 517
+      # build backends like hatchling can pass 'no-build: false' to permit editable
+      # installs. SonarCloud's static analyzer cannot resolve the env var. The lockfile-
+      # based 'uv sync --frozen' (uv-locked path) constrains installable versions to
+      # the consumer's audited uv.lock, bounding residual setup-script risk.
+      - name: Install dependencies (uv with lockfile)
+        if: steps.detect.outputs.state == 'uv-locked'
+        run: uv sync --all-extras --frozen $NO_BUILD_FLAG  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+        shell: bash
+
+      - name: Install dependencies (uv without lockfile)
+        if: steps.detect.outputs.state == 'uv-no-lock'
+        run: uv sync --all-extras $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path (uv sync creates one)
+        shell: bash
+
+      - name: Skip notice (no pyproject.toml)
+        if: steps.detect.outputs.state == 'skip'
+        run: |
+          echo "## Mutation Testing Skipped" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "No pyproject.toml at repo root, nothing to mutate." >> $GITHUB_STEP_SUMMARY
 
       - name: Run mutation testing
         id: mutmut
+        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
         env:
           SOURCE_DIRECTORY: ${{ inputs.source-directory }}
           TEST_DIRECTORY: ${{ inputs.test-directory }}
         run: |
           echo "Starting mutation testing on $SOURCE_DIRECTORY..."
 
-          # Run mutmut with configurable paths
+          # The install step above (uv-locked or uv-no-lock) guaranteed uv.lock exists,
+          # so literal `--frozen` here is safe on both detect-state branches.
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
           uv run --frozen $NO_BUILD_FLAG mutmut run \
             --paths-to-mutate="$SOURCE_DIRECTORY" \
             --tests-dir="$TEST_DIRECTORY" \
@@ -184,11 +219,14 @@ jobs:
             || true
 
           # Generate reports
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
           uv run --frozen $NO_BUILD_FLAG mutmut results > mutmut-results.txt || true
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
           uv run --frozen $NO_BUILD_FLAG mutmut html || true
 
       - name: Analyze mutation results
         id: analyze
+        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
         run: |
           echo "Analyzing mutation test results..."
 
@@ -267,7 +305,7 @@ jobs:
           FAIL_UNDER: ${{ inputs.fail-under-threshold }}
 
       - name: Upload mutation reports
-        if: always()
+        if: always() && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock')
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: mutation-reports
@@ -278,7 +316,7 @@ jobs:
           retention-days: ${{ inputs.artifact-retention-days }}
 
       - name: Post PR comment
-        if: ${{ inputs.post-pr-comment && github.event_name == 'pull_request' }}
+        if: ${{ inputs.post-pr-comment && github.event_name == 'pull_request' && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock') }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
         with:
           script: |
@@ -345,7 +383,7 @@ jobs:
             }
 
       - name: Mutation Testing Summary
-        if: always()
+        if: always() && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock')
         env:
           THRESHOLD: ${{ inputs.mutation-threshold }}
         run: |
