@@ -7,8 +7,12 @@
 # --skip-owners list (default: ByronWilliamsCPA,williaby) and whose ref is a
 # tag (@v...) or branch (@main/@master/@HEAD/@develop).
 #
-# Output: CSV with one row per repo: repo,violations
-# Exit code: 0 even when violations exist (this is a report, not a gate).
+# Output: CSV with one row per repo. Each row is one of:
+#   {repo},{count}   numeric violations found
+#   {repo},error     API call failed (rate limit, 5xx, auth loss); diagnostic
+#                    message written to stderr
+# Exit code: 0 even when violations or errors are present (this is a report,
+# not a gate). Errors are surfaced via the sentinel row plus stderr.
 #
 # Usage:
 #   ./scripts/fleet-audit-sha-pins.sh --org ByronWilliamsCPA [--org williaby] \
@@ -52,8 +56,50 @@ emit() {
 [[ "$OUTPUT" != "-" ]] && : > "$OUTPUT"
 emit "repo,violations"
 
+# gh_api_safe ENDPOINT JQ_FILTER
+# Wraps a `gh api` call so that 404 (legitimate "no workflows directory")
+# is distinguishable from real failures (rate limit, 5xx, auth loss).
+# Sets two globals:
+#   GH_API_STATUS = "ok" | "missing" | "error"
+#   GH_API_BODY   = body on ok/missing-as-empty, error message on error
+gh_api_safe() {
+    local endpoint="$1"
+    local jq_filter="$2"
+    local raw rc
+    raw=$(gh api "$endpoint" --jq "$jq_filter" 2>&1)
+    rc=$?
+    if [[ $rc -eq 0 ]]; then
+        GH_API_STATUS="ok"
+        GH_API_BODY="$raw"
+        return 0
+    fi
+    # gh prints messages like "gh: Not Found (HTTP 404)" on stderr; we
+    # captured them via 2>&1 so they live in $raw.
+    if [[ "$raw" == *"HTTP 404"* || "$raw" == *"Not Found"* ]]; then
+        GH_API_STATUS="missing"
+        GH_API_BODY=""
+        return 0
+    fi
+    GH_API_STATUS="error"
+    GH_API_BODY="$raw"
+    return 1
+}
+
+# is_skipped_owner OWNER -- literal-match, no regex injection.
+is_skipped_owner() {
+    case ",${SKIP_OWNERS}," in
+        *,"$1",*) return 0 ;;
+        *)        return 1 ;;
+    esac
+}
+
+REPO_LIMIT=1000
+
 for org in "${ORGS[@]}"; do
-    mapfile -t repos < <(gh repo list "$org" --limit 200 --json name --jq '.[].name')
+    mapfile -t repos < <(gh repo list "$org" --limit "$REPO_LIMIT" --json name --jq '.[].name')
+    if [[ ${#repos[@]} -eq $REPO_LIMIT ]]; then
+        echo "WARN: $org returned exactly $REPO_LIMIT repos; audit may be truncated. Raise REPO_LIMIT or page through results." >&2
+    fi
     for repo in "${repos[@]}"; do
         full="$org/$repo"
         # Skip infrastructure meta-repos
@@ -61,14 +107,29 @@ for org in "${ORGS[@]}"; do
             ByronWilliamsCPA/.github|ByronWilliamsCPA/.claude|williaby/.github|williaby/.claude) continue ;;
         esac
 
-        files=$(gh api "repos/$full/contents/.github/workflows" --jq '.[].path' 2>/dev/null || true)
-        [[ -z "$files" ]] && { emit "$full,0"; continue; }
+        if ! gh_api_safe "repos/$full/contents/.github/workflows" '.[].path'; then
+            echo "WARN: $full: workflows listing failed: $GH_API_BODY" >&2
+            emit "$full,error"
+            continue
+        fi
+        if [[ "$GH_API_STATUS" == "missing" ]] || [[ -z "$GH_API_BODY" ]]; then
+            emit "$full,0"
+            continue
+        fi
+        files="$GH_API_BODY"
 
         violations=0
+        api_error=false
         while IFS= read -r path; do
             [[ -z "$path" ]] && continue
             [[ "$path" != *.yml && "$path" != *.yaml ]] && continue
-            content=$(gh api "repos/$full/contents/$path" --jq '.content' 2>/dev/null | base64 -d 2>/dev/null || true)
+            if ! gh_api_safe "repos/$full/contents/$path" '.content'; then
+                echo "WARN: $full:$path: content fetch failed: $GH_API_BODY" >&2
+                api_error=true
+                break
+            fi
+            [[ "$GH_API_STATUS" == "missing" ]] && continue
+            content=$(echo "$GH_API_BODY" | base64 -d 2>/dev/null || true)
             [[ -z "$content" ]] && continue
             while IFS= read -r line; do
                 # Skip comment lines
@@ -77,7 +138,7 @@ for org in "${ORGS[@]}"; do
                     owner="${BASH_REMATCH[2]}"
                     ref="${BASH_REMATCH[4]}"
                     # Skip if owner is in the skip list
-                    if [[ "$owner" =~ ^(${SKIP_OWNERS//,/|})$ ]]; then
+                    if is_skipped_owner "$owner"; then
                         continue
                     fi
                     # Skip if ref is a full 40-character SHA (already pinned)
@@ -89,6 +150,10 @@ for org in "${ORGS[@]}"; do
             done <<< "$content"
         done <<< "$files"
 
-        emit "$full,$violations"
+        if [[ "$api_error" == true ]]; then
+            emit "$full,error"
+        else
+            emit "$full,$violations"
+        fi
     done
 done

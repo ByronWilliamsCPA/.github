@@ -143,3 +143,52 @@ STUB
   run "$SCRIPT" --org ByronWilliamsCPA --output "$TEST_TMPDIR/out.csv"
   assert_success
 }
+
+@test "audit emits 'error' sentinel when API call fails (not 404)" {
+  # Stub returns the repo list, then fails every contents API with a 429
+  cat > "$TEST_TMPDIR/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+if [[ "$1 $2" == "auth status" ]]; then exit 0; fi
+if [[ "$1" == "repo" && "$2" == "list" ]]; then
+  _apply_jq_flag '[{"name":"repo-rate-limited"}]' "$@"
+  exit 0
+fi
+if [[ "$1" == "api" ]]; then
+  echo "gh: API rate limit exceeded for user (HTTP 429)" >&2
+  exit 1
+fi
+exit 0
+STUB
+  chmod +x "$TEST_TMPDIR/bin/gh"
+
+  run "$SCRIPT" --org ByronWilliamsCPA --output "$TEST_TMPDIR/out.csv"
+  assert_success   # script remains report-only; non-zero would block runs
+
+  run cat "$TEST_TMPDIR/out.csv"
+  assert_output --partial "ByronWilliamsCPA/repo-rate-limited,error"
+}
+
+@test "audit treats 404 on workflows directory as a legitimate zero" {
+  # Stub returns the repo list, then a 404 for the workflows directory
+  cat > "$TEST_TMPDIR/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+if [[ "$1 $2" == "auth status" ]]; then exit 0; fi
+if [[ "$1" == "repo" && "$2" == "list" ]]; then
+  _apply_jq_flag '[{"name":"repo-no-workflows"}]' "$@"
+  exit 0
+fi
+if [[ "$1" == "api" ]]; then
+  echo "gh: Not Found (HTTP 404)" >&2
+  exit 1
+fi
+exit 0
+STUB
+  chmod +x "$TEST_TMPDIR/bin/gh"
+
+  run "$SCRIPT" --org ByronWilliamsCPA --output "$TEST_TMPDIR/out.csv"
+  assert_success
+
+  run cat "$TEST_TMPDIR/out.csv"
+  assert_output --partial "ByronWilliamsCPA/repo-no-workflows,0"
+  refute_output --partial "ByronWilliamsCPA/repo-no-workflows,error"
+}
