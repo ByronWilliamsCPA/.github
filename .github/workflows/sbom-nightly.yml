@@ -1,0 +1,71 @@
+# ============================================================================
+# Org-Level Nightly SBOM Scan
+# ============================================================================
+# Runs python-sbom.yml on a nightly schedule so CVE database updates that
+# land between PR builds are caught automatically. The org self-test skips
+# cleanly here (no pyproject.toml in .github), but it proves the trigger
+# machinery works and keeps the workflow "live" in Actions.
+#
+# Downstream pattern: add a schedule trigger alongside your existing
+# pull_request trigger in your own python-sbom.yml caller workflow:
+#
+#   on:
+#     pull_request:
+#     schedule:
+#       - cron: '0 2 * * *'
+#   jobs:
+#     sbom:
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-sbom.yml@main
+#       with:
+#         python-version: '3.12'
+#         run-osv: true
+#
+# The schedule trigger causes GitHub to pull a fresh CVE database snapshot
+# on every run, so vulnerabilities disclosed after your last PR build are
+# caught within 24 hours without waiting for the next code change.
+# ============================================================================
+
+name: SBOM Nightly Scan
+
+on:
+  schedule:
+    # 02:17 UTC daily - offset from the hour to reduce Actions queue contention
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+    inputs:
+      python-version:
+        description: 'Python version to scan'
+        required: false
+        default: '3.12'
+      fail-on-vulnerabilities:
+        description: 'Fail on CRITICAL/HIGH vulnerabilities (true/false)'
+        required: false
+        default: 'true'
+      run-osv:
+        description: 'Run OSV-Scanner gate (true/false)'
+        required: false
+        default: 'true'
+
+# #CRITICAL: permissions are set to empty at the workflow level; the
+# reusable workflow (python-sbom.yml) grants its own per-job permissions.
+# Reusable workflows run with the permissions of the CALLEE, not the caller,
+# when the callee defines its own permissions blocks. This means this
+# workflow does not need elevated permissions even though the child jobs
+# write to security-events.
+# #VERIFY: confirm that upload-sarif succeeds in the first nightly run by
+# checking the Security > Code scanning alerts tab for nightly-triggered
+# entries distinct from PR-triggered ones (different ref/sha on the alert).
+permissions: {}
+
+jobs:
+  sbom:
+    # #ASSUME: when triggered via schedule, inputs.* is empty; the || fallbacks
+    # below supply the production defaults. workflow_dispatch overrides them.
+    uses: ./.github/workflows/python-sbom.yml
+    with:
+      python-version: ${{ inputs.python-version || '3.12' }}
+      # #EDGE: workflow_dispatch inputs are always strings; cast to boolean via
+      # comparison. When triggered by schedule, both expressions resolve to true
+      # via the || fallback before the == comparison.
+      fail-on-vulnerabilities: ${{ (inputs.fail-on-vulnerabilities || 'true') == 'true' }}
+      run-osv: ${{ (inputs.run-osv || 'true') == 'true' }}
