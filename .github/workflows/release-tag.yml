@@ -5,11 +5,13 @@
 #   feat: prefix: minor bump
 #   all other types (fix, chore, ci, docs, refactor, perf, test): patch bump
 #
-# Creates an annotated tag (v1.x.y) and force-moves the floating major
-# tag (v1) to HEAD. Both are pushed via GITHUB_TOKEN.
+# Creates a single annotated immutable tag (vX.Y.Z) and pushes it via
+# GITHUB_TOKEN. The tag is immutable: it is never updated or force-pushed,
+# which satisfies the org-level ByronWilliamsCPA-tag-protection-semver
+# ruleset that blocks update/non_fast_forward on refs/tags/v*.
 #
-# The floating v1 tag is safe because all consumers pin to full 40-char
-# SHAs (CI-005 enforcement); v1 is human-readable documentation only.
+# Consumers pin to the immutable point tag or a full 40-char SHA
+# (CI-005 enforcement); no floating major tag is published.
 
 name: Release Tag
 
@@ -63,17 +65,12 @@ jobs:
           fi
 
           NEW_TAG="v${MAJOR}.${MINOR}.${PATCH}"
-          FLOATING="v${MAJOR}"
 
           echo "Previous tag: $PREV"
           echo "New tag:      $NEW_TAG"
-          echo "Floating tag: $FLOATING"
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git tag -a "$NEW_TAG" -m "Release $NEW_TAG"
-          git tag -f "$FLOATING" -m "Latest $FLOATING release: $NEW_TAG"
-
           git push origin "$NEW_TAG"
-          git push origin "$FLOATING" --force
