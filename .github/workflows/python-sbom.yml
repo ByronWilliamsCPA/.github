@@ -184,15 +184,15 @@ jobs:
         run: |
           .venv/bin/cyclonedx-py environment \
             --output-format JSON \
-            --output-file "$GITHUB_WORKSPACE/sbom-runtime.json" \
+            --output-file "$GITHUB_WORKSPACE/sbom-runtime.cdx.json" \
             .venv/bin/python3
-          if [ ! -s "$GITHUB_WORKSPACE/sbom-runtime.json" ]; then
-            echo "::error::sbom-runtime.json is missing or empty in $GITHUB_WORKSPACE"
+          if [ ! -s "$GITHUB_WORKSPACE/sbom-runtime.cdx.json" ]; then
+            echo "::error::sbom-runtime.cdx.json is missing or empty in $GITHUB_WORKSPACE"
             echo "Workspace contents:"
             ls -la "$GITHUB_WORKSPACE"
             exit 1
           fi
-          echo "SBOM generated: $(wc -c < "$GITHUB_WORKSPACE/sbom-runtime.json") bytes"
+          echo "SBOM generated: $(wc -c < "$GITHUB_WORKSPACE/sbom-runtime.cdx.json") bytes"
 
       - name: Verify SBOM files before upload
         if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
@@ -207,7 +207,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: sboms
-          path: ${{ github.workspace }}/sbom-runtime.json
+          path: ${{ github.workspace }}/sbom-runtime.cdx.json
           retention-days: ${{ inputs.artifact-retention-days }}
           if-no-files-found: error
 
@@ -260,7 +260,7 @@ jobs:
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
         with:
           scan-type: sbom
-          scan-ref: sbom-runtime.json
+          scan-ref: sbom-runtime.cdx.json
           format: table
           severity: ${{ inputs.severity-threshold }}
           exit-code: ${{ inputs.fail-on-vulnerabilities && '1' || '0' }}
@@ -271,7 +271,7 @@ jobs:
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
         with:
           scan-type: sbom
-          scan-ref: sbom-runtime.json
+          scan-ref: sbom-runtime.cdx.json
           format: sarif
           output: trivy-runtime-results.sarif
           trivyignores: ${{ steps.trivyignore.outputs.exists == 'true' && inputs.trivyignore-path || '' }}
@@ -413,7 +413,7 @@ jobs:
         id: grype-table
         uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2  # v7.4.0
         with:
-          sbom: sbom-runtime.json
+          sbom: sbom-runtime.cdx.json
           fail-build: false  # parallel-run: do not fail on vulnerabilities found
           severity-cutoff: ${{ steps.severity.outputs.cutoff }}
           output-format: table
@@ -428,7 +428,7 @@ jobs:
         if: always()
         uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2  # v7.4.0
         with:
-          sbom: sbom-runtime.json
+          sbom: sbom-runtime.cdx.json
           fail-build: false
           severity-cutoff: ${{ steps.severity.outputs.cutoff }}
           output-format: sarif
@@ -507,7 +507,7 @@ jobs:
         continue-on-error: ${{ !inputs.fail-on-vulnerabilities }}
         with:
           scan-args: |-
-            --sbom=sbom-runtime.json
+            -L sbom-runtime.cdx.json
 
       # Secondary SARIF run: always non-gating; output written to file for
       # Security tab upload. Runs even if the gating step above failed.
@@ -518,7 +518,7 @@ jobs:
         continue-on-error: true
         with:
           scan-args: |-
-            --sbom=sbom-runtime.json
+            -L sbom-runtime.cdx.json
             --format=sarif
             --output=osv-sbom-runtime.sarif
 
@@ -577,7 +577,7 @@ jobs:
           import os
           import sys
 
-          with open('sbom-runtime.json') as f:
+          with open('sbom-runtime.cdx.json') as f:
               sbom = json.load(f)
 
           # Parse forbidden licenses from input
