@@ -67,14 +67,21 @@ jobs:
           path: dist/
 
   # Generate SLSA provenance
+  #
+  # The SLSA generator is called directly here, not via the org reusable
+  # python-slsa.yml. GitHub Actions prohibits nested reusable workflow calls,
+  # so a template cannot call python-slsa.yml (which itself calls the slsa
+  # generator). Calling the generator directly keeps the call one level deep.
   provenance:
     name: Generate Provenance
     needs: build
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-slsa.yml@6f71aecae2c91214ca0a0a2206a36cf912aa31ac # v1
-    with:
-      base64-subjects: ${{ needs.build.outputs.hashes }}
-      upload-assets: true
     permissions:
       actions: read
       id-token: write
       contents: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@f7dd8c54c2067bafc12ca7a55595d5ee9b75204a  # v2.1.0
+    with:
+      base64-subjects: ${{ needs.build.outputs.hashes }}
+      upload-assets: true
+      upload-tag-name: ${{ github.ref_name }}
+      provenance-name: multiple.intoto.jsonl
