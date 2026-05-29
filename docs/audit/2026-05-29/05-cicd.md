@@ -1,0 +1,56 @@
+# 05 - CI/CD and Tooling
+
+HEAD e070932. Deprecated-action mechanics are clean: every action is SHA-pinned at a current major (upload/download-artifact v7/v8, cache v5, setup-python v6, setup-uv v8, checkout v6); no `::set-output`, `::save-state`, `set-env`, Node12/16, or artifact v1-v3 anywhere in 34 workflows or 17 templates. The real gaps are config drift (two yamllint, two shellcheck configs) and a pre-commit/CI enforcement hole: the repo's own lint hooks (yamllint, markdownlint, detect-secrets, trufflehog, commitizen, em-dash guard) run in no repo-local CI workflow, so they gate only developers who installed pre-commit locally.
+
+---
+
+**CICD-01 - Pre-commit lint hooks are not enforced in any repo-local CI**
+Severity: High. Effort: M (add one pre-commit job to self-test.yml or pr-validation.yml plus pip/uv setup; few hours of YAML, but covers a systemic gap).
+Evidence: `.pre-commit-config.yaml` defines yamllint, markdownlint, commitizen, detect-secrets, trufflehog, and the local `no-em-dash` hook (lines 10-92). Grep for `pre-commit|yamllint|markdownlint|detect-secrets|commitizen` across all 11 repo-local workflows (self-test, pr-validation, shell-tests, reuse, sonarcloud, scorecard, codeql, security-analysis, dependency-review, release-tag, sbom-nightly) returns NONE. `python-precommit.yml` is `workflow_call:`-only (line: `on: workflow_call:`) and its "Detect repo state" step sets `state=skip` when no `pyproject.toml` exists (python-precommit.yml ~line 80); this repo has no pyproject.toml, so even if called it would skip. self-test.yml runs only actionlint + shellcheck (self-test.yml:42-117). The em-dash hook `scripts/check-no-em-dash.sh`, called out as mandatory in CLAUDE.md, has zero CI enforcement.
+Recommendation: add a `pre-commit run --all-files` job to a repo-local push/PR workflow (self-test.yml), or at minimum run yamllint + markdownlint + check-no-em-dash.sh directly. Until then these hooks are advisory.
+
+**CICD-02 - Two yamllint configs with conflicting rules; one silently wins**
+Severity: Medium. Effort: S (delete one file, reconcile rules).
+Evidence: `.yamllint` (line-length max 160, truthy allowed-values include `yes/no`, plus braces/brackets rules) and `.yamllint.yml` (line-length max 150, truthy `level: warning`, no braces/brackets rules). yamllint's config search order is `.yamllint` then `.yamllint.yaml` then `.yamllint.yml`, so `.yamllint` wins and `.yamllint.yml` is dead. The two disagree on max line length (160 vs 150) and truthy handling. Any tool or contributor reading `.yamllint.yml` gets the wrong rules.
+Recommendation: delete `.yamllint.yml`; keep a single `.yamllint`. If 150 was intended, fold it into `.yamllint`.
+
+**CICD-03 - Two shellcheck configs that do not agree and are not both applied**
+Severity: Medium. Effort: S.
+Evidence: root `.shellcheckrc` sets `severity=warning` (the severity floor used by self-test.yml shellcheck job and actionlint's integrated pass). `.qlty/configs/.shellcheckrc` sets only `source-path=SCRIPTDIR` and no severity, so the qlty-driven shellcheck plugin (`.qlty/qlty.toml` line 68) runs at default severity (style/info included) while CI runs at warning+. The two scanners therefore disagree on what blocks. self-test.yml additionally hardcodes `SHELLCHECK_OPTS: '--severity=warning'` (self-test.yml:55) because `.shellcheckrc` "is not reliably honored by actionlint's stdin-fed invocation" (comment lines 50-55), so severity is configured in three places.
+Recommendation: align `.qlty/configs/.shellcheckrc` with the root `severity=warning` (or merge source-path into root and point qlty at it) so qlty and CI gate identically.
+
+**CICD-04 - sonar-project.properties and .codecov.yml target a package this repo does not have**
+Severity: Low. Effort: S.
+Evidence: `.codecov.yml` lines 7-13 set project target 80% / patch 90% coverage gates, while its own header (lines 2-3) states "This repo has no Python package; coverage data is uploaded by downstream callers." A Codecov status on this repo's PRs can only ever be no-data or fail. `sonar-project.properties` sets `sonar.sources=.` (line 9) over a repo that is YAML/shell only; `sonarcloud.yml` runs on every push/PR (sonarcloud.yml:9-13). The coverage gate is meaningless here even though it reads as enforced.
+Recommendation: set `.codecov.yml` `informational: true` or scope it to caller repos only; confirm Sonar coverage gates are disabled for this repo so a 0% coverage does not show as a failing gate.
+
+**CICD-05 - Caching present on uv but absent on standalone setup-python steps**
+Severity: Low. Effort: S per workflow.
+Evidence: `astral-sh/setup-uv` steps consistently set `enable-cache: true` (e.g. python-ci.yml:164, python-precommit.yml:70-73 with `cache-dependency-glob: uv.lock`). `actions/cache@v5` is used explicitly in `workflow-templates/python-ci.yml` (lines 92, 161, 228) and `workflow-templates/python-docs.yml` (70, 124, 169). But several `actions/setup-python@v6` steps that are NOT paired with setup-uv caching pass no `cache:` input: python-docs.yml:84, python-ci.yml:473, python-fuzzing.yml:119, python-sbom.yml:121/565, python-compatibility.yml:207, python-performance-regression.yml:171, python-mutation.yml:142. Where the job also runs setup-uv with enable-cache the pip cache is moot; standalone setup-python steps (e.g. python-docs.yml:84 feeds a uv path so likely covered) should be audited individually. Net: not a broken pipeline, marginal wasted install time.
+Recommendation: for any setup-python step not backed by an enable-cache uv step, add `cache: pip` (or rely solely on uv). Low priority.
+
+**CICD-06 - Concurrency control on minority of workflows**
+Severity: Low. Effort: S.
+Evidence: 5 of 34 workflow files declare `concurrency:`; 1 of 17 templates. All five repo-local PR-triggered workflows that matter have it (self-test.yml:35, shell-tests.yml:16, pr-validation.yml:14, sonarcloud.yml:18) but `reuse.yml` (runs on every push/PR, reuse.yml:8-19) has none, so superseded pushes keep running its two jobs plus a `docker run` SPDX step. `workflow_call` reusables generally do not need their own concurrency (the caller owns it), so the low template count is expected, not a defect.
+Recommendation: add a `concurrency` block with `cancel-in-progress: true` to reuse.yml. Reusables can be left alone.
+
+**CICD-07 - Timeouts and pinned-version hygiene: clean**
+Timeouts: 30 of 34 workflows and 7 of 17 templates set `timeout-minutes`; all five repo-local PR/push workflows set it (5-15 min). The 4 without are mostly workflow_call reusables where the caller's job-level timeout applies. actionlint version is pinned with sha256 checksum verification (self-test.yml:49,71). Only one non-`ubuntu-latest` runner ref, an intentional matrix (`runs-on: ${{ matrix.os }}`, python-compatibility.yml:184). No action needed.
+
+**CICD-08 - self-test and shell-tests exercise the right targets; submodules handled**
+shell-tests.yml checks out with `submodules: recursive` (line 52) and runs every `tests/*.bats` via `find tests -maxdepth 1 -name '*.bats'` piped to the vendored bats-core binary (lines 62-63), so locally-uninitialized bats submodules are initialized in CI and both `update-pinned-actions.bats` and `fleet-audit-sha-pins.bats` run. self-test.yml runs actionlint over both `.github/workflows/*.yml` and `workflow-templates/*.yml` (lines 80,83) plus shellcheck over all repo scripts (lines 101-117). Gap: self-test.yml does NOT call any reusable workflow with a smoke `workflow_call`, so the reusables are lint-checked but not execution-tested in this repo. Tracking only; downstream caller repos provide execution coverage.
+
+**CICD-09 - continue-on-error and if: always() usage is scoped, not masking quality gates**
+Reviewed all `continue-on-error` and `|| true` occurrences. The continue-on-error instances are either input-gated (`${{ !inputs.fail-on-* }}` in python-reuse.yml:79, python-sbom.yml:507, python-sonarcloud.yml:415, python-qlty-coverage.yml:218) so the caller chooses gating, or on explicitly non-gating scan/upload steps with inline rationale (codecov uploads in workflow-templates/python-codecov.yml, grype in python-sbom.yml, scorecard publish in python-scorecard.yml:125). No lint or unit-test job is unconditionally `continue-on-error: true`. The `|| true` uses are on diagnostic/`grep -c`/cleanup commands, not on the test or audit invocations themselves. `if: always()` is used for summary/upload steps and explicit gate jobs (e.g. pr-validation.yml gate jobs re-check `needs.*.result`), not to swallow failures. Security-gate continue-on-error is out of scope (security agent owns it). No quality-gate masking found in the CI/quality domain.
+
+---
+
+## Backlog rows (for orchestrator)
+
+ID | title | domain | severity | effort | files | evidence | recommendation | cve
+CICD-01 | Pre-commit lint hooks not enforced in repo-local CI | cicd | High | M | .pre-commit-config.yaml; .github/workflows/self-test.yml; .github/workflows/pr-validation.yml; scripts/check-no-em-dash.sh | pre-commit defines yamllint/markdownlint/detect-secrets/trufflehog/commitizen/no-em-dash (lines 10-92); grep shows no repo-local workflow runs any of them; python-precommit.yml is workflow_call-only and skips when no pyproject.toml | Add a pre-commit run --all-files job to self-test.yml or run yamllint+markdownlint+check-no-em-dash.sh in a push/PR workflow |  
+CICD-02 | Two yamllint configs disagree; .yamllint.yml is dead | cicd | Medium | S | .yamllint; .yamllint.yml | .yamllint max 160 + braces/brackets/yes-no truthy; .yamllint.yml max 150 warning-level; yamllint search order makes .yamllint win | Delete .yamllint.yml; consolidate into single .yamllint |  
+CICD-03 | Two shellcheck configs not aligned; qlty vs CI gate differ | cicd | Medium | S | .shellcheckrc; .qlty/configs/.shellcheckrc; .qlty/qlty.toml; .github/workflows/self-test.yml | root sets severity=warning; qlty config sets only source-path so qlty runs default severity; self-test.yml hardcodes SHELLCHECK_OPTS=--severity=warning (line 55) | Set qlty .shellcheckrc to severity=warning so qlty and CI gate identically |  
+CICD-04 | Coverage/Sonar gates target a nonexistent package | cicd | Low | S | .codecov.yml; sonar-project.properties; .github/workflows/sonarcloud.yml | .codecov.yml sets 80/90% targets while its header states repo has no Python package; sonar.sources=. on YAML/shell-only repo | Set codecov informational:true or scope to callers; disable Sonar coverage gate for this repo |  
+CICD-05 | setup-python steps without cache where not uv-backed | cicd | Low | S | .github/workflows/python-docs.yml; python-ci.yml; python-fuzzing.yml; python-sbom.yml; python-compatibility.yml; python-performance-regression.yml; python-mutation.yml | setup-python@v6 steps pass no cache: input (python-fuzzing.yml:119, python-sbom.yml:121, etc.); uv steps use enable-cache:true | Add cache:pip to setup-python steps not backed by an enable-cache uv step, or rely solely on uv |  
+CICD-06 | reuse.yml lacks concurrency control | cicd | Low | S | .github/workflows/reuse.yml | 5/34 workflows have concurrency; reuse.yml runs on every push/PR (lines 8-19) with no concurrency, including a docker run SPDX step | Add concurrency group with cancel-in-progress:true to reuse.yml |  
