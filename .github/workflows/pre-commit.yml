@@ -7,7 +7,9 @@
 #
 # This is repo-local self-CI. It does NOT use the reusable python-precommit.yml,
 # which is uv/pyproject driven and skips cleanly when no pyproject.toml exists
-# (this repo has none). pre-commit is installed directly via pip here.
+# (this repo has none). pre-commit is installed via `uv pip install --no-build`
+# at a pinned version (not bare pip) to satisfy the S8541/S8544 supply-chain
+# gates; see the install step below.
 #
 # No path filter: the no-em-dash and markdownlint hooks must run on every
 # change, including docs-only and config-only PRs.
@@ -26,6 +28,8 @@ concurrency:
 
 # #CRITICAL: deny-by-default at the top level; the single job narrows to the
 # read scope it needs. No hook writes back to the repo.
+# #VERIFY: every job in this workflow must declare its own permissions block;
+# none may rely on a broader inherited default.
 permissions: {}
 
 jobs:
@@ -35,6 +39,8 @@ jobs:
     timeout-minutes: 10
     # #ASSUME: read-only checkout is sufficient; this gate lints staged content
     # and never pushes fixes back.
+    # #VERIFY: if a hook is later added that auto-fixes and commits, this scope
+    # must be widened to contents: write and the assumption revisited.
     permissions:
       contents: read
 
