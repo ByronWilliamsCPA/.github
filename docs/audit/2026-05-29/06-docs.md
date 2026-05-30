@@ -1,11 +1,12 @@
 # 06 - Documentation and Developer Experience
 
-Docs are broad and well structured, but the public usage surface is built on version tags that do not exist: the repo has zero git tags, yet README, USAGE_EXAMPLES.md, and most docs/workflows pages tell callers to pin `@v1`, while CHANGELOG.md states there are no numbered releases. Coverage is also uneven: 23 `python-*.yml` reusables exist but only 14 have a docs/workflows page, README mentions 19 of 23 and links to one doc page that does not exist, and one doc page ships a malformed `uses:` path. Root-level analysis docs read as point-in-time working notes rather than durable reference.
+Docs are broad and well structured, but the versioning story is internally contradictory: a moving `v1` tag exists and is what README, USAGE_EXAMPLES.md, most docs/workflows pages, and renovate.json rely on, yet CHANGELOG.md states there are no numbered releases and the docs mix `@main` and `@v1`. Coverage is also uneven: 23 `python-*.yml` reusables exist but only 14 have a docs/workflows page, README mentions 19 of 23 and links to one doc page that does not exist, and one doc page ships a malformed `uses:` path. Root-level analysis docs read as point-in-time working notes rather than durable reference.
 
-**DOC-01: `@v1` references are unresolvable; no git tags exist**
-Severity: High | Effort: M (decide tag/release policy, then sweep or pin)
-Evidence: `git tag | wc -l` returns `0`. README.md:114,147 and ~30 lines in USAGE_EXAMPLES.md (lines 19,45,63,...,488) plus docs/workflows pages use `@v1`. CHANGELOG.md:7-9 says "date-based version headers ... there are no numbered releases." A caller copying any quickstart gets a workflow-resolution failure because `@v1` resolves to nothing.
-Recommendation: Pick one: (a) create and maintain a `v1` moving tag (and document it), or (b) change all examples to `@main` with a pinned-SHA note. Reconcile CHANGELOG.md:7-9 with whichever is chosen. This is the single highest-impact doc defect.
+**DOC-01: `v1` is a stale moving tag and CHANGELOG denies any release exists**
+Severity: Medium | Effort: S (reconcile CHANGELOG wording; re-point tag on release)
+Evidence: `git ls-remote --tags origin` shows `refs/tags/v1` (annotated) at `6f71aec`, an ancestor of `main` (`e070932`) and 32 commits behind it. README.md:114,147 and USAGE_EXAMPLES.md (lines 19,45,63,...,488) plus docs/workflows pages use `@v1`, which resolves. CHANGELOG.md:7-9 says "date-based version headers ... there are no numbered releases", contradicting the moving `v1` tag the docs and renovate.json depend on.
+Recommendation: Reconcile CHANGELOG.md:7-9 to name the moving `v1` tag that tracks `main`, and re-point `v1` to current `main` on release so consumers pinning `@v1` are not 32 commits behind.
+Correction: this finding originally read "zero git tags, `@v1` unresolvable, Severity High." That was a local-clone artifact: the audit environment had fetched no tags. `git ls-remote` against the remote shows `v1` exists, so the defect is staleness plus the CHANGELOG contradiction, not non-resolution. Downgraded to Medium.
 
 **DOC-02: Malformed `uses:` path in python-fips-compatibility.md**
 Severity: High | Effort: S
@@ -54,7 +55,7 @@ Recommendation: Make one canonical file (AGENTS.md or .claude/CLAUDE.md) and hav
 
 | ID | title | domain | severity | effort | files | evidence | recommendation | cve |
 |----|-------|--------|----------|--------|-------|----------|----------------|-----|
-| DOC-01 | `@v1` refs unresolvable; zero git tags; contradicts CHANGELOG | docs | High | M | README.md, USAGE_EXAMPLES.md, docs/workflows/*.md, CHANGELOG.md | `git tag` empty; README.md:114,147; USAGE_EXAMPLES.md:19-488 `@v1`; CHANGELOG.md:7-9 "no numbered releases" | Create/maintain `v1` tag or switch examples to `@main`; reconcile CHANGELOG | |
+| DOC-01 | `v1` is a stale moving tag and CHANGELOG denies any release exists | docs | Medium | S | CHANGELOG.md, README.md, USAGE_EXAMPLES.md, docs/workflows | `git ls-remote` shows refs/tags/v1 (annotated) at 6f71aec, 32 commits behind main e070932; CHANGELOG.md:7-9 "no numbered releases" contradicts the moving v1 tag; original zero-tags reading was a local-clone artifact | Reconcile CHANGELOG to name the moving v1 tag; re-point v1 to current main on release | |
 | DOC-02 | Malformed `uses:` path in FIPS doc | docs | High | S | docs/workflows/python-fips-compatibility.md | lines 42,53,99 missing repo `.github` segment | Add the `.github/` segment | |
 | DOC-03 | README links to nonexistent doc page | docs | Medium | S | README.md, docs/workflows/ | README.md:82 -> docs/workflows/python-qlty-coverage.md absent | Write page or repoint link | |
 | DOC-04 | Per-workflow doc coverage 14/23 | docs | Medium | M | docs/workflows/ | 9 reusables have no page (pr-validation, precommit, qlty-coverage, release, reuse, sbom, scorecard, security-analysis, slsa) | Add stub pages, prioritize release/publish/security | |

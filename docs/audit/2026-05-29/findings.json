@@ -1,6 +1,6 @@
 {
   "repo": "ByronWilliamsCPA/.github",
-  "generated_at": "2026-05-29T20:24:30Z",
+  "generated_at": "2026-05-30T01:39:48Z",
   "commit": "e070932",
   "findings": [
     {
@@ -105,22 +105,6 @@
       ],
       "evidence": "transfer-repos.sh:112 fires irreversible gh repo transfer in a loop with &>/dev/null and no dry-run; sync-secrets.sh:103-105 writes secrets with 2>/dev/null; both untested",
       "recommendation": "Add a --dry-run flag and surface gh stderr instead of discarding it; add Bats coverage gating the confirm and skip paths.",
-      "cve": ""
-    },
-    {
-      "id": "DOC-01",
-      "title": "@v1 references are unresolvable; zero git tags exist; contradicts CHANGELOG",
-      "domain": "docs",
-      "severity": "High",
-      "effort": "M",
-      "files": [
-        "README.md",
-        "USAGE_EXAMPLES.md",
-        "docs/workflows",
-        "CHANGELOG.md"
-      ],
-      "evidence": "git tag returns 0 tags; README.md:114,147 and USAGE_EXAMPLES.md:19-488 pin @v1; CHANGELOG.md:7-9 states there are no numbered releases",
-      "recommendation": "Either create and maintain a v1 moving tag or switch examples to @main with a pinned-SHA note; reconcile CHANGELOG accordingly.",
       "cve": ""
     },
     {
@@ -241,6 +225,22 @@
       ],
       "evidence": "workflow-templates/python-ci.yml:138 matrix [3.10..3.14]; 3.14 not stable as of Jan 2026 cutoff; callee declares max 3.13 at python-compatibility.yml:11",
       "recommendation": "Drop 3.14 or set allow-prereleases / non-gating until 3.14 reaches stable.",
+      "cve": ""
+    },
+    {
+      "id": "DOC-01",
+      "title": "v1 is a stale moving tag and CHANGELOG denies any release exists",
+      "domain": "docs",
+      "severity": "Medium",
+      "effort": "S",
+      "files": [
+        "CHANGELOG.md",
+        "README.md",
+        "USAGE_EXAMPLES.md",
+        "docs/workflows"
+      ],
+      "evidence": "git ls-remote shows refs/tags/v1 (annotated) at 6f71aec, an ancestor of main e070932 and 32 commits behind it; CHANGELOG.md:7-9 says there are no numbered releases, contradicting the moving v1 tag that the docs and renovate.json rely on. The audit's original zero-git-tags reading was a local-clone artifact; @v1 does resolve for consumers.",
+      "recommendation": "Reconcile CHANGELOG to acknowledge the moving v1 tag that tracks main, and re-point v1 to current main on release so consumers pinning @v1 are not 32 commits behind.",
       "cve": ""
     },
     {

@@ -36,7 +36,7 @@ Two lower-grade structural drifts compound it. Constants are centralized for act
 
 Four root causes recur across domains.
 
-The library has no released version, and everything downstream of that fact is broken or contradictory. There are zero git tags, yet the README, USAGE_EXAMPLES.md, and most doc pages tell callers to pin `@v1` (DOC-01), CHANGELOG says there are no numbered releases (a direct contradiction), self-referential security workflows are pinned to a SHA commented `# main` because no tag exists (SEC-04), and Renovate is configured to track a `v1` tag that is not there. The single highest-leverage fix in the repo is to cut and maintain the `v1` tag; it resolves a High doc defect and removes the contradiction that makes every quickstart fail.
+The library's versioning is internally contradictory. A moving `v1` tag does exist on the remote (annotated, at `6f71aec`, an ancestor of `main` and 32 commits behind it), and the README, USAGE_EXAMPLES.md, most doc pages, and renovate.json all rely on it. But CHANGELOG.md says there are no numbered releases (DOC-01), the docs mix `@main` and `@v1` (DOC-06), and the self-referential security workflows pin the `v1` commit under a `# main` comment (SEC-04). The corrective is small: reconcile the CHANGELOG to name the moving `v1` tag, standardize the docs on `@v1`, and re-point `v1` to current `main` so consumers are not 32 commits behind. (Correction to the original audit: an earlier draft of DOC-01 read "zero git tags, `@v1` unresolvable." That was a local-clone artifact; the audit environment had fetched no tags. `@v1` does resolve for consumers. DOC-01 is corrected here to Medium.)
 
 The deliverable (templates for consumers) is held to a lower bar than the repo's own code. The one floating `@master` action pin, the non-blocking quality gate, the unreleased 3.14 matrix, and the inline-reimplemented jobs all live in `workflow-templates/`, not in the consumed reusables. The repo guards its own runs well and ships its weaker copy to others. The `@master` pin is the cleanest example: production pins that exact action to a SHA; the template a consumer copies pins it to a branch (SEC-01 / DEP-01, the same defect both agents found).
 
@@ -64,7 +64,6 @@ Sorted by severity, then effort. Effort: S under a day, M a few days, L a week o
 | ARCH-03 | Template python-ci drifts from the reusable on Python versions and jobs | architecture | High | M | workflow-templates/python-ci.yml;<br>.github/workflows/python-ci.yml |
 | CICD-01 | Pre-commit lint hooks are enforced in no repo-local CI | cicd | High | M | .pre-commit-config.yaml;<br>.github/workflows/self-test.yml;<br>.github/workflows/pr-validation.yml;<br>(+1 more) |
 | CQ-02 | Untested destructive operator scripts swallow per-repo errors | code-quality | High | M | scripts/transfer-repos.sh;<br>scripts/sync-secrets.sh |
-| DOC-01 | @v1 references are unresolvable; zero git tags exist; contradicts CHANGELOG | docs | High | M | README.md;<br>USAGE_EXAMPLES.md;<br>docs/workflows;<br>(+1 more) |
 | CQ-01 | Six of eight shell scripts have zero test coverage | code-quality | High | L | scripts/calculate-image-storage.sh;<br>scripts/check-no-em-dash.sh;<br>scripts/regenerate-checksums.sh;<br>(+3 more) |
 | ARCH-06 | Naming collision risk: repo-local CI vs reusable exports in one dir | architecture | Medium | S | .github/workflows/reuse.yml;<br>.github/workflows/python-reuse.yml;<br>.github/workflows/scorecard.yml;<br>(+2 more) |
 | ARCH-07 | Duplicate ADR-001 across two dirs; major decisions undocumented | architecture | Medium | S | docs/architecture/adr-001-scorecard-publish-results.md;<br>docs/planning/adr/adr-001-workflow-security-remediation-delivery.md;<br>docs/architecture/adr-000-index.md |
@@ -73,6 +72,7 @@ Sorted by severity, then effort. Effort: S under a day, M a few days, L a week o
 | CQ-05 | Failure-swallowing \|\| true in the legacy update path | code-quality | Medium | S | scripts/update-pinned-actions.sh |
 | CQ-06 | Duplicated 10-entry FILES array across two scripts | code-quality | Medium | S | scripts/regenerate-checksums.sh;<br>sync_org_files.sh |
 | DEP-03 | Workflow-template Python matrix targets unreleased 3.14 | dependencies | Medium | S | workflow-templates/python-ci.yml |
+| DOC-01 | v1 is a stale moving tag and CHANGELOG denies any release exists | docs | Medium | S | CHANGELOG.md;<br>README.md;<br>USAGE_EXAMPLES.md;<br>(+1 more) |
 | DOC-03 | README links to a doc page that does not exist | docs | Medium | S | README.md;<br>docs/workflows |
 | DOC-05 | README workflow catalog omits four reusables | docs | Medium | S | README.md |
 | DOC-06 | Version-tag inconsistency across docs (@main vs @v1) | docs | Medium | S | docs/workflows;<br>examples;<br>USAGE_EXAMPLES.md |
@@ -99,10 +99,10 @@ Clean areas, recorded once: action SHA pinning is uniform with no drift across a
 
 ## 6. Verdict
 
-Drifting, not at-risk. The security and supply-chain fundamentals are in place and the repo is too young (two weeks, 50 commits) to have rotted; what it has is the drift of fast scaffolding that outran its own conventions. One Critical (a template that fails to load for any adopter), eight High, and a cluster of contradictions that all trace back to four root causes.
+Drifting, not at-risk. The security and supply-chain fundamentals are in place and the repo is too young (two weeks, 50 commits) to have rotted; what it has is the drift of fast scaffolding that outran its own conventions. One Critical (a template that fails to load for any adopter), seven High, and a cluster of contradictions that all trace back to four root causes.
 
 The three changes that move it most:
 
-1. Cut and maintain the `v1` tag (DOC-01, with SEC-04 and the Renovate `v1` follow), so the documented usage actually resolves and the CHANGELOG stops contradicting the README.
+1. Reconcile the `v1` versioning story (DOC-01, DOC-06, SEC-04): name the moving `v1` tag in the CHANGELOG, standardize docs on `@v1`, and re-point `v1` to current `main` so consumers are not 32 commits behind.
 2. Fix the template tier as a deliverable: repair the broken `python-slsa` caller (ARCH-01), convert the inline templates to thin callers (ARCH-02, ARCH-03), and pin the `@master` ref (SEC-01).
 3. Enforce the mandatory checks in repo-local CI (CICD-01) and add tests for the destructive operator scripts (CQ-02, CQ-01), so the rules the repo states for everyone else are gated on its own pushes.
