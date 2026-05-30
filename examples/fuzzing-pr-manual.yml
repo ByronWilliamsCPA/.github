@@ -43,7 +43,7 @@ permissions: read-all
 jobs:
   fuzzing:
     name: Security Fuzzing - ${{ github.event.inputs.sanitizer }}
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@v1
     permissions:
       contents: read
       security-events: write

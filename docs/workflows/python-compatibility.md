@@ -28,7 +28,7 @@ cost by 92%); the full matrix runs on ready PRs.
 ```yaml
 jobs:
   compatibility:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-compatibility.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-compatibility.yml@v1
     with:
       python-versions: '["3.11","3.12","3.13"]'
 ```

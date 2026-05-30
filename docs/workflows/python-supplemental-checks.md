@@ -38,7 +38,7 @@ Each check is disabled by default; enable only what your project needs.
 ```yaml
 jobs:
   supplemental:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-supplemental-checks.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-supplemental-checks.yml@v1
     with:
       enable-link-check: true
       enable-changelog-check: true

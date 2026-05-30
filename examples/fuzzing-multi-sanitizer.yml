@@ -30,7 +30,7 @@ jobs:
   # Address Sanitizer - Memory Safety
   address-sanitizer:
     name: Fuzzing (Address Sanitizer)
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@v1
     permissions:
       contents: read
       security-events: write
@@ -46,7 +46,7 @@ jobs:
   # Undefined Behavior Sanitizer
   undefined-sanitizer:
     name: Fuzzing (Undefined Behavior)
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@v1
     permissions:
       contents: read
       security-events: write
@@ -62,7 +62,7 @@ jobs:
   # Memory Sanitizer - Uninitialized Reads
   memory-sanitizer:
     name: Fuzzing (Memory Sanitizer)
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@v1
     permissions:
       contents: read
       security-events: write
