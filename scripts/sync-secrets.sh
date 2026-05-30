@@ -96,12 +96,18 @@ SUCCESS=0
 FAILED=0
 FAILED_REPOS=()
 
+# With GH_DEBUG set, gh prints the full request (including the --body secret)
+# to stderr, which the failure branch below captures and echoes. Unset it (and
+# the pager) so a secret can never reach the terminal or a CI log.
+unset GH_DEBUG GH_PAGER
+
 for repo in "${REPO_ARRAY[@]}"; do
     FULL_REPO="$USERNAME/$repo"
     printf "  %-50s ... " "$repo"
 
-    # Capture stderr so a failure surfaces the gh error. The secret value is
-    # passed via --body and is not echoed by gh on error.
+    # Capture stderr so a failure surfaces the gh error. gh does not echo the
+    # --body value on error, and GH_DEBUG is unset above, so the secret cannot
+    # leak into the captured output.
     if secret_output=$(gh secret set "$SECRET_NAME" \
         --repo "$FULL_REPO" \
         --body "$SECRET_VALUE" 2>&1); then
@@ -109,7 +115,7 @@ for repo in "${REPO_ARRAY[@]}"; do
         SUCCESS=$((SUCCESS + 1))
     else
         echo -e "${RED}❌${NC}"
-        echo "      ${secret_output}"
+        printf '      %s\n' "${secret_output}"
         FAILED=$((FAILED + 1))
         FAILED_REPOS+=("$repo")
     fi

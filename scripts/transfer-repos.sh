@@ -151,7 +151,7 @@ for repo in "${REPO_ARRAY[@]}"; do
         fi
     else
         echo -e "${RED}❌${NC}"
-        echo "      ${transfer_output}"
+        printf '      %s\n' "${transfer_output}"
         FAILED=$((FAILED + 1))
         FAILED_REPOS+=("$repo")
     fi
