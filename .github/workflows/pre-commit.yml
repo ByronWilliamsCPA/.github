@@ -1,0 +1,72 @@
+# ============================================================================
+# Pre-Commit Gate for ByronWilliamsCPA/.github (repo-local)
+# ============================================================================
+# Enforces the .pre-commit-config.yaml hooks (yamllint, markdownlint,
+# file checks, detect-secrets, trufflehog, and the mandatory no-em-dash
+# guard) in CI, not just for developers who ran `pre-commit install`.
+#
+# This is repo-local self-CI. It does NOT use the reusable python-precommit.yml,
+# which is uv/pyproject driven and skips cleanly when no pyproject.toml exists
+# (this repo has none). pre-commit is installed directly via pip here.
+#
+# No path filter: the no-em-dash and markdownlint hooks must run on every
+# change, including docs-only and config-only PRs.
+# ============================================================================
+
+name: Pre-Commit (repo-local lint gate)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+# #CRITICAL: deny-by-default at the top level; the single job narrows to the
+# read scope it needs. No hook writes back to the repo.
+permissions: {}
+
+jobs:
+  pre-commit:
+    name: Run pre-commit hooks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # #ASSUME: read-only checkout is sufficient; this gate lints staged content
+    # and never pushes fixes back.
+    permissions:
+      contents: read
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5  # v2.19.3
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: '3.12'
+
+      # Cache pre-commit hook environments keyed on the config file so hook
+      # repos are not re-cloned on every run.
+      - name: Cache pre-commit environments
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: |
+            pre-commit-${{ runner.os }}-
+
+      - name: Install pre-commit
+        run: python -m pip install --upgrade pre-commit
+
+      # TruffleHog is not installed on the runner; that hook self-skips via its
+      # own `command -v trufflehog` guard. commitizen is a commit-msg-stage hook
+      # and does not run under the default pre-commit stage used here.
+      - name: Run pre-commit
+        run: pre-commit run --all-files --show-diff-on-failure
