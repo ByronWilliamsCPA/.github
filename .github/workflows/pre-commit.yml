@@ -1,0 +1,92 @@
+# ============================================================================
+# Pre-Commit Gate for ByronWilliamsCPA/.github (repo-local)
+# ============================================================================
+# Enforces the .pre-commit-config.yaml hooks (yamllint, markdownlint,
+# file checks, detect-secrets, trufflehog, and the mandatory no-em-dash
+# guard) in CI, not just for developers who ran `pre-commit install`.
+#
+# This is repo-local self-CI. It does NOT use the reusable python-precommit.yml,
+# which is uv/pyproject driven and skips cleanly when no pyproject.toml exists
+# (this repo has none). pre-commit is installed via `uv pip install --no-build`
+# at a pinned version (not bare pip) to satisfy the S8541/S8544 supply-chain
+# gates; see the install step below.
+#
+# No path filter: the no-em-dash and markdownlint hooks must run on every
+# change, including docs-only and config-only PRs.
+# ============================================================================
+
+name: Pre-Commit (repo-local lint gate)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+# #CRITICAL: deny-by-default at the top level; the single job narrows to the
+# read scope it needs. No hook writes back to the repo.
+# #VERIFY: every job in this workflow must declare its own permissions block;
+# none may rely on a broader inherited default.
+permissions: {}
+
+jobs:
+  pre-commit:
+    name: Run pre-commit hooks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # #ASSUME: read-only checkout is sufficient; this gate lints staged content
+    # and never pushes fixes back.
+    # #VERIFY: if a hook is later added that auto-fixes and commits, this scope
+    # must be widened to contents: write and the assumption revisited.
+    permissions:
+      contents: read
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5  # v2.19.3
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: '3.12'
+
+      # Cache pre-commit hook environments keyed on the config file so hook
+      # repos are not re-cloned on every run.
+      - name: Cache pre-commit environments
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: |
+            pre-commit-${{ runner.os }}-
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
+
+      - name: Create virtual environment
+        # #CRITICAL: uv pip install requires an existing .venv (issue #106).
+        # #VERIFY: `uv venv` must run before the install step.
+        run: uv venv
+
+      # Pin pre-commit to a resolved version and install with --no-build so the
+      # supply chain is locked (githubactions:S8541/S8544), matching the
+      # `uv pip install --no-build 'pkg==version'` pattern used elsewhere in this
+      # repo. Renovate (pep621/pip managers) bumps the pin.
+      - name: Install pre-commit
+        run: uv pip install --no-build 'pre-commit==4.6.0'
+
+      # TruffleHog is not installed on the runner; that hook self-skips via its
+      # own `command -v trufflehog` guard. commitizen is a commit-msg-stage hook
+      # and does not run under the default pre-commit stage used here. pre-commit
+      # is invoked from the venv directly rather than via `uv run` (no project
+      # pyproject.toml exists in this repo).
+      - name: Run pre-commit
+        run: .venv/bin/pre-commit run --all-files --show-diff-on-failure

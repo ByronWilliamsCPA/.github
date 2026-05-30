@@ -29,6 +29,12 @@ jobs:
   build:
     name: Build Package
     runs-on: ubuntu-latest
+    # #ASSUME: the build job only reads the repo and uploads artifacts; it needs
+    # no write scopes. Declaring contents: read here keeps it from inheriting
+    # id-token: write / contents: write from the top-level block.
+    # #VERIFY: re-check if a future build step needs to push tags or attest.
+    permissions:
+      contents: read
     outputs:
       hashes: ${{ steps.hash.outputs.hashes }}
 
@@ -67,14 +73,28 @@ jobs:
           path: dist/
 
   # Generate SLSA provenance
+  #
+  # The SLSA generator is called directly here, not via the org reusable
+  # python-slsa.yml. That reusable workflow exposes only `on: workflow_dispatch`
+  # and has no `workflow_call` trigger, so it cannot be loaded via `uses:` from
+  # this template. Calling the generator directly is the path that works (nesting
+  # depth is not the issue; GitHub permits up to four levels of reusable calls).
   provenance:
     name: Generate Provenance
     needs: build
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-slsa.yml@6f71aecae2c91214ca0a0a2206a36cf912aa31ac # v1
-    with:
-      base64-subjects: ${{ needs.build.outputs.hashes }}
-      upload-assets: true
+    # #CRITICAL: id-token: write lets this job mint the OIDC token that signs the
+    # SLSA provenance; contents: write uploads the attestation to the release. As
+    # the caller of an external reusable workflow, this block is the permission
+    # set handed to the generator (caller/callee inheritance).
+    # #VERIFY: keep these scoped to this job only; confirm no other job requests
+    # id-token: write and that the generator ref stays pinned to the v2.1.0 SHA.
     permissions:
       actions: read
       id-token: write
       contents: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@f7dd8c54c2067bafc12ca7a55595d5ee9b75204a  # v2.1.0
+    with:
+      base64-subjects: ${{ needs.build.outputs.hashes }}
+      upload-assets: true
+      upload-tag-name: ${{ github.ref_name }}
+      provenance-name: multiple.intoto.jsonl

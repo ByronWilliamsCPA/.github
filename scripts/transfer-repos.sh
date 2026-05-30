@@ -11,6 +11,28 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Parse arguments
+DRY_RUN=false
+for arg in "$@"; do
+    case "$arg" in
+        --dry-run)
+            DRY_RUN=true
+            ;;
+        -h|--help)
+            echo "Usage: $0 [--dry-run]"
+            echo ""
+            echo "  --dry-run   List the repositories that would be transferred,"
+            echo "              then exit without transferring anything."
+            exit 0
+            ;;
+        *)
+            echo "Unknown argument: $arg" >&2
+            echo "Usage: $0 [--dry-run]" >&2
+            exit 1
+            ;;
+    esac
+done
+
 echo -e "${BLUE}📦 Repository Transfer Tool${NC}"
 echo "============================"
 echo ""
@@ -85,6 +107,12 @@ echo "  • GitHub redirects old URLs for 90+ days"
 echo "  • You must be an owner of $ORG_NAME"
 echo ""
 
+if [ "$DRY_RUN" = true ]; then
+    echo -e "${YELLOW}🧪 Dry run enabled: no repositories will be transferred.${NC}"
+    echo "The ${#REPO_ARRAY[@]} repositories listed above would be transferred to $ORG_NAME."
+    exit 0
+fi
+
 read -rp "Transfer all repos listed above? (y/N): " CONFIRM_ALL
 echo ""
 
@@ -108,8 +136,9 @@ for repo in "${REPO_ARRAY[@]}"; do
 
     printf "  %-50s ... " "$repo"
 
-    # Attempt transfer using GitHub API
-    if gh api "repos/$FULL_REPO/transfer" -X POST -f new_owner="$ORG_NAME" &>/dev/null; then
+    # Attempt transfer using GitHub API. Capture stdout and stderr together so
+    # a failure surfaces the actual API error instead of a bare red X.
+    if transfer_output=$(gh api "repos/$FULL_REPO/transfer" -X POST -f new_owner="$ORG_NAME" 2>&1); then
         # Wait briefly and verify transfer completed
         sleep 1
         if gh api "repos/$ORG_NAME/$repo" &>/dev/null; then
@@ -122,6 +151,7 @@ for repo in "${REPO_ARRAY[@]}"; do
         fi
     else
         echo -e "${RED}❌${NC}"
+        printf '      %s\n' "${transfer_output}"
         FAILED=$((FAILED + 1))
         FAILED_REPOS+=("$repo")
     fi
