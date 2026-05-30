@@ -29,6 +29,12 @@ jobs:
   build:
     name: Build Package
     runs-on: ubuntu-latest
+    # #ASSUME: the build job only reads the repo and uploads artifacts; it needs
+    # no write scopes. Declaring contents: read here keeps it from inheriting
+    # id-token: write / contents: write from the top-level block.
+    # #VERIFY: re-check if a future build step needs to push tags or attest.
+    permissions:
+      contents: read
     outputs:
       hashes: ${{ steps.hash.outputs.hashes }}
 
@@ -69,12 +75,19 @@ jobs:
   # Generate SLSA provenance
   #
   # The SLSA generator is called directly here, not via the org reusable
-  # python-slsa.yml. GitHub Actions prohibits nested reusable workflow calls,
-  # so a template cannot call python-slsa.yml (which itself calls the slsa
-  # generator). Calling the generator directly keeps the call one level deep.
+  # python-slsa.yml. That reusable workflow exposes only `on: workflow_dispatch`
+  # and has no `workflow_call` trigger, so it cannot be loaded via `uses:` from
+  # this template. Calling the generator directly is the path that works (nesting
+  # depth is not the issue; GitHub permits up to four levels of reusable calls).
   provenance:
     name: Generate Provenance
     needs: build
+    # #CRITICAL: id-token: write lets this job mint the OIDC token that signs the
+    # SLSA provenance; contents: write uploads the attestation to the release. As
+    # the caller of an external reusable workflow, this block is the permission
+    # set handed to the generator (caller/callee inheritance).
+    # #VERIFY: keep these scoped to this job only; confirm no other job requests
+    # id-token: write and that the generator ref stays pinned to the v2.1.0 SHA.
     permissions:
       actions: read
       id-token: write
