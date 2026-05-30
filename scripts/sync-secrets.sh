@@ -100,13 +100,16 @@ for repo in "${REPO_ARRAY[@]}"; do
     FULL_REPO="$USERNAME/$repo"
     printf "  %-50s ... " "$repo"
 
-    if gh secret set "$SECRET_NAME" \
+    # Capture stderr so a failure surfaces the gh error. The secret value is
+    # passed via --body and is not echoed by gh on error.
+    if secret_output=$(gh secret set "$SECRET_NAME" \
         --repo "$FULL_REPO" \
-        --body "$SECRET_VALUE" 2>/dev/null; then
+        --body "$SECRET_VALUE" 2>&1); then
         echo -e "${GREEN}✅${NC}"
         SUCCESS=$((SUCCESS + 1))
     else
         echo -e "${RED}❌${NC}"
+        echo "      ${secret_output}"
         FAILED=$((FAILED + 1))
         FAILED_REPOS+=("$repo")
     fi
