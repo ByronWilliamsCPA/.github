@@ -62,11 +62,25 @@ jobs:
           restore-keys: |
             pre-commit-${{ runner.os }}-
 
+      - name: Set up uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b  # v8.1.0
+
+      - name: Create virtual environment
+        # #CRITICAL: uv pip install requires an existing .venv (issue #106).
+        # #VERIFY: `uv venv` must run before the install step.
+        run: uv venv
+
+      # Pin pre-commit to a resolved version and install with --no-build so the
+      # supply chain is locked (githubactions:S8541/S8544), matching the
+      # `uv pip install --no-build 'pkg==version'` pattern used elsewhere in this
+      # repo. Renovate (pep621/pip managers) bumps the pin.
       - name: Install pre-commit
-        run: python -m pip install --upgrade pre-commit
+        run: uv pip install --no-build 'pre-commit==4.6.0'
 
       # TruffleHog is not installed on the runner; that hook self-skips via its
       # own `command -v trufflehog` guard. commitizen is a commit-msg-stage hook
-      # and does not run under the default pre-commit stage used here.
+      # and does not run under the default pre-commit stage used here. pre-commit
+      # is invoked from the venv directly rather than via `uv run` (no project
+      # pyproject.toml exists in this repo).
       - name: Run pre-commit
-        run: pre-commit run --all-files --show-diff-on-failure
+        run: .venv/bin/pre-commit run --all-files --show-diff-on-failure
