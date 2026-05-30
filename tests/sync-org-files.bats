@@ -74,7 +74,9 @@ STUB
   assert_success
   assert_output --partial "All files synced"
   assert [ -f "$WORKDIR/CODE_OF_CONDUCT.md" ]
+  # REUSE-IgnoreStart -- the literal tag below is test data, not this file's license
   run grep -q "SPDX-License-Identifier: MIT" "$WORKDIR/CODE_OF_CONDUCT.md"
+  # REUSE-IgnoreEnd
   assert_success
   run grep -q "HELLO PAYLOAD" "$WORKDIR/CODE_OF_CONDUCT.md"
   assert_success
