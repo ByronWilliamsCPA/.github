@@ -1,6 +1,8 @@
 # Codecov configuration for ByronWilliamsCPA/.github
-# This repo has no Python package; coverage data is uploaded by downstream callers
-# of python-codecov.yml.
+# This repo has no Python package and uploads no coverage of its own, so the
+# status checks below are marked informational: they report targets but never
+# block a PR on coverage that is never produced here. The 80/90 targets are kept
+# as the documented defaults this org expects of downstream Python repos.
 
 coverage:
   status:
@@ -8,10 +10,12 @@ coverage:
       default:
         target: 80%
         threshold: 2%
+        informational: true
     patch:
       default:
         target: 90%
         threshold: 2%
+        informational: true
 
 comment:
   layout: reach,diff,flags,files
