@@ -126,7 +126,7 @@ if [[ "$MODE" == "--all" || "$MODE" == "--local" ]]; then
 
         echo -e "${GREEN}📊 Local Images Summary:${NC}"
         echo "  Total Images: $image_count"
-        echo "  Total Size: $(bytes_to_human $total_size) (${total_gb}GB)"
+        echo "  Total Size: $(bytes_to_human "$total_size") (${total_gb}GB)"
         echo ""
 
         # GHCR Cost Calculation
