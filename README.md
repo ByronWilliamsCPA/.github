@@ -125,6 +125,7 @@ jobs:
 ### Documentation
 
 - **[USAGE_EXAMPLES.md](USAGE_EXAMPLES.md)** - Detailed usage examples
+- **[docs/python-versions.md](docs/python-versions.md)** - Python version policy (single source of truth, enforced in CI)
 - **[QLTY_INTEGRATION.md](QLTY_INTEGRATION.md)** - Qlty Cloud integration guide
 - **[PYPI_WORKFLOW_ANALYSIS.md](PYPI_WORKFLOW_ANALYSIS.md)** - PyPI workflow analysis & migration
 - **[docs/workflows/](docs/workflows/)** - Workflow-specific documentation
