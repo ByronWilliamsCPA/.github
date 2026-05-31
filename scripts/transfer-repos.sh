@@ -69,7 +69,7 @@ gh api user/orgs --jq '.[] | "  - \(.login)"'
 echo ""
 
 read -rp "Target organization name: " ORG_NAME
-if [ -z "$ORG_NAME" ]; then
+if [[ -z "$ORG_NAME" ]]; then
     echo -e "${RED}❌ Organization name required${NC}"
     exit 1
 fi
@@ -84,7 +84,7 @@ echo ""
 echo "🔍 Finding Python repositories..."
 REPOS=$(gh repo list "$USERNAME" --limit 100 --json name,primaryLanguage -q '.[] | select(.primaryLanguage.name == "Python") | .name')
 
-if [ -z "$REPOS" ]; then
+if [[ -z "$REPOS" ]]; then
     echo -e "${RED}❌ No Python repositories found${NC}"
     exit 1
 fi
@@ -107,7 +107,7 @@ echo "  • GitHub redirects old URLs for 90+ days"
 echo "  • You must be an owner of $ORG_NAME"
 echo ""
 
-if [ "$DRY_RUN" = true ]; then
+if [[ "$DRY_RUN" = true ]]; then
     echo -e "${YELLOW}🧪 Dry run enabled: no repositories will be transferred.${NC}"
     echo "The ${#REPO_ARRAY[@]} repositories listed above would be transferred to $ORG_NAME."
     exit 0
@@ -161,11 +161,11 @@ echo ""
 echo "============================"
 echo -e "${GREEN}✅ Transferred: $SUCCESS/${#REPO_ARRAY[@]}${NC}"
 
-if [ $SKIPPED -gt 0 ]; then
+if [[ $SKIPPED -gt 0 ]]; then
     echo -e "${YELLOW}⏭️  Skipped: $SKIPPED/${#REPO_ARRAY[@]}${NC}"
 fi
 
-if [ $FAILED -gt 0 ]; then
+if [[ $FAILED -gt 0 ]]; then
     echo -e "${RED}❌ Failed: $FAILED/${#REPO_ARRAY[@]}${NC}"
     echo ""
     echo "Failed repositories:"
@@ -183,7 +183,7 @@ echo ""
 echo -e "${BLUE}Done!${NC}"
 echo ""
 
-if [ $SUCCESS -gt 0 ]; then
+if [[ $SUCCESS -gt 0 ]]; then
     echo -e "${GREEN}Next steps:${NC}"
     echo "  1. Add organization-level secrets:"
     echo "     gh secret set QLTY_TOKEN --org $ORG_NAME --visibility all"

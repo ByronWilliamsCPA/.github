@@ -45,7 +45,7 @@ echo ""
 echo "🔍 Finding Python repositories..."
 REPOS=$(gh repo list "$USERNAME" --limit 100 --json name,primaryLanguage -q '.[] | select(.primaryLanguage.name == "Python") | .name')
 
-if [ -z "$REPOS" ]; then
+if [[ -z "$REPOS" ]]; then
     echo -e "${RED}❌ No Python repositories found${NC}"
     echo ""
     echo "This script only syncs secrets to Python repositories."
@@ -60,7 +60,7 @@ echo ""
 
 # Prompt for secret name
 read -rp "Secret name (e.g., QLTY_TOKEN, CODECOV_TOKEN): " SECRET_NAME
-if [ -z "$SECRET_NAME" ]; then
+if [[ -z "$SECRET_NAME" ]]; then
     echo -e "${RED}❌ Secret name required${NC}"
     exit 1
 fi
@@ -70,7 +70,7 @@ echo -n "Secret value (hidden): "
 read -rs SECRET_VALUE
 echo ""
 
-if [ -z "$SECRET_VALUE" ]; then
+if [[ -z "$SECRET_VALUE" ]]; then
     echo -e "${RED}❌ Secret value required${NC}"
     exit 1
 fi
@@ -125,7 +125,7 @@ echo ""
 echo "=========================="
 echo -e "${GREEN}✅ Success: $SUCCESS/${#REPO_ARRAY[@]}${NC}"
 
-if [ $FAILED -gt 0 ]; then
+if [[ $FAILED -gt 0 ]]; then
     echo -e "${RED}❌ Failed: $FAILED/${#REPO_ARRAY[@]}${NC}"
     echo ""
     echo "Failed repositories:"
