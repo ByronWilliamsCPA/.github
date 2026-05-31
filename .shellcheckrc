@@ -9,3 +9,7 @@
 # (SC2129 redirect grouping, SC2126 grep+wc) which are mostly preference
 # rather than safety. Real warnings and errors still fire.
 severity=warning
+
+# Resolve `source` directives relative to the script's own directory, matching
+# the qlty shellcheck config (.qlty/configs/.shellcheckrc).
+source-path=SCRIPTDIR

@@ -1,5 +1,7 @@
 # PyPI Publishing Workflow Analysis & Migration
 
+> **Historical working note.** Point-in-time record from an earlier implementation phase, kept for provenance and not maintained as current reference. For current guidance see the repository README and `docs/workflows/`.
+
 **Status**: ✅ Complete
 **Date**: 2025-12-06
 

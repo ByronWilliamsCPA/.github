@@ -1,5 +1,7 @@
 # Phase 1 Implementation Complete ✅
 
+> **Historical working note.** Point-in-time record from an earlier implementation phase, kept for provenance and not maintained as current reference. For current guidance see the repository README and `docs/workflows/`.
+
 **Date**: 2025-01-07
 **Scope**: Critical Quick Wins for Org Workflow Optimization
 **Status**: COMPLETE

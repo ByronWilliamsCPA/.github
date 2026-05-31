@@ -1,1 +1,5 @@
+# Kept aligned with the repo-root .shellcheckrc so qlty and CI gate at the
+# same level. severity=warning silences info/style-level findings; real
+# warnings and errors still fire.
+severity=warning
 source-path=SCRIPTDIR
