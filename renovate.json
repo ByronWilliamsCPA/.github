@@ -82,8 +82,7 @@
   "enabledManagers": [
     "pep621",
     "pip_requirements",
-    "github-actions",
-    "pre-commit"
+    "github-actions"
   ],
   "separateMajorMinor": true,
   "separateMinorPatch": false,
