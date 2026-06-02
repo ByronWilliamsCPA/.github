@@ -2,8 +2,9 @@
 #
 # This is the repo's own CI (it runs fsfe/reuse-action on this repo). It is
 # distinct from the reusable export python-reuse.yml, which downstream repos
-# call. Convention in this directory: python-*.yml files are reusable workflows
-# (name suffix "(Reusable)"); the unprefixed files are this repo's self-checks.
+# call. Convention in this directory: most python-*.yml files are reusable
+# workflows (name suffix "(Reusable)"), though a few (e.g. python-slsa.yml) are
+# workflow_dispatch templates; the unprefixed files are this repo's self-checks.
 #
 # Validates REUSE 3.0 specification compliance for license management
 #

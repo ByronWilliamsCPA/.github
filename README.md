@@ -79,7 +79,7 @@ Calling repos must provide:
 - **[Fuzzing](docs/workflows/python-fuzzing.md)** (`python-fuzzing.yml`) - ClusterFuzzLite continuous fuzzing for security vulnerabilities
 - **[Performance Regression](docs/workflows/python-performance-regression.md)** (`python-performance-regression.yml`) - Automated performance testing with baseline comparison
 - **[SonarCloud](docs/workflows/python-sonarcloud.md)** (`python-sonarcloud.yml`) - Code quality and security analysis with SonarCloud
-- **[Qlty Coverage](.github/workflows/python-qlty-coverage.yml)** (`python-qlty-coverage.yml`) - Coverage tracking with Qlty Cloud
+- **[Qlty Coverage](docs/workflows/python-qlty-coverage.md)** (`python-qlty-coverage.yml`) - Coverage tracking with Qlty Cloud
 - **[Documentation](USAGE_EXAMPLES.md#documentation)** (`python-docs.yml`) - MkDocs build and GitHub Pages deployment
 - **[Releases](USAGE_EXAMPLES.md#releases)** (`python-release.yml`) - Signed releases with SLSA provenance and SBOM
 - **[Codecov Coverage Upload](.github/workflows/python-codecov.yml)** (`python-codecov.yml`) - Securely uploads coverage reports to Codecov without re-running tests
