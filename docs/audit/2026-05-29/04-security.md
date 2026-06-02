@@ -36,9 +36,9 @@ CVE: none claimed.
 
 ---
 
-### Clean sub-areas (one line each)
+## Clean sub-areas (one line each)
 
-- Hardcoded secrets: none. Broad grep for AWS keys (`AKIA`), PEM/`BEGIN PRIVATE KEY`, `ghp_`/`github_pat_`, `xox*`, `AIza*`, inline passwords across all tracked files returned nothing (all `secrets.*` references are `${{ secrets.NAME }}` GitHub expressions).
+- Hardcoded secrets: none. Broad grep for AWS keys (`AKIA`), PEM private-key headers, `ghp_`/`github_pat_`, `xox*`, `AIza*`, inline passwords across all tracked files returned nothing (all `secrets.*` references are `${{ secrets.NAME }}` GitHub expressions).
 - `.secrets.baseline`: clean, no drift. 6 entries across 2 files (`python-scorecard.yml:106` Secret Keyword; `.pre-commit-config.yaml:8/25/34/43/52` Hex High Entropy String); both files exist, line counts (211 / 92) comfortably cover all referenced line numbers, all entries `is_verified=false` and are pre-commit-hook revision SHAs / pragma-allowlisted token-presence checks, not real secrets.
 - `.trufflehog-exclude`: minimal and reasonable scope (`CHANGELOG.md`, `\.submodules/`); does not mask source or workflow files.
 - `checksums.txt`: 10 entries, community-health docs only; not a secret surface.

@@ -46,7 +46,7 @@ Recommendation: Either wire it into an explicit unpinned-detection test or remov
 
 **CQ-09: Idiom inconsistency, `[ ]` vs `[[ ]]` and `echo` vs `printf`**
 Severity: Low. Effort: S.
-Evidence: The two tested scripts use `[[ ]]` throughout; the older scripts mix in `[ ]` (`transfer-repos.sh:50,65,134,138,156`; `sync-secrets.sh:48,63,73,119`; `calculate-image-storage.sh:163,169,261,294`; `regenerate-checksums.sh:33,37`). No backticks in code (all `` ` `` hits are comments/heredoc text). No `read` without `-r`. Em-dash usage: none in scripts (the repo's own `check-no-em-dash.sh` hook enforces this).
+Evidence: The two tested scripts use `[[ ]]` throughout; the older scripts mix in `[ ]` (`transfer-repos.sh:50,65,134,138,156`; `sync-secrets.sh` (lines 48, 63, 73, 119); `calculate-image-storage.sh:163,169,261,294`; `regenerate-checksums.sh:33,37`). No backticks in code (all `` ` `` hits are comments/heredoc text). No `read` without `-r`. Em-dash usage: none in scripts (the repo's own `check-no-em-dash.sh` hook enforces this).
 Recommendation: Cosmetic; standardize on `[[ ]]` opportunistically when these scripts are next touched. No correctness impact (all current `[ ]` operands are quoted).
 
 **Clean sub-areas (one line each):**
