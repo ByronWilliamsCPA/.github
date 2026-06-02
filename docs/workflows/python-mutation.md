@@ -22,7 +22,7 @@ This workflow can be long-running; schedule it weekly rather than on every push.
 ```yaml
 jobs:
   mutation:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-mutation.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-mutation.yml@v1
     with:
       mutation-threshold: 70
       fail-under-threshold: true

@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-30
 **Status:** Active
-**ADR:** [ADR-001](adr/adr-001-workflow-security-remediation-delivery.md)
+**ADR:** [ADR-002](adr/adr-002-workflow-security-remediation-delivery.md)
 **Source Spec:** `docs/superpowers/specs/2026-04-30-workflow-security-architecture-remediation-design.md`
 
 ---

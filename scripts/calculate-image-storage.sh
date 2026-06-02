@@ -126,7 +126,7 @@ if [[ "$MODE" == "--all" || "$MODE" == "--local" ]]; then
 
         echo -e "${GREEN}📊 Local Images Summary:${NC}"
         echo "  Total Images: $image_count"
-        echo "  Total Size: $(bytes_to_human $total_size) (${total_gb}GB)"
+        echo "  Total Size: $(bytes_to_human "$total_size") (${total_gb}GB)"
         echo ""
 
         # GHCR Cost Calculation
@@ -160,13 +160,13 @@ if [[ "$MODE" == "--all" || "$MODE" == "--repo" ]]; then
 
     # Find all docker-compose files
     compose_files=()
-    if [ -d "services" ]; then
+    if [[ -d "services" ]]; then
         while IFS= read -r file; do
             compose_files+=("$file")
         done < <(find services -name "docker-compose.yml" -o -name "docker-compose.yaml")
     fi
 
-    if [ ${#compose_files[@]} -eq 0 ]; then
+    if [[ ${#compose_files[@]} -eq 0 ]]; then
         echo -e "${YELLOW}⚠️  No docker-compose files found in services/ directory${NC}"
     else
         echo -e "${GREEN}Found ${#compose_files[@]} docker-compose files${NC}"
@@ -178,7 +178,7 @@ if [[ "$MODE" == "--all" || "$MODE" == "--repo" ]]; then
         for file in "${compose_files[@]}"; do
             while IFS= read -r image; do
                 # Skip variable substitutions and empty lines
-                if [[ ! "$image" =~ \$\{ ]] && [ -n "$image" ]; then
+                if [[ ! "$image" =~ \$\{ ]] && [[ -n "$image" ]]; then
                     unique_images["$image"]=1
                 fi
             done < <(awk '/^\s*image:/ {sub(/^\s*image:\s*/, ""); sub(/#.*/, ""); gsub(/[[:space:]]/, ""); if (length > 0) print}' "$file" || true)
@@ -258,7 +258,7 @@ echo "  • Mirror hardened images (dhi.io, cgr.dev) to public GHCR repos"
 echo "  • Only use private repos for proprietary application images"
 echo ""
 echo -e "${YELLOW}📊 Based on your current images:${NC}"
-if [ -n "${total_mb:-}" ]; then
+if [[ -n "${total_mb:-}" ]]; then
     images_to_mirror=$((dhi_count + chainguard_count + distroless_count))
     echo "  • Images to mirror to GHCR: ~${images_to_mirror}"
     echo "  • Recommended: Use PUBLIC GHCR repos (FREE)"
@@ -291,7 +291,7 @@ echo "   • Auto-sync from cgr.dev → ghcr.io (public)"
 echo "   • Auto-sync from gcr.io → ghcr.io (public)"
 echo ""
 echo -e "${GREEN}3. Cost Savings:${NC}"
-if [ -n "${monthly_cost:-}" ] && (( $(echo "$monthly_cost > 0" | bc -l) )); then
+if [[ -n "${monthly_cost:-}" ]] && (( $(echo "$monthly_cost > 0" | bc -l) )); then
     yearly_savings=$(echo "$monthly_cost * 12" | bc -l)
     printf "   • Potential annual savings: \$%.2f (using public vs private)\n" "$yearly_savings"
 fi

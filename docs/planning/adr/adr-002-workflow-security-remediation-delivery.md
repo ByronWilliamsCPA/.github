@@ -1,4 +1,4 @@
-# ADR-001: Workflow Security Remediation Delivery Strategy
+# ADR-002: Workflow Security Remediation Delivery Strategy
 
 **Status:** Accepted
 **Date:** 2026-04-30

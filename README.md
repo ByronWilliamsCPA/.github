@@ -92,6 +92,10 @@ Calling repos must provide:
 - **[SBOM](.github/workflows/python-sbom.yml)** (`python-sbom.yml`) - Software Bill of Materials generation and dependency vulnerability scanning
 - **[OpenSSF Scorecard](.github/workflows/python-scorecard.yml)** (`python-scorecard.yml`) - Repository security health scoring via OpenSSF Scorecard
 - **[Supplemental Checks](.github/workflows/python-supplemental-checks.yml)** (`python-supplemental-checks.yml`) - Optional PR checks including link validation and changelog enforcement
+- **[Standard Stack](.github/workflows/python-standard-stack.yml)** (`python-standard-stack.yml`) - Bundled standard checks for typical Python repositories
+- **[Pre-commit](.github/workflows/python-precommit.yml)** (`python-precommit.yml`) - Runs pre-commit hooks as a reusable workflow
+- **[SLSA Provenance](.github/workflows/python-slsa.yml)** (`python-slsa.yml`) - SLSA build provenance attestation for release artifacts
+- **[PR Validation](.github/workflows/python-pr-validation.yml)** (`python-pr-validation.yml`) - Deprecated; migrate to `python-ci.yml`
 
 ### Key Features
 
@@ -121,6 +125,7 @@ jobs:
 ### Documentation
 
 - **[USAGE_EXAMPLES.md](USAGE_EXAMPLES.md)** - Detailed usage examples
+- **[docs/python-versions.md](docs/python-versions.md)** - Python version policy (single source of truth, enforced in CI)
 - **[QLTY_INTEGRATION.md](QLTY_INTEGRATION.md)** - Qlty Cloud integration guide
 - **[PYPI_WORKFLOW_ANALYSIS.md](PYPI_WORKFLOW_ANALYSIS.md)** - PyPI workflow analysis & migration
 - **[docs/workflows/](docs/workflows/)** - Workflow-specific documentation

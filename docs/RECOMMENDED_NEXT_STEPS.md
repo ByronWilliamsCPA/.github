@@ -1,5 +1,7 @@
 # Recommended Next Steps for Org Workflow Enhancements
 
+> **Historical working note.** Point-in-time record from an earlier implementation phase, kept for provenance and not maintained as current reference. For current guidance see the repository README and `docs/workflows/`.
+
 **Date**: 2025-01-07
 **Priority**: HIGH
 **Estimated Total Effort**: 4 hours for Phase 1 (30-40% cost reduction)

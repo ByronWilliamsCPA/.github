@@ -156,6 +156,26 @@ Continuous code quality monitoring:
 
 ---
 
+## Template architecture: thin callers vs inline
+
+Templates come in two shapes:
+
+- Thin caller: the template's job uses the org reusable workflow at `@v1`, so the implementation lives once in `.github/workflows/python-<name>.yml`. `python-scorecard.yml` is the reference example.
+- Inline: the template implements the steps directly.
+
+Convention: prefer the thin-caller shape so logic is not duplicated between the gallery template and its reusable namesake. These templates are still inline and are tracked for conversion: `python-ci`, `python-security-analysis`, `python-docs`, `python-publish-pypi`, `python-release`, `python-sonarcloud`.
+
+The conversion is not mechanical. Validate three things per template on a branch where `actionlint` and CI can run before converting:
+
+- Secret interface. The reusable may declare no `workflow_call.secrets` block (`python-ci.yml` is one), in which case a caller that passes named secrets fails to validate; such callers must use `secrets: inherit` instead. The secret names a caller passes must match exactly what the reusable declares.
+- Cookiecutter layer. `python-docs`, `python-publish-pypi`, `python-release`, and `python-sonarcloud` embed `{{ cookiecutter.* }}` placeholders, so they are generated, not copied verbatim. A thin caller must keep those placeholders in the `with:` inputs and the generation pipeline must still resolve them.
+- Permissions. A caller job that uses a reusable must grant at least the permissions the reusable's jobs request; carry over the template's top-level `permissions:` to the caller job.
+
+Two templates stay inline on purpose and must not be converted to thin callers:
+
+- `python-slsa.yml`: GitHub Actions prohibits nested reusable workflow calls. The SLSA generator is itself a reusable workflow, so this template calls it directly (one level deep). Calling the org `python-slsa.yml` reusable would be a nested call and fail to load.
+- `python-codecov.yml`: it uses a `workflow_run` trigger to download coverage artifacts from a separate CI run by run-id, which avoids pwn-request code execution. The reusable `python-codecov.yml` is a same-run `workflow_call` job (`needs: test`) with a different artifact model, so a thin-caller swap would break cross-run artifact download.
+
 ## How to Use These Templates
 
 ### Option 1: Through GitHub UI
@@ -240,4 +260,4 @@ These templates are maintained centrally in the organization's `.github` reposit
 
 ---
 
-_Last updated: November 16, 2025_
+_Last updated: May 30, 2026_

@@ -27,7 +27,7 @@ on:
 
 jobs:
   ci:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-standard-stack.yml@main
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-standard-stack.yml@v1
     with:
       python-version: "3.12"
     secrets: inherit

@@ -30,11 +30,11 @@ FILES=(
 # Verify every file in the list exists before writing the manifest.
 missing=()
 for f in "${FILES[@]}"; do
-  if [ ! -f "$f" ]; then
+  if [[ ! -f "$f" ]]; then
     missing+=("$f")
   fi
 done
-if [ "${#missing[@]}" -gt 0 ]; then
+if [[ "${#missing[@]}" -gt 0 ]]; then
   echo "ERROR: The following files are listed but missing from the working tree:" >&2
   printf '  %s\n' "${missing[@]}" >&2
   exit 1

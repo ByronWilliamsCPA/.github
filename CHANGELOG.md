@@ -6,7 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 This project uses date-based version headers (e.g. `[2025-01-07]`) rather than
 semver because it is a shared workflow library with continuous deployment; there
-are no numbered releases.
+are no numbered point releases. Consumers pin the moving `v1` tag, which tracks
+the latest reviewed commit on `main` and is re-pointed as changes land.
 
 ## [Unreleased]
 
