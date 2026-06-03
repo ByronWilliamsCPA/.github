@@ -7,7 +7,9 @@
 # Two operating modes controlled by the check-all input:
 #
 #   Diff mode (default, check-all: false)
-#     Analyzes only files changed relative to the upstream ref.
+#     Analyzes only files changed relative to the upstream ref. Requires the
+#     upstream input to be set (e.g. origin/main); the gate fails fast when
+#     neither check-all nor upstream is provided.
 #     Use for PR gates to catch newly introduced issues.
 #
 #   Full scan mode (check-all: true)
@@ -23,7 +25,7 @@
 #   jobs:
 #     qlty-gate:
 #       if: github.event_name == 'pull_request'
-#       uses: ByronWilliamsCPA/.github/.github/workflows/python-qlty-gate.yml@<sha>
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-qlty-gate.yml@v1
 #       with:
 #         fail-level: medium
 #         upstream: origin/${{ github.base_ref }}
@@ -35,7 +37,7 @@
 #   jobs:
 #     qlty-gate:
 #       if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-#       uses: ByronWilliamsCPA/.github/.github/workflows/python-qlty-gate.yml@<sha>
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-qlty-gate.yml@v1
 #       with:
 #         fail-level: high
 #         check-all: true
@@ -76,7 +78,7 @@ on:
       upstream:
         description: >
           Base ref for diff comparison in diff mode, e.g. origin/main.
-          Ignored when check-all is true.
+          Required when check-all is false; ignored when check-all is true.
         type: string
         required: false
         default: ''
@@ -87,12 +89,19 @@ on:
         required: false
         default: 15
 
+# #CRITICAL: deny-by-default at workflow scope. A reusable workflow inherits no
+# token scope implicitly; each job below requests the minimum it needs, and a
+# caller can never grant this workflow more than the caller's own token holds.
+# #VERIFY: confirm no job added later depends on an implicit (unset) permission.
 permissions: {}
 
 jobs:
   gate:
     name: Qlty Gate
     runs-on: ubuntu-latest
+    # #ASSUME: read-only checkout is the only access qlty check needs; it reads
+    # source files and writes findings to the step summary, never to the repo or API.
+    # #VERIFY: widen to security-events: write only if a future step uploads SARIF.
     permissions:
       contents: read
     timeout-minutes: ${{ inputs.timeout-minutes }}
@@ -107,6 +116,10 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
         with:
           fetch-depth: 0
+          # #ASSUME: qlty check needs no Git credentials; disabling persistence keeps
+          # GITHUB_TOKEN out of .git/config while scanning checked-out code.
+          # #VERIFY: re-enable only if a future step pushes or calls the API.
+          persist-credentials: false
 
       - name: Install Qlty CLI
         uses: qltysh/qlty-action/install@fd52dc852530a708d68c3b7342f8d33d1df4cd55  # v2.2.1
@@ -118,6 +131,19 @@ jobs:
           NO_FAIL: ${{ inputs.no-fail }}
           UPSTREAM: ${{ inputs.upstream }}
         run: |
+          # #EDGE: diff mode needs an explicit upstream ref. Without --all or
+          # --upstream, qlty check's scan scope is ambiguous, so fail fast.
+          if [ "$CHECK_ALL" != "true" ] && [ -z "$UPSTREAM" ]; then
+            echo "::error::Either check-all must be true or upstream must be set for diff mode."
+            exit 1
+          fi
+          case "$FAIL_LEVEL" in
+            note | fmt | low | medium | high) ;;
+            *)
+              echo "::error::Invalid fail-level '$FAIL_LEVEL'. Must be one of: note, fmt, low, medium, high."
+              exit 1
+              ;;
+          esac
           args=("--fail-level" "$FAIL_LEVEL")
           if [ "$CHECK_ALL" = "true" ]; then
             args+=("--all")
@@ -133,6 +159,7 @@ jobs:
           FAIL_LEVEL: ${{ inputs.fail-level }}
           CHECK_ALL: ${{ inputs.check-all }}
           NO_FAIL: ${{ inputs.no-fail }}
+          UPSTREAM: ${{ inputs.upstream }}
         run: |
           {
             echo "## Qlty Gate"
@@ -146,4 +173,5 @@ jobs:
             fi
             echo "| Fail level | \`$FAIL_LEVEL\` |"
             echo "| Informational only | \`$NO_FAIL\` |"
+            [ -n "$UPSTREAM" ] && echo "| Upstream ref | \`$UPSTREAM\` |"
           } >> "$GITHUB_STEP_SUMMARY"
