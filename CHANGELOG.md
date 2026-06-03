@@ -26,6 +26,13 @@ the latest reviewed commit on `main` and is re-pointed as changes land.
   must use job id `qlty-gate` so the resulting `qlty-gate / Qlty Gate` CheckRun
   matches the `required_status_checks` entry across repos. Documented in
   `docs/workflows/python-qlty-gate.md`.
+- `.github/workflows/qlty.yml`: repo-local caller that wires
+  `python-qlty-gate.yml` into this repo. A `qlty-gate` job runs the diff-mode
+  gate on every PR (`fail-level: medium`), producing the `qlty-gate / Qlty Gate`
+  required check; a `qlty-health` job runs a weekly full-codebase scan (Monday
+  07:00 UTC) plus `workflow_dispatch`, informational only (`no-fail: true`).
+  Carries deny-by-default `permissions: {}` with job-scoped `contents: read` and
+  SHA-pins the reusable workflow.
 - Repo-local `.github/workflows/pre-commit.yml` lint gate (yamllint, markdownlint, the mandatory no-em-dash guard, and secret scans) now runs on every push and PR, closing the gap where these hooks ran only for developers who had run `pre-commit install`. Carries deny-by-default `permissions: {}` and installs pre-commit via the locked `uv pip install --no-build` pattern (not bare pip), satisfying the S8541/S8544 supply-chain gates.
 - Operator scripts: `scripts/transfer-repos.sh` gains `--dry-run` (and `--help`) and surfaces the underlying `gh` error on failure instead of discarding it; `scripts/sync-secrets.sh` surfaces `gh` errors with a `GH_DEBUG`/`GH_PAGER` guard so a secret cannot leak into the failure output. New Bats suites cover `transfer-repos.sh`, `sync-secrets.sh`, and `sync_org_files.sh`.
 - `python-sbom.yml`: OSV-Scanner runs alongside Trivy and Grype as a third
