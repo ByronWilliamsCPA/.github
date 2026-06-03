@@ -1,0 +1,149 @@
+# ===========================================================================
+# Reusable Qlty Gate Workflow
+# ===========================================================================
+# Runs qlty check as a blocking CI gate and optionally as an informational
+# full-codebase health scan.
+#
+# Two operating modes controlled by the check-all input:
+#
+#   Diff mode (default, check-all: false)
+#     Analyzes only files changed relative to the upstream ref.
+#     Use for PR gates to catch newly introduced issues.
+#
+#   Full scan mode (check-all: true)
+#     Analyzes the entire codebase via --all.
+#     Use for scheduled health scans on the default branch.
+#
+# The resulting CheckRun is named "{caller-job-id} / Qlty Gate".
+# Callers must use the job id "qlty-gate" so the required_status_checks
+# entry "qlty-gate / Qlty Gate" matches consistently across repos.
+#
+# Minimal caller example (PR gate):
+#
+#   jobs:
+#     qlty-gate:
+#       if: github.event_name == 'pull_request'
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-qlty-gate.yml@<sha>
+#       with:
+#         fail-level: medium
+#         upstream: origin/${{ github.base_ref }}
+#       permissions:
+#         contents: read
+#
+# Minimal caller example (weekly health scan):
+#
+#   jobs:
+#     qlty-gate:
+#       if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-qlty-gate.yml@<sha>
+#       with:
+#         fail-level: high
+#         check-all: true
+#         no-fail: true
+#       permissions:
+#         contents: read
+# ===========================================================================
+
+name: Qlty Gate (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      fail-level:
+        description: >
+          Minimum severity level that triggers a non-zero exit.
+          Options: note, fmt, low, medium, high. Default: medium.
+        type: string
+        required: false
+        default: 'medium'
+
+      check-all:
+        description: >
+          When true, analyze the entire codebase (--all) instead of only
+          changed files. Use for scheduled full health scans.
+        type: boolean
+        required: false
+        default: false
+
+      no-fail:
+        description: >
+          When true, exit 0 regardless of findings. Use for informational
+          scans that should not block workflows.
+        type: boolean
+        required: false
+        default: false
+
+      upstream:
+        description: >
+          Base ref for diff comparison in diff mode, e.g. origin/main.
+          Ignored when check-all is true.
+        type: string
+        required: false
+        default: ''
+
+      timeout-minutes:
+        description: 'Job timeout in minutes'
+        type: number
+        required: false
+        default: 15
+
+permissions: {}
+
+jobs:
+  gate:
+    name: Qlty Gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411  # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Install Qlty CLI
+        uses: qltysh/qlty-action/install@fd52dc852530a708d68c3b7342f8d33d1df4cd55  # v2.2.1
+
+      - name: Run qlty check
+        env:
+          FAIL_LEVEL: ${{ inputs.fail-level }}
+          CHECK_ALL: ${{ inputs.check-all }}
+          NO_FAIL: ${{ inputs.no-fail }}
+          UPSTREAM: ${{ inputs.upstream }}
+        run: |
+          args=("--fail-level" "$FAIL_LEVEL")
+          if [ "$CHECK_ALL" = "true" ]; then
+            args+=("--all")
+          elif [ -n "$UPSTREAM" ]; then
+            args+=("--upstream" "$UPSTREAM")
+          fi
+          [ "$NO_FAIL" = "true" ] && args+=("--no-fail")
+          qlty check "${args[@]}"
+
+      - name: Write job summary
+        if: always()
+        env:
+          FAIL_LEVEL: ${{ inputs.fail-level }}
+          CHECK_ALL: ${{ inputs.check-all }}
+          NO_FAIL: ${{ inputs.no-fail }}
+        run: |
+          {
+            echo "## Qlty Gate"
+            echo ""
+            echo "| Setting | Value |"
+            echo "|---------|-------|"
+            if [ "$CHECK_ALL" = "true" ]; then
+              echo "| Mode | Full scan (\`--all\`) |"
+            else
+              echo "| Mode | Diff only (changed files) |"
+            fi
+            echo "| Fail level | \`$FAIL_LEVEL\` |"
+            echo "| Informational only | \`$NO_FAIL\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
