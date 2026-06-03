@@ -13,6 +13,19 @@ the latest reviewed commit on `main` and is re-pointed as changes land.
 
 ### Added
 
+- `python-qlty-gate.yml`: new reusable workflow that runs `qlty check` as a
+  blocking CI gate. Two modes via the `check-all` input: diff mode (default)
+  analyzes only files changed against the `upstream` ref for PR gates, and full
+  scan mode (`check-all: true`) runs `qlty check --all` for scheduled health
+  scans. Inputs: `fail-level` (default `medium`, validated against
+  `note/fmt/low/medium/high`), `no-fail` (informational runs that always exit 0),
+  `upstream` (required in diff mode; the gate fails fast when neither `check-all`
+  nor `upstream` is set), and `timeout-minutes` (default 15). Carries
+  deny-by-default `permissions: {}` with a job-scoped `contents: read`, sets
+  `persist-credentials: false` on checkout, and SHA-pins all actions. Callers
+  must use job id `qlty-gate` so the resulting `qlty-gate / Qlty Gate` CheckRun
+  matches the `required_status_checks` entry across repos. Documented in
+  `docs/workflows/python-qlty-gate.md`.
 - Repo-local `.github/workflows/pre-commit.yml` lint gate (yamllint, markdownlint, the mandatory no-em-dash guard, and secret scans) now runs on every push and PR, closing the gap where these hooks ran only for developers who had run `pre-commit install`. Carries deny-by-default `permissions: {}` and installs pre-commit via the locked `uv pip install --no-build` pattern (not bare pip), satisfying the S8541/S8544 supply-chain gates.
 - Operator scripts: `scripts/transfer-repos.sh` gains `--dry-run` (and `--help`) and surfaces the underlying `gh` error on failure instead of discarding it; `scripts/sync-secrets.sh` surfaces `gh` errors with a `GH_DEBUG`/`GH_PAGER` guard so a secret cannot leak into the failure output. New Bats suites cover `transfer-repos.sh`, `sync-secrets.sh`, and `sync_org_files.sh`.
 - `python-sbom.yml`: OSV-Scanner runs alongside Trivy and Grype as a third
