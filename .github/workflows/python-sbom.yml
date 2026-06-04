@@ -46,15 +46,20 @@ on:
         type: number
         default: 90
       forbidden-licenses:
-        description: 'JSON array of forbidden SPDX license IDs'
+        description: 'JSON array of forbidden SPDX license IDs. The check also maps free-text license names to copyleft families (GPL, AGPL, LGPL, MPL) so packages declaring a license as a name rather than an SPDX id are still caught.'
         required: false
         type: string
-        default: '["GPL-2.0-only", "GPL-2.0-or-later", "GPL-3.0-only", "GPL-3.0-or-later", "AGPL-3.0-only", "AGPL-3.0-or-later"]'
+        default: '["GPL-2.0-only", "GPL-2.0-or-later", "GPL-3.0-only", "GPL-3.0-or-later", "AGPL-3.0-only", "AGPL-3.0-or-later", "LGPL-2.0-only", "LGPL-2.0-or-later", "LGPL-2.1-only", "LGPL-2.1-or-later", "LGPL-3.0-only", "LGPL-3.0-or-later", "MPL-2.0"]'
       fail-on-forbidden-licenses:
         description: 'Fail workflow on forbidden licenses'
         required: false
         type: boolean
         default: false
+      allowed-packages:
+        description: 'JSON array of package names exempted from the license check. Seed with ubiquitous permissive transitive dependencies whose copyleft classification is a non-issue (e.g. certifi is MPL-2.0 but pulled by requests into virtually every Python project).'
+        required: false
+        type: string
+        default: '["certifi"]'
       trivyignore-path:
         description: 'Path to .trivyignore file for suppressing known CVEs (relative to repo root). DEPRECATED: removed at Trivy cutover (see issue #152).'
         required: false
@@ -194,6 +199,18 @@ jobs:
           fi
           echo "SBOM generated: $(wc -c < "$GITHUB_WORKSPACE/sbom-runtime.cdx.json") bytes"
 
+      # cyclonedx-bom 7.3.0 emits no license entry for packages that declare their
+      # license through the PEP 639 License-Expression field (for example hypothesis),
+      # so those packages are invisible to an SBOM-only license check. pip-licenses
+      # reads installed distribution metadata directly and closes that gap. The
+      # license-compliance job cross-checks this inventory alongside the SBOM.
+      - name: Generate pip-licenses inventory (PEP 639 coverage)
+        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
+        run: |
+          uv pip install --no-build 'pip-licenses==5.5.5'
+          .venv/bin/pip-licenses --format=json --output-file "$GITHUB_WORKSPACE/pip-licenses.json"
+          echo "pip-licenses inventory: $(wc -c < "$GITHUB_WORKSPACE/pip-licenses.json") bytes"
+
       - name: Verify SBOM files before upload
         if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
         run: |
@@ -207,7 +224,9 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: sboms
-          path: ${{ github.workspace }}/sbom-runtime.cdx.json
+          path: |
+            ${{ github.workspace }}/sbom-runtime.cdx.json
+            ${{ github.workspace }}/pip-licenses.json
           retention-days: ${{ inputs.artifact-retention-days }}
           if-no-files-found: error
 
@@ -569,51 +588,129 @@ jobs:
       - name: Check licenses in runtime SBOM
         env:
           FORBIDDEN_LICENSES: ${{ inputs.forbidden-licenses }}
+          ALLOWED_PACKAGES: ${{ inputs.allowed-packages }}
           FAIL_ON_FORBIDDEN: ${{ inputs.fail-on-forbidden-licenses }}
+          # The checker is passed through an env var and run with python -c "$CHECK_SCRIPT".
+          # All inputs reach it via env (no GitHub-expression interpolation inside run:),
+          # which avoids the heredoc-indentation trap and the workflow-injection class.
+          # Improvements over the prior id-only check:
+          #   - reads the CycloneDX id, name, AND expression fields, then maps free-text
+          #     license names to copyleft families (GPL/AGPL/LGPL/MPL), so a package whose
+          #     license is recorded as a name (for example PyMuPDF's
+          #     "GNU AFFERO GPL 3.0 or Artifex Commercial License") is no longer missed;
+          #   - honors a per-package allowlist (allowed-packages input);
+          #   - also reads pip-licenses.json to catch PEP 639 packages that
+          #     cyclonedx-bom 7.3.0 omits from the SBOM entirely.
+          CHECK_SCRIPT: |
+            import json
+            import os
+            import re
+            import sys
+
+            def norm(value):
+                return (value or "").strip()
+
+            def detect_family(text):
+                """Map an SPDX id or free-text license string to a copyleft family."""
+                lowered = (text or "").lower()
+                if re.search(r"\baffero\b", lowered) or re.search(r"\bagpl", lowered):
+                    return "AGPL"
+                if (
+                    re.search(r"\blesser\b", lowered)
+                    or re.search(r"\blgpl", lowered)
+                    or "library general public" in lowered
+                ):
+                    return "LGPL"
+                if re.search(r"\bgpl", lowered) or "gnu general public" in lowered:
+                    return "GPL"
+                if re.search(r"\bmpl\b", lowered) or "mozilla public" in lowered:
+                    return "MPL"
+                return None
+
+            def load_json(path):
+                try:
+                    with open(path) as handle:
+                        return json.load(handle)
+                except FileNotFoundError:
+                    return None
+
+            forbidden = set(json.loads(os.environ.get("FORBIDDEN_LICENSES", "[]")))
+            allowed = {p.lower() for p in json.loads(os.environ.get("ALLOWED_PACKAGES", "[]"))}
+            fail_on = os.environ.get("FAIL_ON_FORBIDDEN", "false").lower() == "true"
+            forbidden_families = {fam for fam in (detect_family(x) for x in forbidden) if fam}
+
+            issues = []
+
+            def check(pkg_name, strings):
+                if pkg_name.lower() in allowed:
+                    return
+                flagged = set()
+                for raw in strings:
+                    text = norm(raw)
+                    if not text:
+                        continue
+                    if text in forbidden:
+                        flagged.add(text)
+                        continue
+                    family = detect_family(text)
+                    if family and family in forbidden_families:
+                        flagged.add(f"{text} [{family}]")
+                for item in sorted(flagged):
+                    issues.append(f"{pkg_name}: {item}")
+
+            sbom = load_json("sbom-runtime.cdx.json")
+            if sbom:
+                for component in sbom.get("components", []):
+                    name = component.get("name", "")
+                    strings = []
+                    for lic in component.get("licenses", []):
+                        license_obj = lic.get("license", {})
+                        strings.append(license_obj.get("id"))
+                        strings.append(license_obj.get("name"))
+                        strings.append(lic.get("expression"))
+                    check(name, strings)
+
+            piplic = load_json("pip-licenses.json")
+            if piplic:
+                for row in piplic:
+                    check(row.get("Name", ""), [row.get("License")])
+
+            issues = sorted(set(issues))
+            if issues:
+                print("WARNING: Found forbidden or copyleft licenses:")
+                for issue in issues:
+                    print(f"  - {issue}")
+                if fail_on:
+                    sys.exit(1)
+            else:
+                print("All licenses compatible")
         run: |
           echo "Checking runtime dependency licenses..."
-          python -c "
-          import json
-          import os
-          import sys
-
-          with open('sbom-runtime.cdx.json') as f:
-              sbom = json.load(f)
-
-          # Parse forbidden licenses from input
-          forbidden_licenses = json.loads(os.environ.get('FORBIDDEN_LICENSES', '[]'))
-          fail_on_forbidden = os.environ.get('FAIL_ON_FORBIDDEN', 'false').lower() == 'true'
-          issues = []
-
-          for component in sbom.get('components', []):
-              licenses = component.get('licenses', [])
-              for lic in licenses:
-                  lic_id = lic.get('license', {}).get('id', '')
-                  if lic_id in forbidden_licenses:
-                      issues.append(f\"{component['name']}: {lic_id}\")
-
-          if issues:
-              print('WARNING: Found potentially incompatible licenses:')
-              for issue in issues:
-                  print(f'  - {issue}')
-              if fail_on_forbidden:
-                  sys.exit(1)
-          else:
-              print('All licenses compatible')
-          "
+          python -c "$CHECK_SCRIPT"
 
       - name: License Summary
         env:
           FORBIDDEN_LICENSES: ${{ inputs.forbidden-licenses }}
+          ALLOWED_PACKAGES: ${{ inputs.allowed-packages }}
+          FAIL_ON_FORBIDDEN: ${{ inputs.fail-on-forbidden-licenses }}
         run: |
-          echo "### License Compliance Check" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Scanned runtime dependencies for license compliance." >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Forbidden licenses checked:**" >> $GITHUB_STEP_SUMMARY
-          echo '```json' >> $GITHUB_STEP_SUMMARY
-          echo "$FORBIDDEN_LICENSES" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          # Single grouped redirect to a quoted target (avoids per-line SC2086 and SC2129).
+          {
+            echo "### License Compliance Check"
+            echo ""
+            echo "Scanned runtime dependencies (CycloneDX SBOM plus pip-licenses inventory) for license compliance."
+            echo "Matching reads the SPDX id, name, and expression fields and maps free-text names to copyleft families."
+            echo "Mode: $([ "$FAIL_ON_FORBIDDEN" = "true" ] && echo "gating (fails on forbidden)" || echo "advisory (warn only)")."
+            echo ""
+            echo "**Forbidden licenses checked:**"
+            echo '```json'
+            echo "$FORBIDDEN_LICENSES"
+            echo '```'
+            echo "**Packages allowlisted:**"
+            echo '```json'
+            echo "$ALLOWED_PACKAGES"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   # ============================================================================
   # Job 4: Parity Summary (Trivy vs Grype, parallel-run only)
