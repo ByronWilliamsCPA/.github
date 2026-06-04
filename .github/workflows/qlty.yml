@@ -1,0 +1,44 @@
+name: Qlty
+
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly full-codebase health scan: Monday 07:00 UTC
+    - cron: '0 7 * * 1'
+  workflow_dispatch:
+
+# Deny-by-default at workflow scope; each job opts into the minimum below.
+# #ASSUME reusable-workflow callees inherit the caller job's permissions
+# (contents: read), not this empty workflow-level set. #VERIFY each job
+# declares its own permissions block.
+permissions: {}
+
+concurrency:
+  group: qlty-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # PR gate: diff mode, block merges that introduce medium+ severity issues.
+  # Check name: "qlty-gate / Qlty Gate" -- required by org docs-tier ruleset.
+  qlty-gate:
+    if: github.event_name == 'pull_request'
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-qlty-gate.yml@1561a3ef04892ffd6c4a0c4c46fdf1de5a34ed02
+    permissions:
+      contents: read
+    with:
+      fail-level: medium
+      upstream: origin/${{ github.base_ref }}
+
+  # Weekly health scan: full codebase, informational only.
+  # fail-level is advisory while no-fail is set; remove no-fail once existing
+  # qlty debt is resolved so fail-level begins to enforce.
+  qlty-health:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-qlty-gate.yml@1561a3ef04892ffd6c4a0c4c46fdf1de5a34ed02
+    permissions:
+      contents: read
+    with:
+      fail-level: high
+      check-all: true
+      no-fail: true
