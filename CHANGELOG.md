@@ -13,6 +13,23 @@ the latest reviewed commit on `main` and is re-pointed as changes land.
 
 ### Added
 
+- `python-sbom.yml`: the dormant `license-compliance` job now performs real
+  copyleft detection. It reads the CycloneDX `id`, `name`, and `expression`
+  fields (previously `id` only) and maps free-text license names to copyleft
+  families (GPL/AGPL/LGPL/MPL) with word-boundary matching, closing the blind
+  spot that let PyMuPDF's free-text AGPL and `hypothesis`'s PEP 639
+  `License-Expression` pass silently. The default denylist expands beyond
+  GPL/AGPL to include LGPL (2.0/2.1/3.0) and MPL-2.0. New `allowed-packages`
+  input (default `["certifi:MPL"]`) exempts ubiquitous copyleft-but-accepted
+  transitive deps; entries are `name` (blanket) or `name:FAMILY` (scoped to one
+  family, so a later license change is still caught). `generate-sbom` now also
+  emits `pip-licenses.json` (installed-distribution metadata), which the job
+  cross-checks to cover PEP 639 packages that `cyclonedx-bom==7.3.0` omits from
+  the SBOM. Behavior is unchanged for callers: `fail-on-forbidden-licenses`
+  still defaults `false`, so the gate stays advisory; only the warning output
+  changes. Malformed `forbidden-licenses`/`allowed-packages` JSON and a missing
+  inventory now fail with a clear `::error::` instead of a traceback or a false
+  "all compatible" pass.
 - `python-qlty-gate.yml`: new reusable workflow that runs `qlty check` as a
   blocking CI gate. Two modes via the `check-all` input: diff mode (default)
   analyzes only files changed against the `upstream` ref for PR gates, and full
