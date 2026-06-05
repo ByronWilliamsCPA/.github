@@ -56,10 +56,10 @@ on:
         type: boolean
         default: false
       allowed-packages:
-        description: 'JSON array of package names exempted from the license check. Seed with ubiquitous permissive transitive dependencies whose copyleft classification is a non-issue (e.g. certifi is MPL-2.0 but pulled by requests into virtually every Python project).'
+        description: 'JSON array of packages exempted from the license check. Each entry is either a bare package name (exempt from every copyleft family) or "name:FAMILY" (exempt only that family, e.g. "certifi:MPL", so a later license change is still caught). Seed with ubiquitous transitive dependencies whose copyleft classification is an accepted non-issue (e.g. certifi is MPL-2.0 but pulled by requests into virtually every Python project).'
         required: false
         type: string
-        default: '["certifi"]'
+        default: '["certifi:MPL"]'
       trivyignore-path:
         description: 'Path to .trivyignore file for suppressing known CVEs (relative to repo root). DEPRECATED: removed at Trivy cutover (see issue #152).'
         required: false
@@ -613,6 +613,11 @@ jobs:
             def detect_family(text):
                 """Map an SPDX id or free-text license string to a copyleft family."""
                 lowered = (text or "").lower()
+                # A "<token>-compatible" phrasing (for example the historic
+                # "GPL-compatible" classifier) describes a permissive license's
+                # compatibility with copyleft, not a copyleft grant, so strip those
+                # qualifiers before detection to avoid a false positive.
+                lowered = re.sub(r"\b(?:a?gpl|lgpl|mpl)[- ]compatible\b", " ", lowered)
                 if re.search(r"\baffero\b", lowered) or re.search(r"\bagpl", lowered):
                     return "AGPL"
                 if (
@@ -634,31 +639,70 @@ jobs:
                 except FileNotFoundError:
                     return None
 
-            forbidden = set(json.loads(os.environ.get("FORBIDDEN_LICENSES", "[]")))
-            allowed = {p.lower() for p in json.loads(os.environ.get("ALLOWED_PACKAGES", "[]"))}
+            def load_list(var_name):
+                """Parse a JSON-array env var, failing loudly on malformed input."""
+                raw = os.environ.get(var_name, "[]")
+                try:
+                    value = json.loads(raw)
+                except json.JSONDecodeError as exc:
+                    sys.exit(f"::error::{var_name} is not valid JSON: {exc}")
+                if not isinstance(value, list):
+                    sys.exit(
+                        f"::error::{var_name} must be a JSON array, "
+                        f"got {type(value).__name__}"
+                    )
+                return value
+
+            forbidden = set(load_list("FORBIDDEN_LICENSES"))
             fail_on = os.environ.get("FAIL_ON_FORBIDDEN", "false").lower() == "true"
             forbidden_families = {fam for fam in (detect_family(x) for x in forbidden) if fam}
 
+            # Allowlist entries are "name" (exempt from every family) or "name:FAMILY"
+            # (exempt only that copyleft family, so a later license change is still
+            # caught). allowed[name] is None for a blanket exemption, else a set of
+            # families.
+            allowed = {}
+            for entry in load_list("ALLOWED_PACKAGES"):
+                name, _, family = str(entry).partition(":")
+                name = name.strip().lower()
+                family = family.strip().upper()
+                if not family:
+                    allowed[name] = None
+                elif allowed.get(name, set()) is not None:
+                    allowed.setdefault(name, set()).add(family)
+
             issues = []
+            unset = object()
 
             def check(pkg_name, strings):
-                if pkg_name.lower() in allowed:
-                    return
+                exempt = allowed.get(pkg_name.lower(), unset)
+                if exempt is None:
+                    return  # blanket allowlist entry: skip every family
                 flagged = set()
                 for raw in strings:
                     text = norm(raw)
                     if not text:
                         continue
-                    if text in forbidden:
-                        flagged.add(text)
-                        continue
                     family = detect_family(text)
-                    if family and family in forbidden_families:
-                        flagged.add(f"{text} [{family}]")
+                    exact = text in forbidden
+                    heuristic = family is not None and family in forbidden_families
+                    if not exact and not heuristic:
+                        continue
+                    if exempt is not unset and family in exempt:
+                        continue  # family-scoped exemption (for example certifi:MPL)
+                    flagged.add(text if exact else f"{text} [{family}]")
                 for item in sorted(flagged):
                     issues.append(f"{pkg_name}: {item}")
 
             sbom = load_json("sbom-runtime.cdx.json")
+            piplic = load_json("pip-licenses.json")
+            if sbom is None and piplic is None:
+                sys.exit(
+                    "::error::No license inventory found (neither "
+                    "sbom-runtime.cdx.json nor pip-licenses.json). Cannot verify "
+                    "dependency licenses; failing rather than reporting clean."
+                )
+
             if sbom:
                 for component in sbom.get("components", []):
                     name = component.get("name", "")
@@ -670,7 +714,6 @@ jobs:
                         strings.append(lic.get("expression"))
                     check(name, strings)
 
-            piplic = load_json("pip-licenses.json")
             if piplic:
                 for row in piplic:
                     check(row.get("Name", ""), [row.get("License")])
