@@ -136,7 +136,7 @@ jobs:
           egress-policy: audit
 
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
 
       - name: Check Dockerfile exists
         id: check-dockerfile
@@ -161,7 +161,7 @@ jobs:
 
       - name: Upload Hadolint SARIF
         if: ${{ inputs.upload-sarif && steps.check-dockerfile.outputs.exists == 'true' }}
-        uses: github/codeql-action/upload-sarif@7211b7c8077ea37d8641b6271f6a365a22a5fbfa  # v4.36.0
+        uses: github/codeql-action/upload-sarif@87557b9c84dde89fdd9b10e88954ac2f4248e463  # v4.36.1
         with:
           sarif_file: hadolint-results.sarif
           category: hadolint
@@ -195,7 +195,7 @@ jobs:
 
       - name: Checkout repository
         if: ${{ inputs.build-image }}
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
 
       # Conditional DHI login: docker/login-action emits "##[error]Username and
       # password required" when secrets are absent, which clutters CI logs even
@@ -279,7 +279,7 @@ jobs:
 
       - name: Upload Trivy SARIF
         if: ${{ inputs.upload-sarif && steps.image.outputs.ref != '' }}
-        uses: github/codeql-action/upload-sarif@7211b7c8077ea37d8641b6271f6a365a22a5fbfa  # v4.36.0
+        uses: github/codeql-action/upload-sarif@87557b9c84dde89fdd9b10e88954ac2f4248e463  # v4.36.1
         with:
           sarif_file: trivy-container-results.sarif
           category: trivy-container
