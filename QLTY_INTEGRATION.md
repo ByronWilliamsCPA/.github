@@ -501,7 +501,7 @@ jobs:
   quality-report:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
 
       - name: Generate Qlty Report
         env:
