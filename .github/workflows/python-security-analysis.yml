@@ -5,9 +5,27 @@
 #   jobs:
 #     security:
 #       uses: ByronWilliamsCPA/.github/.github/workflows/python-security-analysis.yml@v1
+#       permissions:
+#         contents: read
+#         security-events: write  # codeql job (SARIF upload)
+#         actions: read           # codeql job
+#         pull-requests: write    # dependency-review PR comment summary
 #       with:
 #         source-directory: 'src'
 #         fail-on-high: true
+#
+# Caller permission contract:
+# #CRITICAL: reusable caller/callee permission inheritance
+# #ASSUME: callers grant at least the four scopes shown above, at workflow or
+#   calling-job level. GitHub validates called-job permission requests against
+#   the caller's grant at compile time; a called job requesting more than the
+#   caller grants fails the whole run at startup ("startup_failure" with the
+#   generic "workflow file issue" message), before any job executes.
+# #VERIFY: after changing permissions here or in a caller, confirm with:
+#   gh run list -R ByronWilliamsCPA/<repo> --workflow=security-analysis.yml
+# Callers that disable codeql (run-codeql: false) and rely on a dedicated
+# codeql.yml may omit actions: read and security-events: write only if no
+# other job here requests them; when in doubt, grant all four.
 
 name: Python Security Analysis (Reusable)
 
@@ -66,6 +84,19 @@ on:
         required: false
         type: boolean
         default: true
+
+      # The Safety scanner was removed in PR #140 (2026-05-18). Deleting the
+      # input was a breaking interface change: callers still passing
+      # run-safety fail at startup with the opaque "workflow file issue"
+      # error, and callers pinned to pre-#140 SHAs break the moment Renovate
+      # bumps their pin. Retained as an ignored no-op so existing callers
+      # keep working; no job reads it. Remove it from caller with: blocks,
+      # then delete this input in a future major revision.
+      run-safety:
+        description: 'DEPRECATED no-op. Safety scanner was removed (PR #140); input kept only so existing callers do not startup-fail. Remove from your with: block.'
+        type: boolean
+        required: false
+        default: false
 
 permissions: {}
 
