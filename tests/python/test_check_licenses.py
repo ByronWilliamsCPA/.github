@@ -1,6 +1,10 @@
 """Tests for scripts/check_licenses.py.
 
-Covers the nine cases enumerated in issue #193:
+Covers the nine cases enumerated in issue #193 (scenario groups 1-9 below)
+plus the input-hardening behaviours added in review: corrupt or wrong-shape
+inventory files, allowlist entry ordering, mixed exempt/non-exempt licenses
+on one component, and numeric gating values.
+
 1. Exact SPDX id match (e.g. AGPL-3.0-only)
 2. Free-text family mapping (e.g. PyMuPDF "GNU AFFERO GPL 3.0 ..." -> AGPL;
    "GNU Lesser General Public License v3" -> LGPL)
@@ -17,19 +21,17 @@ from __future__ import annotations
 
 import json
 import os
-import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 from unittest.mock import patch
 
 import pytest
 
-# Add scripts/ to sys.path so we can import check_licenses without a package.
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "scripts"))
-
-import check_licenses  # noqa: E402
+import check_licenses
 
 if TYPE_CHECKING:
-    from check_licenses import Sbom
+    from pathlib import Path
+
+    from check_licenses import PipLicenseRow, Sbom
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -59,7 +61,7 @@ _DEFAULT_FORBIDDEN_FAMILIES = {
 
 def make_sbom(*components: dict[str, object]) -> "Sbom":
     """Build a minimal CycloneDX-shaped SBOM dict for testing."""
-    return {"components": list(components)}  # type: ignore[return-value]
+    return cast("Sbom", {"components": list(components)})
 
 
 def sbom_component(name: str, licenses: list[dict[str, object]]) -> dict[str, object]:
@@ -89,11 +91,28 @@ def run_check(
         allowed = {}
     return check_licenses.run_check(
         sbom,
-        piplic,  # type: ignore[arg-type]
+        cast("list[PipLicenseRow] | None", piplic),
         forbidden,
         forbidden_families,
         allowed,
     )
+
+
+def write_sbom(tmp_path: "Path", data: dict[str, object]) -> None:
+    """Write an SBOM JSON file into tmp_path under the expected filename."""
+    (tmp_path / "sbom-runtime.cdx.json").write_text(json.dumps(data))
+
+
+_GATING_ENV = {
+    "FORBIDDEN_LICENSES": json.dumps(_DEFAULT_FORBIDDEN),
+    "ALLOWED_PACKAGES": "[]",
+}
+
+_GPL_SBOM: dict[str, object] = {
+    "components": [
+        {"name": "evil-pkg", "licenses": [{"license": {"id": "GPL-3.0-only"}}]}
+    ]
+}
 
 
 # ---------------------------------------------------------------------------
@@ -157,8 +176,25 @@ def test_scoped_allowlist_does_not_exempt_certifi_agpl() -> None:
     assert issues == ["certifi: AGPL-3.0-only"]
 
 
+def test_scoped_allowlist_with_mixed_licenses_flags_only_non_exempt() -> None:
+    """One component with both an exempt-family and a non-exempt license.
+
+    Guards against a regression where a scoped exemption on one license
+    silently suppresses findings for the component's other licenses.
+    """
+    allowed = check_licenses.build_allowlist(["certifi:MPL"])
+    sbom = make_sbom(
+        sbom_component(
+            "certifi",
+            [sbom_license_id("MPL-2.0"), sbom_license_id("AGPL-3.0-only")],
+        )
+    )
+    issues = run_check(sbom, None, allowed=allowed)
+    assert issues == ["certifi: AGPL-3.0-only"]
+
+
 # ---------------------------------------------------------------------------
-# Test 4: Blanket allowlist back-compat
+# Test 4: Blanket allowlist back-compat (and entry ordering)
 # ---------------------------------------------------------------------------
 
 
@@ -168,6 +204,18 @@ def test_blanket_allowlist_exempts_all_families() -> None:
     sbom = make_sbom(sbom_component("somepkg", [sbom_license_id("GPL-3.0-only")]))
     issues = run_check(sbom, None, allowed=allowed)
     assert issues == []
+
+
+def test_blanket_then_family_keeps_blanket() -> None:
+    """A family entry after a bare-name entry cannot downgrade the blanket."""
+    allowed = check_licenses.build_allowlist(["certifi", "certifi:MPL"])
+    assert allowed == {"certifi": None}
+
+
+def test_family_then_blanket_upgrades_to_blanket() -> None:
+    """A bare-name entry after a family entry upgrades to blanket exemption."""
+    allowed = check_licenses.build_allowlist(["certifi:MPL", "certifi"])
+    assert allowed == {"certifi": None}
 
 
 # ---------------------------------------------------------------------------
@@ -198,16 +246,17 @@ def test_agpl_compatible_not_flagged() -> None:
 
 def test_pip_licenses_catches_pep639_package() -> None:
     """A package absent from the SBOM but present in pip-licenses.json is flagged."""
-    piplic = [{"Name": "hypothesis", "License": "AGPL-3.0-only"}]
-    # Pass None for sbom to simulate the package being absent from the SBOM.
-    issues = run_check(None, piplic)  # type: ignore[arg-type]
+    piplic: list[dict[str, object]] = [
+        {"Name": "hypothesis", "License": "AGPL-3.0-only"}
+    ]
+    issues = run_check(None, piplic)
     assert issues == ["hypothesis: AGPL-3.0-only"]
 
 
 def test_pip_licenses_permissive_not_flagged() -> None:
     """A package in pip-licenses.json with a permissive license is not flagged."""
-    piplic = [{"Name": "requests", "License": "Apache-2.0"}]
-    issues = run_check(None, piplic)  # type: ignore[arg-type]
+    piplic: list[dict[str, object]] = [{"Name": "requests", "License": "Apache-2.0"}]
+    issues = run_check(None, piplic)
     assert issues == []
 
 
@@ -217,31 +266,23 @@ def test_pip_licenses_permissive_not_flagged() -> None:
 
 
 def test_both_inventories_missing_exits_with_error(
-    tmp_path: pytest.TempPathFactory,
+    tmp_path: "Path", monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """When both sbom and pip-licenses are absent, main() exits non-zero with ::error::."""
-    env = {
-        "FORBIDDEN_LICENSES": json.dumps(_DEFAULT_FORBIDDEN),
-        "ALLOWED_PACKAGES": "[]",
-        "FAIL_ON_FORBIDDEN": "false",
-    }
+    """When both sbom and pip-licenses are absent, main() exits with ::error::."""
+    monkeypatch.chdir(tmp_path)
+    env = {**_GATING_ENV, "FAIL_ON_FORBIDDEN": "false"}
     with patch.dict(os.environ, env, clear=False):
-        import os as _os
+        with pytest.raises(SystemExit) as exc_info:
+            check_licenses.main()
 
-        original_cwd = _os.getcwd()
-        _os.chdir(tmp_path)  # type: ignore[arg-type]
-        try:
-            with pytest.raises(SystemExit) as exc_info:
-                check_licenses.main()
-        finally:
-            _os.chdir(original_cwd)
-
-    assert exc_info.value.code != 0
-    assert "::error::" in str(exc_info.value.code)
+    # sys.exit(str) stores the message string in .code (the process exit
+    # status becomes 1); assert on the message content explicitly.
+    assert isinstance(exc_info.value.code, str)
+    assert "::error::" in exc_info.value.code
 
 
 # ---------------------------------------------------------------------------
-# Test 8: Malformed JSON input
+# Test 8: Malformed JSON input (env vars and inventory files)
 # ---------------------------------------------------------------------------
 
 
@@ -269,64 +310,94 @@ def test_malformed_allowed_packages_exits_with_error() -> None:
     assert "::error::ALLOWED_PACKAGES" in str(exc_info.value.code)
 
 
+def test_corrupt_sbom_json_exits_with_error(tmp_path: "Path") -> None:
+    """An SBOM file that exists but is not valid JSON exits with ::error::."""
+    path = tmp_path / "sbom-runtime.cdx.json"
+    path.write_text("{not valid json")
+    with pytest.raises(SystemExit) as exc_info:
+        check_licenses.load_sbom(str(path))
+    assert "::error::" in str(exc_info.value.code)
+
+
+def test_corrupt_pip_licenses_json_exits_with_error(tmp_path: "Path") -> None:
+    """A pip-licenses file that exists but is not valid JSON exits with ::error::."""
+    path = tmp_path / "pip-licenses.json"
+    path.write_text("[truncated")
+    with pytest.raises(SystemExit) as exc_info:
+        check_licenses.load_pip_licenses(str(path))
+    assert "::error::" in str(exc_info.value.code)
+
+
+def test_array_root_sbom_exits_with_error(tmp_path: "Path") -> None:
+    """An SBOM whose root is a JSON array (wrong shape) exits with ::error::."""
+    path = tmp_path / "sbom-runtime.cdx.json"
+    path.write_text("[]")
+    with pytest.raises(SystemExit) as exc_info:
+        check_licenses.load_sbom(str(path))
+    assert "::error::" in str(exc_info.value.code)
+    assert "JSON object" in str(exc_info.value.code)
+
+
+def test_components_not_list_exits_with_error(tmp_path: "Path") -> None:
+    """An SBOM whose 'components' value is not a list exits with ::error::."""
+    path = tmp_path / "sbom-runtime.cdx.json"
+    path.write_text('{"components": "oops"}')
+    with pytest.raises(SystemExit) as exc_info:
+        check_licenses.load_sbom(str(path))
+    assert "::error::" in str(exc_info.value.code)
+    assert "must be a list" in str(exc_info.value.code)
+
+
+def test_dict_root_pip_licenses_exits_with_error(tmp_path: "Path") -> None:
+    """A pip-licenses file whose root is an object (not array) exits with ::error::."""
+    path = tmp_path / "pip-licenses.json"
+    path.write_text('{"Name": "x"}')
+    with pytest.raises(SystemExit) as exc_info:
+        check_licenses.load_pip_licenses(str(path))
+    assert "::error::" in str(exc_info.value.code)
+    assert "JSON array" in str(exc_info.value.code)
+
+
 # ---------------------------------------------------------------------------
 # Test 9: Gating mode exits 1
 # ---------------------------------------------------------------------------
 
 
-def test_gating_mode_exits_1_on_forbidden(tmp_path: pytest.TempPathFactory) -> None:
+def test_gating_mode_exits_1_on_forbidden(
+    tmp_path: "Path", monkeypatch: pytest.MonkeyPatch
+) -> None:
     """With FAIL_ON_FORBIDDEN=true, a forbidden license causes sys.exit(1)."""
-    sbom_data: dict[str, object] = {
-        "components": [
-            {"name": "evil-pkg", "licenses": [{"license": {"id": "GPL-3.0-only"}}]}
-        ]
-    }
-    sbom_path = tmp_path / "sbom-runtime.cdx.json"  # type: ignore[operator]
-    sbom_path.write_text(json.dumps(sbom_data))  # type: ignore[union-attr]
-
-    env = {
-        "FORBIDDEN_LICENSES": json.dumps(_DEFAULT_FORBIDDEN),
-        "ALLOWED_PACKAGES": "[]",
-        "FAIL_ON_FORBIDDEN": "true",
-    }
+    write_sbom(tmp_path, _GPL_SBOM)
+    monkeypatch.chdir(tmp_path)
+    env = {**_GATING_ENV, "FAIL_ON_FORBIDDEN": "true"}
     with patch.dict(os.environ, env, clear=False):
-        import os as _os
+        with pytest.raises(SystemExit) as exc_info:
+            check_licenses.main()
 
-        original_cwd = _os.getcwd()
-        _os.chdir(tmp_path)  # type: ignore[arg-type]
-        try:
-            with pytest.raises(SystemExit) as exc_info:
-                check_licenses.main()
-        finally:
-            _os.chdir(original_cwd)
+    assert exc_info.value.code == 1
+
+
+def test_gating_mode_exits_1_with_numeric_true(
+    tmp_path: "Path", monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """FAIL_ON_FORBIDDEN=1 also enables gating (boolean-ish caller values)."""
+    write_sbom(tmp_path, _GPL_SBOM)
+    monkeypatch.chdir(tmp_path)
+    env = {**_GATING_ENV, "FAIL_ON_FORBIDDEN": "1"}
+    with patch.dict(os.environ, env, clear=False):
+        with pytest.raises(SystemExit) as exc_info:
+            check_licenses.main()
 
     assert exc_info.value.code == 1
 
 
 def test_advisory_mode_does_not_exit_on_forbidden(
-    tmp_path: pytest.TempPathFactory,
+    tmp_path: "Path", monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """With FAIL_ON_FORBIDDEN=false, a forbidden license warns but does not exit 1."""
-    sbom_data: dict[str, object] = {
-        "components": [
-            {"name": "evil-pkg", "licenses": [{"license": {"id": "GPL-3.0-only"}}]}
-        ]
-    }
-    sbom_path = tmp_path / "sbom-runtime.cdx.json"  # type: ignore[operator]
-    sbom_path.write_text(json.dumps(sbom_data))  # type: ignore[union-attr]
-
-    env = {
-        "FORBIDDEN_LICENSES": json.dumps(_DEFAULT_FORBIDDEN),
-        "ALLOWED_PACKAGES": "[]",
-        "FAIL_ON_FORBIDDEN": "false",
-    }
+    write_sbom(tmp_path, _GPL_SBOM)
+    monkeypatch.chdir(tmp_path)
+    env = {**_GATING_ENV, "FAIL_ON_FORBIDDEN": "false"}
     with patch.dict(os.environ, env, clear=False):
-        import os as _os
-
-        original_cwd = _os.getcwd()
-        _os.chdir(tmp_path)  # type: ignore[arg-type]
-        try:
-            # Should NOT raise; advisory mode just prints the warning.
-            check_licenses.main()
-        finally:
-            _os.chdir(original_cwd)
+        # Should NOT raise; advisory mode just prints the warnings.
+        check_licenses.main()

@@ -1,7 +1,8 @@
 {
   "pythonVersion": "3.12",
-  "typeCheckingMode": "basic",
+  "typeCheckingMode": "strict",
   "extraPaths": ["scripts"],
   "venvPath": ".",
+  "venv": ".venv",
   "include": ["scripts", "tests/python"]
 }

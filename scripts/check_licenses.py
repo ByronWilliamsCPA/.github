@@ -2,19 +2,23 @@
 
 Reads CycloneDX SBOM (sbom-runtime.cdx.json) and/or pip-licenses inventory
 (pip-licenses.json) from the current working directory, cross-checks them
-against a configurable list of forbidden SPDX license IDs, and reports or
-fails on any match.
+against a configurable list of forbidden licenses, and reports or fails on
+any match.
 
 All inputs are read from environment variables so that GitHub Actions workflow
 expressions never interpolate into the script body (injection-safe pattern).
 
 Environment variables:
-    FORBIDDEN_LICENSES: JSON array of forbidden SPDX license IDs.
+    FORBIDDEN_LICENSES: JSON array of forbidden license identifiers. SPDX IDs
+                        (for example "AGPL-3.0-only") are preferred, but
+                        free-text strings are also accepted; every entry is
+                        matched both exactly and via the copyleft-family
+                        heuristic in detect_family().
     ALLOWED_PACKAGES:   JSON array of allowlist entries.  Each entry is either
                         a bare package name (exempt from every copyleft family)
                         or "name:FAMILY" (exempt only that family).
-    FAIL_ON_FORBIDDEN:  "true" to exit 1 when forbidden licenses are found;
-                        any other value is advisory (warn only).
+    FAIL_ON_FORBIDDEN:  "true" or "1" to exit 1 when forbidden licenses are
+                        found; any other value is advisory (warn only).
 """
 
 from __future__ import annotations
@@ -50,6 +54,22 @@ class PipLicenseRow(TypedDict, total=False):
     License: str
 
 
+# Allowlist three-state semantics (see build_allowlist):
+#   key absent        -> package not allowlisted; check normally
+#   value None        -> blanket exemption (every copyleft family exempt)
+#   value set[str]    -> only the named copyleft families are exempt
+Allowlist = dict[str, set[str] | None]
+
+
+def _oneline(exc: BaseException) -> str:
+    """Flatten an exception message to one line.
+
+    GitHub Actions ``::error::`` annotations are truncated at the first
+    newline; JSONDecodeError messages can embed the offending document.
+    """
+    return str(exc).replace("\n", " ")
+
+
 def norm(value: str | None) -> str:
     """Strip and normalise a potentially-None string."""
     return (value or "").strip()
@@ -81,22 +101,57 @@ def detect_family(text: str | None) -> str | None:
     return None
 
 
-def load_sbom(path: str) -> Sbom | None:
-    """Load a CycloneDX SBOM JSON file, returning None if absent."""
+def _load_json_file(path: str) -> object | None:
+    """Load a JSON file, returning None if absent and exiting loudly otherwise.
+
+    A missing file is a valid state (the caller decides whether at least one
+    inventory is required), but a file that exists and cannot be read or
+    parsed is always a hard error: silently skipping it would let a corrupt
+    artifact produce a false "all licenses compatible" result.
+    """
     try:
         with open(path) as handle:
-            return cast("Sbom", json.load(handle))
+            return cast("object", json.load(handle))
     except FileNotFoundError:
         return None
+    except json.JSONDecodeError as exc:
+        sys.exit(f"::error::{path} is not valid JSON: {_oneline(exc)}")
+    except OSError as exc:
+        sys.exit(f"::error::Cannot read {path}: {_oneline(exc)}")
+
+
+def load_sbom(path: str) -> Sbom | None:
+    """Load a CycloneDX SBOM JSON file, returning None if absent.
+
+    Exits with a ``::error::`` annotation if the file exists but is not valid
+    JSON, is unreadable, or does not have the expected object shape.
+    """
+    data = _load_json_file(path)
+    if data is None:
+        return None
+    if not isinstance(data, dict):
+        sys.exit(f"::error::{path} must be a JSON object, got {type(data).__name__}")
+    components = cast("dict[str, object]", data).get("components", [])
+    if not isinstance(components, list):
+        sys.exit(
+            f"::error::{path}: 'components' must be a list,"
+            f" got {type(components).__name__}"
+        )
+    return cast("Sbom", data)
 
 
 def load_pip_licenses(path: str) -> list[PipLicenseRow] | None:
-    """Load a pip-licenses JSON file, returning None if absent."""
-    try:
-        with open(path) as handle:
-            return cast("list[PipLicenseRow]", json.load(handle))
-    except FileNotFoundError:
+    """Load a pip-licenses JSON file, returning None if absent.
+
+    Exits with a ``::error::`` annotation if the file exists but is not valid
+    JSON, is unreadable, or is not a JSON array.
+    """
+    data = _load_json_file(path)
+    if data is None:
         return None
+    if not isinstance(data, list):
+        sys.exit(f"::error::{path} must be a JSON array, got {type(data).__name__}")
+    return cast("list[PipLicenseRow]", data)
 
 
 def load_list(var_name: str) -> list[str]:
@@ -105,7 +160,7 @@ def load_list(var_name: str) -> list[str]:
     try:
         parsed = cast("object", json.loads(raw))
     except json.JSONDecodeError as exc:
-        sys.exit(f"::error::{var_name} is not valid JSON: {exc}")
+        sys.exit(f"::error::{var_name} is not valid JSON: {_oneline(exc)}")
     if not isinstance(parsed, list):
         sys.exit(
             f"::error::{var_name} must be a JSON array, got {type(parsed).__name__}"
@@ -113,14 +168,19 @@ def load_list(var_name: str) -> list[str]:
     return [str(item) for item in cast("list[object]", parsed)]
 
 
-def build_allowlist(entries: list[str]) -> dict[str, set[str] | None]:
+def build_allowlist(entries: list[str]) -> Allowlist:
     """Build the package allowlist from the ALLOWED_PACKAGES list.
 
     Returns a dict mapping lowercase package name to either:
       - None: blanket exemption (all copyleft families exempt)
       - set[str]: the specific copyleft families that are exempt
+
+    Note the two distinct meanings of None when reading the result: a stored
+    None value means blanket exemption, while dict.get() returning None for an
+    absent key means "not allowlisted at all".  Callers must check key
+    membership before interpreting a None value (see check_package).
     """
-    allowed: dict[str, set[str] | None] = {}
+    allowed: Allowlist = {}
     for entry in entries:
         name, _, family = entry.partition(":")
         name = name.strip().lower()
@@ -130,7 +190,8 @@ def build_allowlist(entries: list[str]) -> dict[str, set[str] | None]:
         else:
             existing = allowed.get(name)
             if existing is None and name in allowed:
-                # Already blanket-exempt; keep it
+                # Key already stored as None (blanket-exempt); a family-scoped
+                # entry cannot downgrade a blanket exemption.
                 pass
             elif existing is None:
                 allowed[name] = {family}
@@ -139,23 +200,24 @@ def build_allowlist(entries: list[str]) -> dict[str, set[str] | None]:
     return allowed
 
 
-_UNSET: object = object()
-
-
 def check_package(
     pkg_name: str,
     strings: list[str | None],
     forbidden: set[str],
     forbidden_families: set[str],
-    allowed: dict[str, set[str] | None],
+    allowed: Allowlist,
 ) -> list[str]:
     """Return a list of issue strings for a single package.
 
-    An empty list means the package is compatible.
+    An empty list means the package is either clean (no forbidden licenses)
+    or explicitly allowlisted; the two cases are indistinguishable here.
     """
-    exempt = allowed.get(pkg_name.lower(), _UNSET)
-    if exempt is None:
+    key = pkg_name.lower()
+    if key in allowed and allowed[key] is None:
         return []  # blanket allowlist entry: skip every family
+
+    # None here means "not allowlisted" (the blanket case returned above).
+    exempt_families = allowed.get(key)
 
     flagged: set[str] = set()
     for raw in strings:
@@ -167,7 +229,7 @@ def check_package(
         heuristic = family is not None and family in forbidden_families
         if not exact and not heuristic:
             continue
-        if exempt is not _UNSET and isinstance(exempt, set) and family in exempt:
+        if exempt_families is not None and family in exempt_families:
             continue  # family-scoped exemption (for example certifi:MPL)
         flagged.add(text if exact else f"{text} [{family}]")
 
@@ -179,7 +241,7 @@ def run_check(
     piplic: list[PipLicenseRow] | None,
     forbidden: set[str],
     forbidden_families: set[str],
-    allowed: dict[str, set[str] | None],
+    allowed: Allowlist,
 ) -> list[str]:
     """Return sorted, deduplicated issues across both inventory sources."""
     issues: list[str] = []
@@ -187,6 +249,11 @@ def run_check(
     if sbom:
         for component in sbom.get("components", []):
             name = component.get("name", "")
+            if not name:
+                print(
+                    "::warning::SBOM component with empty or missing name;"
+                    " its license entries are attributed to ''."
+                )
             strings: list[str | None] = []
             for lic in component.get("licenses", []):
                 license_obj = lic.get("license", {})
@@ -215,7 +282,10 @@ def run_check(
 def main() -> None:
     """Entry point: read env vars, load inventories, run check, and exit."""
     forbidden = set(load_list("FORBIDDEN_LICENSES"))
-    fail_on = os.environ.get("FAIL_ON_FORBIDDEN", "false").lower() == "true"
+    fail_on = os.environ.get("FAIL_ON_FORBIDDEN", "false").strip().lower() in {
+        "true",
+        "1",
+    }
     forbidden_families = {fam for fam in (detect_family(x) for x in forbidden) if fam}
     allowed = build_allowlist(load_list("ALLOWED_PACKAGES"))
 
@@ -230,12 +300,23 @@ def main() -> None:
         )
         sys.exit(msg)
 
-    issues = run_check(sbom, piplic, forbidden, forbidden_families, allowed)
+    try:
+        issues = run_check(sbom, piplic, forbidden, forbidden_families, allowed)
+    except (AttributeError, TypeError) as exc:
+        # Root shapes are validated at load time, but deeper malformations
+        # (for example a string where CycloneDX requires a license object)
+        # surface here.  Exit loudly: a mid-scan crash must never read as a
+        # partial "clean" result.
+        sys.exit(f"::error::Malformed license inventory structure: {_oneline(exc)}")
 
     if issues:
-        print("WARNING: Found forbidden or copyleft licenses:")
+        # ::warning:: / ::error:: prefixes surface each finding as a GitHub
+        # Actions annotation; bare print() output is hidden inside the
+        # collapsed step log, which made advisory-mode findings invisible.
+        level = "error" if fail_on else "warning"
+        print(f"::{level}::Found forbidden or copyleft licenses:")
         for issue in issues:
-            print(f"  - {issue}")
+            print(f"::{level}::{issue}")
         if fail_on:
             sys.exit(1)
     else:
