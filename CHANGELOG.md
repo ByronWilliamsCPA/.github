@@ -117,6 +117,9 @@ the latest reviewed commit on `main` and is re-pointed as changes land.
      which made callers still passing `run-safety:` fail workflow-call
      input validation at startup; the input has since been restored as
      an ignored no-op (see Fixed below) so those callers keep running.
+     The restoration applies to the reusable workflow only: the
+     `workflow-templates/` mirror is a standalone workflow with no
+     `workflow_call` inputs, so the removal there stands unchanged.
      Remove it from `with:` blocks; it will be deleted in a future
      major revision.
   2. **Required-check name change.** The `python-security` job display
