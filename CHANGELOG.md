@@ -11,6 +11,10 @@ the latest reviewed commit on `main` and is re-pointed as changes land.
 
 ## [Unreleased]
 
+### Fixed
+
+- `python-release.yml`: move PSR step before build so `dist/` carries the bumped version. PSR with `commit: "false"` stamps the bump into the working tree and tags the pre-bump commit, so a post-PSR same-commit tag checkout with a version guard now protects the uncommitted bump that `uv build` reads (fixes #204).
+
 ### Changed
 
 - `workflow-templates/python-security-analysis.yml`: corrected OWASP Dependency-Check pin comment from `v1.1.0` to `1.1.0` to match the upstream tag scheme (no `v` prefix), restoring Renovate digest tracking.
