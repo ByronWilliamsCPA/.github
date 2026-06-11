@@ -15,12 +15,19 @@ the latest reviewed commit on `main` and is re-pointed as changes land.
 
 - `python-release.yml`: move PSR step before build so `dist/` carries the bumped version. PSR with `commit: "false"` stamps the bump into the working tree and tags the pre-bump commit, so a post-PSR same-commit tag checkout with a version guard now protects the uncommitted bump that `uv build` reads (fixes #204).
 
-### Refactored
-
-- `python-sbom.yml`: extracted the `license-compliance` inline Python checker to `scripts/check_licenses.py` (importable module with typed API) and added a pytest suite (`tests/python/`) covering all nine issue-#193 acceptance cases; the workflow step now invokes the script via `python _checker/scripts/check_licenses.py` with inputs still passed via `env:`.
-
 ### Changed
 
+- `python-sbom.yml`: extracted the `license-compliance` inline Python checker
+  to `scripts/check_licenses.py` (importable module with typed API) and added
+  a pytest suite (`tests/python/`) covering all nine issue-#193 acceptance
+  cases; the workflow step now invokes the script via
+  `python _checker/scripts/check_licenses.py` with inputs still passed via
+  `env:`. The checkout of the script is pinned to `job.workflow_sha` (the
+  reusable workflow's own commit) so callers pinning `python-sbom.yml@<sha>`
+  get exactly that commit's checker. The script now validates inventory file
+  shape, reports corrupt or unreadable files with `::error::` annotations,
+  and surfaces advisory-mode findings as `::warning::` annotations instead
+  of bare log lines.
 - `workflow-templates/python-security-analysis.yml`: corrected OWASP Dependency-Check pin comment from `v1.1.0` to `1.1.0` to match the upstream tag scheme (no `v` prefix), restoring Renovate digest tracking.
 - Node 20 deprecation sweep ahead of GitHub's 2026-06-16 forced cutover to
   Node 24. Audit result: every `actions/setup-python` (v6.2.0) and
