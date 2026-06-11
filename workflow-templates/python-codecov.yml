@@ -96,7 +96,7 @@ jobs:
         with:
           token: ${{  secrets.CODECOV_TOKEN  }}
           slug: ${{  github.repository  }}
-          file: coverage-3.10/coverage.xml
+          files: coverage-3.10/coverage.xml
           fail_ci_if_error: false
           flags: python-3.10
           name: Python Project Coverage (Python 3.10)
@@ -110,7 +110,7 @@ jobs:
         with:
           token: ${{  secrets.CODECOV_TOKEN  }}
           slug: ${{  github.repository  }}
-          file: coverage-3.11/coverage.xml
+          files: coverage-3.11/coverage.xml
           fail_ci_if_error: false
           flags: python-3.11
           name: Python Project Coverage (Python 3.11)
@@ -124,7 +124,7 @@ jobs:
         with:
           token: ${{  secrets.CODECOV_TOKEN  }}
           slug: ${{  github.repository  }}
-          file: coverage-3.12/coverage.xml
+          files: coverage-3.12/coverage.xml
           fail_ci_if_error: false
           flags: python-3.12
           name: Python Project Coverage (Python 3.12)
@@ -138,7 +138,7 @@ jobs:
         with:
           token: ${{  secrets.CODECOV_TOKEN  }}
           slug: ${{  github.repository  }}
-          file: coverage-3.13/coverage.xml
+          files: coverage-3.13/coverage.xml
           fail_ci_if_error: false
           flags: python-3.13
           name: Python Project Coverage (Python 3.13)
@@ -152,7 +152,7 @@ jobs:
         with:
           token: ${{  secrets.CODECOV_TOKEN  }}
           slug: ${{  github.repository  }}
-          file: coverage-3.14/coverage.xml
+          files: coverage-3.14/coverage.xml
           fail_ci_if_error: false
           flags: python-3.14
           name: Python Project Coverage (Python 3.14)
