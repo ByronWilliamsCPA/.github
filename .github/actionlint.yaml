@@ -1,0 +1,15 @@
+# actionlint configuration.
+#
+# paths ignore patterns suppress false positives from actionlint's built-in
+# context type model when it lags GitHub's actual contexts.
+paths:
+  # job.workflow_sha and job.workflow_repository are documented GitHub
+  # contexts for reusable workflows (the commit SHA and repository of the
+  # workflow file that defines the current job; see "Reuse workflows" in the
+  # GitHub docs). actionlint's job context model (through at least 1.7.12)
+  # only knows {check_run_id, container, services, status} and flags them as
+  # undefined. Remove this exception once actionlint's context model catches
+  # up (https://github.com/rhysd/actionlint).
+  .github/workflows/python-sbom.yml:
+    ignore:
+      - 'property "(workflow_sha|workflow_repository)" is not defined in object type'
