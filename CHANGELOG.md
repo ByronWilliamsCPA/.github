@@ -135,10 +135,16 @@ the latest reviewed commit on `main` and is re-pointed as changes land.
   removed from the reusable workflow and its `workflow-templates/`
   mirror. Three downstream-visible surfaces change:
 
-  1. **Input removed.** The `run-safety` boolean input is gone.
-     Callers still passing `run-safety:` in their `with:` block will
-     fail GitHub Actions workflow-call input validation and the run
-     will not start.
+  1. **Input deprecated to a no-op.** The `run-safety` boolean input
+     no longer controls anything. It was initially removed outright,
+     which made callers still passing `run-safety:` fail workflow-call
+     input validation at startup; the input has since been restored as
+     an ignored no-op (see Fixed below) so those callers keep running.
+     The restoration applies to the reusable workflow only: the
+     `workflow-templates/` mirror is a standalone workflow with no
+     `workflow_call` inputs, so the removal there stands unchanged.
+     Remove it from `with:` blocks; it will be deleted in a future
+     major revision.
   2. **Required-check name change.** The `python-security` job display
      name changed from `Python Security Scan` to `Python SAST (Bandit)`.
      Consumer repos with branch protection rules or required-check
@@ -237,6 +243,8 @@ the latest reviewed commit on `main` and is re-pointed as changes land.
 
 ### Fixed
 
+- `python-security-analysis.yml`: restore `run-safety` as a deprecated no-op input. PR #140 deleted the input outright, which made every caller still passing `run-safety:` fail at startup with the opaque "workflow file issue" error, and turned callers pinned to pre-#140 SHAs into time bombs that detonate when Renovate bumps their pin (observed in DeQA-Doc, audio-processor, llc-manager, taxdome Renovate branches; maester-tests broken outright). The input is accepted and ignored; no job reads it. Callers should still remove it from their `with:` blocks; it will be deleted again in a future major revision with a deprecation window.
+- `python-security-analysis.yml`: document the caller permission contract in the usage header. The `codeql` job requests `actions: read` and `security-events: write`, and `dependency-review` requests `pull-requests: write` (the remaining jobs request only `contents: read` and `pull-requests: read`, both covered by the same grants); a caller granting less fails the whole run at startup before any job executes, with no specific error surfaced. The usage example now shows the minimum `permissions:` block a caller must grant. This undocumented contract caused months of silent `startup_failure` runs in `python-libs` and `Unify`.
 - `workflow-templates/python-slsa.yml`: the `provenance` job referenced the org reusable `python-slsa.yml`, which exposes only `on: workflow_dispatch` (no `workflow_call`) and so could not be loaded via `uses:`; the starter template failed for any adopter. It now calls the SLSA generator (`slsa-framework/slsa-github-generator`) directly, pinned to the v2.1.0 SHA, and scopes the `build` job to `contents: read` so it no longer inherits `id-token: write` from the top-level permissions block. The justification comment is corrected: the cause was the missing `workflow_call` trigger, not reusable-call nesting depth (GitHub permits up to four levels).
 - `docs/workflows/python-fips-compatibility.md`: correct the `uses:` path in three doc examples from the single-`.github` form to the doubled-`.github` form (`ByronWilliamsCPA/.github/.github/workflows/python-fips-compatibility.yml`), matching the template path fix recorded below; the documented snippet would otherwise 404 at runtime when copied.
 - `python-docs.yml`: gate the `deploy` job on the `build` job's detected state to prevent `actions/download-artifact` from failing with "artifact not found" when a caller passes `deploy-to-pages: true` from a repo without `pyproject.toml`. The build job now exposes `steps.detect.outputs.state` as a job-level output, and `deploy`'s `if:` clause requires `needs.build.outputs.state != 'skip'`. Without this guard, build succeeded in skip mode (only the skip-notice step ran; the upload-artifact step was already conditionally skipped) and `needs: build` falsely cleared deploy to run against a missing artifact (PR #171, addresses Copilot inline review)
