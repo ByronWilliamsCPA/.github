@@ -13,7 +13,7 @@ the latest reviewed commit on `main` and is re-pointed as changes land.
 
 ### Fixed
 
-- `python-release.yml`: move PSR step before build so `dist/` carries the bumped version; add a post-PSR tag checkout to ensure `uv build` reads the updated `pyproject.toml` (fixes #204).
+- `python-release.yml`: move PSR step before build so `dist/` carries the bumped version. PSR with `commit: "false"` stamps the bump into the working tree and tags the pre-bump commit, so a post-PSR same-commit tag checkout with a version guard now protects the uncommitted bump that `uv build` reads (fixes #204).
 
 ### Changed
 

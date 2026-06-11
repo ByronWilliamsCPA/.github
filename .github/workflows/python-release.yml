@@ -32,11 +32,13 @@
 #   job will fail fast if `run-tests: false` is used without a reason.
 #
 # Step ordering (semantic-release mode):
-#   PSR runs first to determine the new version and push the tag; a checkout
-#   of the tag follows so uv build reads the bumped pyproject.toml. This
-#   ensures dist/, the SBOM, the SLSA hashes, and the Sigstore bundles all
-#   carry the correct version. Manual-tag mode is unaffected: the build runs
-#   on the already-checked-out tagged commit.
+#   PSR runs first to determine the new version. With commit: "false" PSR
+#   stamps the bumped version into pyproject.toml in the working tree
+#   (uncommitted but staged) and pushes a tag that points at the pre-bump
+#   HEAD commit. The build that follows reads the bumped version from that
+#   working-tree edit, so dist/, the SBOM, the SLSA hashes, and the Sigstore
+#   bundles all carry the correct version. Manual-tag mode is unaffected:
+#   the build runs on the already-checked-out tagged commit.
 # ============================================================================
 
 name: Python Release (Reusable)
@@ -248,6 +250,10 @@ jobs:
       released: ${{ steps.semantic-release.outputs.released || steps.manual-release.outputs.released }}
       version: ${{ steps.semantic-release.outputs.version || steps.manual-release.outputs.version }}
       tag: ${{ steps.semantic-release.outputs.tag || steps.manual-release.outputs.tag }}
+      # #EDGE Empty string when no release is produced (semantic-release mode
+      # with no releasable commits): the hash step is gated on released == 'true'.
+      # #VERIFY: callers consuming this output for SLSA provenance must gate
+      # their provenance job on the released output, not on hashes alone.
       hashes: ${{ steps.hash.outputs.hashes }}
 
     steps:
@@ -345,8 +351,10 @@ jobs:
       # -----------------------------------------------------------------------
       # Semantic Release Mode: PSR runs BEFORE the build so the version bump
       # is reflected in dist/. PSR pushes a tag (commit: false so no branch
-      # push is attempted against the ruleset-protected main). After PSR we
-      # check out that tag so uv build reads the bumped pyproject.toml.
+      # push is attempted against the ruleset-protected main) and stamps the
+      # bumped version into the working tree without committing it. The build
+      # reads the bumped version from that working-tree edit; the tag checkout
+      # below is a same-commit guard, not the source of the bump.
       # -----------------------------------------------------------------------
 
       # Semantic Release Mode
@@ -355,8 +363,13 @@ jobs:
         id: semantic-release
         # #ASSUME PSR v10.5.3 outputs released, version, tag as step outputs.
         # #VERIFY on PSR major upgrades: confirm output names are unchanged.
-        # #CRITICAL commit: "false" means PSR only pushes a tag (no branch commit).
+        # #CRITICAL commit: "false" means PSR pushes a tag but creates no branch
+        # commit, so the tag points at the PRE-bump HEAD commit. PSR still stamps
+        # and stages the bumped version in the working tree (PSR >= 10.1.0:
+        # "Always stage version stamped files & changelog even with --no-commit").
         # #VERIFY: branch rulesets must allow tag-ref pushes from github-actions[bot].
+        # #VERIFY on PSR upgrades: confirm version stamping still occurs in the
+        # working tree when commit is disabled; the build below depends on it.
         # #ASSUME github.token has contents: write (granted at job level above).
         # #VERIFY: caller must pass contents: write in their permissions block.
         uses: python-semantic-release/python-semantic-release@350c48fcb3ffcdfd2e0a235206bc2ecea6b69df0  # v10.5.3
@@ -375,28 +388,53 @@ jobs:
           # booleans correctly.
           vcs_release: "false"
 
-      # After PSR pushes a tag it does NOT update the working tree (commit: false).
-      # Check out the tag PSR created so that uv build reads the bumped version from
-      # pyproject.toml. Without this step uv build reads the pre-bump version and
-      # produces mis-versioned artifacts (root cause of issue #204).
-      # #CRITICAL: steps.detect.outputs.state was captured before this checkout;
-      # the lock-file state does not change between the initial checkout and the tag
-      # because PSR only bumps pyproject.toml version (no lock changes). State is safe
-      # to reuse for all subsequent conditional steps.
-      # #ASSUME PSR outputs.tag is the full ref (e.g. "v1.2.3") required by git checkout.
+      # With commit: "false" PSR stamps and stages the bumped version in the
+      # working tree (uncommitted) and tags the PRE-bump HEAD commit. This
+      # checkout therefore targets the commit HEAD is already on: a tree-level
+      # no-op that git permits while carrying the uncommitted bump forward.
+      # uv build reads the bumped version from PSR's working-tree edit, not
+      # from the tag's committed content (fix for issue #204). The version
+      # guard below fails the job if the bump ever stops reaching the build.
+      # #CRITICAL: never replace this step with a clean checkout of the tag
+      # (actions/checkout with ref:, git reset --hard, or a fresh clone). The
+      # tag's committed pyproject.toml carries the PREVIOUS version; a clean
+      # checkout discards the uncommitted bump and silently rebuilds
+      # mis-versioned artifacts (the exact issue #204 regression).
+      # #VERIFY: the version guard below must stay in place and must compare
+      # against steps.semantic-release.outputs.version.
+      # Known limitation: the pushed tag's committed source carries the
+      # previous version string; release artifacts are authoritative. Building
+      # from the tag (pip install git+...@vX.Y.Z) reproduces the pre-bump
+      # version. Accepted trade-off of commit: "false" under branch rulesets.
+      # #CRITICAL: steps.detect.outputs.state was captured before PSR ran; safe
+      # to reuse because PSR writes only version stamps, never lock files.
+      # #VERIFY on PSR upgrades: confirm PSR leaves uv.lock untouched and
+      # writes nothing beyond version stamps (else the synced venv goes stale).
+      # #ASSUME PSR outputs.tag is the tag name (e.g. "v1.2.3") accepted by git checkout.
       # #VERIFY on PSR major upgrades: confirm outputs.tag format is unchanged.
       # #EDGE If PSR decides no release is needed (released == 'false') this step is
       # skipped and subsequent build/sign/release steps are also skipped via their
       # conditions, so the job exits cleanly with no artifacts.
+      # #VERIFY: a run with no releasable commits must end green with no dist/.
+      # Note: this checkout re-enters detached HEAD (inverse of the earlier
+      # "Attach HEAD to branch" step). Safe here because PSR already ran and no
+      # later step commits or pushes; re-attach before adding any step that does.
       - name: Checkout PSR tag (bumped version)
         if: ${{ inputs.semantic-release && steps.semantic-release.outputs.released == 'true' }}
         env:
           PSR_TAG: ${{ steps.semantic-release.outputs.tag }}
+          PSR_VERSION: ${{ steps.semantic-release.outputs.version }}
         run: |
           git checkout "$PSR_TAG"
           echo "Checked out PSR tag: $PSR_TAG"
-          echo "pyproject.toml version after checkout:"
-          grep -E '^version\s*=' pyproject.toml || true
+          VERSION_LINE=$(grep -E '^version\s*=' pyproject.toml || true)
+          echo "pyproject.toml version line after checkout: $VERSION_LINE"
+          if [ -z "$VERSION_LINE" ]; then
+            echo "No static version line in pyproject.toml (dynamic versioning?); skipping version guard."
+          elif ! printf '%s' "$VERSION_LINE" | grep -qF "$PSR_VERSION"; then
+            echo "::error::pyproject.toml does not carry PSR version $PSR_VERSION after tag checkout. The uncommitted version stamp was lost; building now would repeat issue #204."
+            exit 1
+          fi
 
       # -----------------------------------------------------------------------
       # Build, SBOM, hashing: run after PSR (semantic mode) or directly on the
@@ -436,12 +474,20 @@ jobs:
           echo "hashes=$(sha256sum ./* | base64 -w0)" >> "$GITHUB_OUTPUT"
 
       - name: Sign artifacts with Sigstore
-        if: ${{ inputs.sign-artifacts && (steps.semantic-release.outputs.released == 'true' || !inputs.semantic-release) }}
+        if: |
+          inputs.sign-artifacts &&
+          (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock') &&
+          (!inputs.semantic-release || steps.semantic-release.outputs.released == 'true')
         # #ASSUME id-token: write (granted at job level) enables OIDC token issuance for Sigstore.
         # #VERIFY: caller must pass id-token: write; reusable workflows inherit caller permissions
         # only when the caller explicitly grants them.
-        # #CRITICAL attestations: write is required in addition to id-token: write for sigstore
-        # gh-action-sigstore-python to upload bundles to the release. Both are granted above.
+        # #CRITICAL gh-action-sigstore-python needs id-token: write (OIDC) and, for the
+        # release-signing-artifacts upload path, contents: write; both are granted above.
+        # attestations: write is NOT used by this action (it belongs to GitHub's
+        # actions/attest-build-provenance API) and is granted at job level only for
+        # potential future provenance use.
+        # #VERIFY: if Sigstore bundle uploads fail, check the id-token and contents
+        # grants, not attestations.
         uses: sigstore/gh-action-sigstore-python@04cffa1d795717b140764e8b640de88853c92acc  # v3.3.0
         with:
           inputs: ./dist/*.tar.gz ./dist/*.whl
