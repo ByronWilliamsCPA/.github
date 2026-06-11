@@ -11,6 +11,29 @@ the latest reviewed commit on `main` and is re-pointed as changes land.
 
 ## [Unreleased]
 
+### Changed
+
+- Node 20 deprecation sweep ahead of GitHub's 2026-06-16 forced cutover to
+  Node 24. Audit result: every `actions/setup-python` (v6.2.0) and
+  `astral-sh/setup-uv` (v8.2.0) pin in the live reusable workflows and
+  `workflow-templates/` already declares `node24`, as do all other SHA-pinned
+  JavaScript actions in `.github/workflows/`. The remaining node20 surfaces
+  were stale documentation examples and one third-party internal pin, fixed as
+  follows: `QLTY_INTEGRATION.md` examples bumped from `setup-python` v5.5.0 and
+  `checkout` v4.2.2 (both node20) to the v6.2.0 / v6.0.3 SHAs used by the live
+  workflows; `USAGE_EXAMPLES.md` legacy snippet bumped from `@v4` tags to the
+  same SHA-pinned v6.0.3 / v6.2.0 references;
+  `examples/fuzzing-migration-example.md` bumped `harden-runner` v2.10.1
+  and `checkout` v4.2.2 to the current v2.19.4 / v6.0.3 SHAs; the
+  `python-codecov.yml` usage comment now shows `upload-artifact` v7.0.1,
+  SHA-pinned. Known
+  residual: `pypa/gh-action-pypi-publish` v1.14.0 (latest release) internally
+  pins `actions/setup-python` v5.6.0 (node20); upstream has already bumped to
+  v6.2.0 on its `unstable/v1` branch, and the publish workflows carry a
+  `#VERIFY` note to re-pin when the next release ships. This emits a
+  deprecation warning only; after the cutover GitHub runs node20 actions on
+  node24 automatically.
+
 ### Added
 
 - `python-sbom.yml`: the dormant `license-compliance` job now performs real

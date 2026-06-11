@@ -154,6 +154,11 @@ jobs:
           echo "🔒 Using OIDC Trusted Publishing (no secrets needed)"
 
       - name: Publish to PyPI
+        # #VERIFY: v1.14.0 internally pins actions/setup-python v5.6.0 (node20).
+        # Upstream already bumped to setup-python v6.2.0 (node24) on unstable/v1;
+        # re-pin here when the next release ships. After GitHub's 2026-06-16
+        # cutover, node20 actions execute on node24 automatically, so until then
+        # this surfaces as a deprecation warning only, not a failure.
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # v1.14.0
         with:
           print-hash: true
@@ -205,6 +210,7 @@ jobs:
           echo "🔒 Using OIDC Trusted Publishing (no secrets needed)"
 
       - name: Publish to TestPyPI
+        # #VERIFY: see node20 note on the PyPI publish step above.
         uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b  # v1.14.0
         with:
           repository-url: https://test.pypi.org/legacy/
