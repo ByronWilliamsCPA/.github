@@ -585,151 +585,61 @@ jobs:
         with:
           python-version: ${{ inputs.python-version }}
 
+      # Checkout only scripts/check_licenses.py from this reusable workflow repo
+      # so the runner can invoke it directly. The SBOM artifacts were downloaded
+      # above into the runner workspace root (the CWD at invocation time); the
+      # script is checked out under _checker/ and reads its inputs from the CWD.
+      # All workflow inputs reach the script via env vars (injection-safe pattern).
+      #
+      # #CRITICAL: ref MUST pin the script to the same commit as this workflow
+      # file. job.workflow_sha is the commit SHA of the reusable workflow file
+      # that defines this job, so a caller pinned to python-sbom.yml@<sha> gets
+      # exactly that commit's check_licenses.py (job.workflow_repository is the
+      # repo that workflow file lives in). Omitting ref would float to main
+      # HEAD at run time, breaking the SHA-pin guarantee and opening a TOCTOU
+      # window for every consumer. These job.* properties are newer than
+      # actionlint 1.7.x's context model; see .github/actionlint.yaml.
+      # #ASSUME: ByronWilliamsCPA/.github remains public; a private repo would
+      # require callers' tokens to carry contents: read on this repo.
+      # #VERIFY: on first caller run, confirm the checked-out script SHA matches
+      # the called workflow ref in the job log.
+      - name: Checkout license checker script
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          sparse-checkout: |
+            scripts/check_licenses.py
+          sparse-checkout-cone-mode: false
+          path: _checker
+
+      # sparse-checkout with cone-mode false exits 0 even when the requested
+      # path does not exist in the ref; fail loudly here instead of letting the
+      # python invocation die with a raw "can't open file" interpreter error.
+      - name: Verify license checker script is present
+        env:
+          CHECKER_REF: ${{ job.workflow_sha }}
+        run: |
+          if [ ! -f "_checker/scripts/check_licenses.py" ]; then
+            echo "::error::scripts/check_licenses.py not found after sparse checkout of ByronWilliamsCPA/.github@${CHECKER_REF}. Path mismatch or failed checkout."
+            exit 1
+          fi
+
       - name: Check licenses in runtime SBOM
         env:
+          # #CRITICAL: workflow inputs MUST reach the script via env vars only.
+          # Never interpolate inputs directly into run: commands; that opens a
+          # script-injection path if callers pass attacker-controlled strings.
+          # The env: block is the injection-safe boundary.
+          # #ASSUME: the extracted script preserves the inline script's
+          # advisory/gating exit-code behaviour exactly.
+          # #VERIFY: confirm on first run that advisory/gating behaviour is preserved.
           FORBIDDEN_LICENSES: ${{ inputs.forbidden-licenses }}
           ALLOWED_PACKAGES: ${{ inputs.allowed-packages }}
           FAIL_ON_FORBIDDEN: ${{ inputs.fail-on-forbidden-licenses }}
-          # The checker is passed through an env var and run with python -c "$CHECK_SCRIPT".
-          # All inputs reach it via env (no GitHub-expression interpolation inside run:),
-          # which avoids the heredoc-indentation trap and the workflow-injection class.
-          # Improvements over the prior id-only check:
-          #   - reads the CycloneDX id, name, AND expression fields, then maps free-text
-          #     license names to copyleft families (GPL/AGPL/LGPL/MPL), so a package whose
-          #     license is recorded as a name (for example PyMuPDF's
-          #     "GNU AFFERO GPL 3.0 or Artifex Commercial License") is no longer missed;
-          #   - honors a per-package allowlist (allowed-packages input);
-          #   - also reads pip-licenses.json to catch PEP 639 packages that
-          #     cyclonedx-bom 7.3.0 omits from the SBOM entirely.
-          CHECK_SCRIPT: |
-            import json
-            import os
-            import re
-            import sys
-
-            def norm(value):
-                return (value or "").strip()
-
-            def detect_family(text):
-                """Map an SPDX id or free-text license string to a copyleft family."""
-                lowered = (text or "").lower()
-                # A "<token>-compatible" phrasing (for example the historic
-                # "GPL-compatible" classifier) describes a permissive license's
-                # compatibility with copyleft, not a copyleft grant, so strip those
-                # qualifiers before detection to avoid a false positive.
-                lowered = re.sub(r"\b(?:a?gpl|lgpl|mpl)[- ]compatible\b", " ", lowered)
-                if re.search(r"\baffero\b", lowered) or re.search(r"\bagpl", lowered):
-                    return "AGPL"
-                if (
-                    re.search(r"\blesser\b", lowered)
-                    or re.search(r"\blgpl", lowered)
-                    or "library general public" in lowered
-                ):
-                    return "LGPL"
-                if re.search(r"\bgpl", lowered) or "gnu general public" in lowered:
-                    return "GPL"
-                if re.search(r"\bmpl\b", lowered) or "mozilla public" in lowered:
-                    return "MPL"
-                return None
-
-            def load_json(path):
-                try:
-                    with open(path) as handle:
-                        return json.load(handle)
-                except FileNotFoundError:
-                    return None
-
-            def load_list(var_name):
-                """Parse a JSON-array env var, failing loudly on malformed input."""
-                raw = os.environ.get(var_name, "[]")
-                try:
-                    value = json.loads(raw)
-                except json.JSONDecodeError as exc:
-                    sys.exit(f"::error::{var_name} is not valid JSON: {exc}")
-                if not isinstance(value, list):
-                    sys.exit(
-                        f"::error::{var_name} must be a JSON array, "
-                        f"got {type(value).__name__}"
-                    )
-                return value
-
-            forbidden = set(load_list("FORBIDDEN_LICENSES"))
-            fail_on = os.environ.get("FAIL_ON_FORBIDDEN", "false").lower() == "true"
-            forbidden_families = {fam for fam in (detect_family(x) for x in forbidden) if fam}
-
-            # Allowlist entries are "name" (exempt from every family) or "name:FAMILY"
-            # (exempt only that copyleft family, so a later license change is still
-            # caught). allowed[name] is None for a blanket exemption, else a set of
-            # families.
-            allowed = {}
-            for entry in load_list("ALLOWED_PACKAGES"):
-                name, _, family = str(entry).partition(":")
-                name = name.strip().lower()
-                family = family.strip().upper()
-                if not family:
-                    allowed[name] = None
-                elif allowed.get(name, set()) is not None:
-                    allowed.setdefault(name, set()).add(family)
-
-            issues = []
-            unset = object()
-
-            def check(pkg_name, strings):
-                exempt = allowed.get(pkg_name.lower(), unset)
-                if exempt is None:
-                    return  # blanket allowlist entry: skip every family
-                flagged = set()
-                for raw in strings:
-                    text = norm(raw)
-                    if not text:
-                        continue
-                    family = detect_family(text)
-                    exact = text in forbidden
-                    heuristic = family is not None and family in forbidden_families
-                    if not exact and not heuristic:
-                        continue
-                    if exempt is not unset and family in exempt:
-                        continue  # family-scoped exemption (for example certifi:MPL)
-                    flagged.add(text if exact else f"{text} [{family}]")
-                for item in sorted(flagged):
-                    issues.append(f"{pkg_name}: {item}")
-
-            sbom = load_json("sbom-runtime.cdx.json")
-            piplic = load_json("pip-licenses.json")
-            if sbom is None and piplic is None:
-                sys.exit(
-                    "::error::No license inventory found (neither "
-                    "sbom-runtime.cdx.json nor pip-licenses.json). Cannot verify "
-                    "dependency licenses; failing rather than reporting clean."
-                )
-
-            if sbom:
-                for component in sbom.get("components", []):
-                    name = component.get("name", "")
-                    strings = []
-                    for lic in component.get("licenses", []):
-                        license_obj = lic.get("license", {})
-                        strings.append(license_obj.get("id"))
-                        strings.append(license_obj.get("name"))
-                        strings.append(lic.get("expression"))
-                    check(name, strings)
-
-            if piplic:
-                for row in piplic:
-                    check(row.get("Name", ""), [row.get("License")])
-
-            issues = sorted(set(issues))
-            if issues:
-                print("WARNING: Found forbidden or copyleft licenses:")
-                for issue in issues:
-                    print(f"  - {issue}")
-                if fail_on:
-                    sys.exit(1)
-            else:
-                print("All licenses compatible")
         run: |
           echo "Checking runtime dependency licenses..."
-          python -c "$CHECK_SCRIPT"
+          python _checker/scripts/check_licenses.py
 
       - name: License Summary
         env:
