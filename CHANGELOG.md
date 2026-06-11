@@ -13,6 +13,7 @@ the latest reviewed commit on `main` and is re-pointed as changes land.
 
 ### Changed
 
+- `workflow-templates/python-security-analysis.yml`: corrected OWASP Dependency-Check pin comment from `v1.1.0` to `1.1.0` to match the upstream tag scheme (no `v` prefix), restoring Renovate digest tracking.
 - Node 20 deprecation sweep ahead of GitHub's 2026-06-16 forced cutover to
   Node 24. Audit result: every `actions/setup-python` (v6.2.0) and
   `astral-sh/setup-uv` (v8.2.0) pin in the live reusable workflows and
