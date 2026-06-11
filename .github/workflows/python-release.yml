@@ -30,6 +30,13 @@
 #   supply a non-empty `skip-tests-reason` input documenting why the tests
 #   are safe to skip (e.g., "tests run in upstream pipeline X"). The release
 #   job will fail fast if `run-tests: false` is used without a reason.
+#
+# Step ordering (semantic-release mode):
+#   PSR runs first to determine the new version and push the tag; a checkout
+#   of the tag follows so uv build reads the bumped pyproject.toml. This
+#   ensures dist/, the SBOM, the SLSA hashes, and the Sigstore bundles all
+#   carry the correct version. Manual-tag mode is unaffected: the build runs
+#   on the already-checked-out tagged commit.
 # ============================================================================
 
 name: Python Release (Reusable)
@@ -335,33 +342,23 @@ jobs:
         run: uv sync --all-extras $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path
         shell: bash
 
-      - name: Build package
-        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
-        run: |
-          uv build
-          echo "Built packages:"
-          ls -lh dist/
-
-      - name: Generate SBOM
-        if: ${{ inputs.generate-sbom && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock') }}
-        run: |
-          echo "Generating Software Bill of Materials..."
-          uv pip install --no-build 'cyclonedx-bom==7.3.0'
-          uv export --format requirements-txt --output-file requirements-all.txt --no-hashes
-          uv run cyclonedx-py requirements requirements-all.txt --of json --output-file dist/sbom.json
-          rm -f requirements-all.txt
-          echo "SBOM generated: dist/sbom.json"
-
-      - name: Generate artifact hashes
-        id: hash
-        working-directory: dist
-        run: |
-          echo "hashes=$(sha256sum ./* | base64 -w0)" >> "$GITHUB_OUTPUT"
+      # -----------------------------------------------------------------------
+      # Semantic Release Mode: PSR runs BEFORE the build so the version bump
+      # is reflected in dist/. PSR pushes a tag (commit: false so no branch
+      # push is attempted against the ruleset-protected main). After PSR we
+      # check out that tag so uv build reads the bumped pyproject.toml.
+      # -----------------------------------------------------------------------
 
       # Semantic Release Mode
       - name: Python Semantic Release
         if: ${{ inputs.semantic-release }}
         id: semantic-release
+        # #ASSUME PSR v10.5.3 outputs released, version, tag as step outputs.
+        # #VERIFY on PSR major upgrades: confirm output names are unchanged.
+        # #CRITICAL commit: "false" means PSR only pushes a tag (no branch commit).
+        # #VERIFY: branch rulesets must allow tag-ref pushes from github-actions[bot].
+        # #ASSUME github.token has contents: write (granted at job level above).
+        # #VERIFY: caller must pass contents: write in their permissions block.
         uses: python-semantic-release/python-semantic-release@350c48fcb3ffcdfd2e0a235206bc2ecea6b69df0  # v10.5.3
         with:
           github_token: ${{ github.token }}
@@ -378,8 +375,73 @@ jobs:
           # booleans correctly.
           vcs_release: "false"
 
+      # After PSR pushes a tag it does NOT update the working tree (commit: false).
+      # Check out the tag PSR created so that uv build reads the bumped version from
+      # pyproject.toml. Without this step uv build reads the pre-bump version and
+      # produces mis-versioned artifacts (root cause of issue #204).
+      # #CRITICAL: steps.detect.outputs.state was captured before this checkout;
+      # the lock-file state does not change between the initial checkout and the tag
+      # because PSR only bumps pyproject.toml version (no lock changes). State is safe
+      # to reuse for all subsequent conditional steps.
+      # #ASSUME PSR outputs.tag is the full ref (e.g. "v1.2.3") required by git checkout.
+      # #VERIFY on PSR major upgrades: confirm outputs.tag format is unchanged.
+      # #EDGE If PSR decides no release is needed (released == 'false') this step is
+      # skipped and subsequent build/sign/release steps are also skipped via their
+      # conditions, so the job exits cleanly with no artifacts.
+      - name: Checkout PSR tag (bumped version)
+        if: ${{ inputs.semantic-release && steps.semantic-release.outputs.released == 'true' }}
+        env:
+          PSR_TAG: ${{ steps.semantic-release.outputs.tag }}
+        run: |
+          git checkout "$PSR_TAG"
+          echo "Checked out PSR tag: $PSR_TAG"
+          echo "pyproject.toml version after checkout:"
+          grep -E '^version\s*=' pyproject.toml || true
+
+      # -----------------------------------------------------------------------
+      # Build, SBOM, hashing: run after PSR (semantic mode) or directly on the
+      # tagged commit (manual mode). Gated on detect state from the initial
+      # checkout; the lock-file state is unchanged by the PSR tag checkout.
+      # -----------------------------------------------------------------------
+
+      - name: Build package
+        if: |
+          (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock') &&
+          (!inputs.semantic-release || steps.semantic-release.outputs.released == 'true')
+        run: |
+          uv build
+          echo "Built packages:"
+          ls -lh dist/
+
+      - name: Generate SBOM
+        if: |
+          inputs.generate-sbom &&
+          (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock') &&
+          (!inputs.semantic-release || steps.semantic-release.outputs.released == 'true')
+        run: |
+          echo "Generating Software Bill of Materials..."
+          uv pip install --no-build 'cyclonedx-bom==7.3.0'
+          uv export --format requirements-txt --output-file requirements-all.txt --no-hashes
+          uv run cyclonedx-py requirements requirements-all.txt --of json --output-file dist/sbom.json
+          rm -f requirements-all.txt
+          echo "SBOM generated: dist/sbom.json"
+
+      - name: Generate artifact hashes
+        id: hash
+        if: |
+          (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock') &&
+          (!inputs.semantic-release || steps.semantic-release.outputs.released == 'true')
+        working-directory: dist
+        run: |
+          echo "hashes=$(sha256sum ./* | base64 -w0)" >> "$GITHUB_OUTPUT"
+
       - name: Sign artifacts with Sigstore
         if: ${{ inputs.sign-artifacts && (steps.semantic-release.outputs.released == 'true' || !inputs.semantic-release) }}
+        # #ASSUME id-token: write (granted at job level) enables OIDC token issuance for Sigstore.
+        # #VERIFY: caller must pass id-token: write; reusable workflows inherit caller permissions
+        # only when the caller explicitly grants them.
+        # #CRITICAL attestations: write is required in addition to id-token: write for sigstore
+        # gh-action-sigstore-python to upload bundles to the release. Both are granted above.
         uses: sigstore/gh-action-sigstore-python@04cffa1d795717b140764e8b640de88853c92acc  # v3.3.0
         with:
           inputs: ./dist/*.tar.gz ./dist/*.whl
@@ -486,6 +548,8 @@ jobs:
 
       - name: Publish to PyPI
         # Uses trusted publishing (OIDC) - configure at pypi.org/manage/account/publishing/
+        # #ASSUME id-token: write (granted at job level) enables OIDC token for uv publish.
+        # #VERIFY: PyPI project must have a trusted publisher configured for this workflow.
         run: uv publish --trusted-publishing always dist/*.whl dist/*.tar.gz
         env:
           UV_PUBLISH_URL: ${{ inputs.pypi-url }}

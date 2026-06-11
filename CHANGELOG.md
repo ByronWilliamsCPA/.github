@@ -11,6 +11,10 @@ the latest reviewed commit on `main` and is re-pointed as changes land.
 
 ## [Unreleased]
 
+### Fixed
+
+- `python-release.yml`: move PSR step before build so `dist/` carries the bumped version; add a post-PSR tag checkout to ensure `uv build` reads the updated `pyproject.toml` (fixes #204).
+
 ### Changed
 
 - Node 20 deprecation sweep ahead of GitHub's 2026-06-16 forced cutover to
