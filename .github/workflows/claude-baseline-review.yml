@@ -27,7 +27,12 @@ name: Claude Baseline Review
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    # #EDGE: edited is included because classification reads the PR body
+    # (precedent-PR citations) and title. labeled/unlabeled are deliberately
+    # excluded: this workflow applies the needs-deep-review label itself via
+    # an app token, and app-token events trigger workflows, so reacting to
+    # label events would self-trigger a loop.
+    types: [opened, synchronize, reopened, ready_for_review, edited]
     branches:
       - main
 
@@ -43,7 +48,13 @@ jobs:
   baseline-review:
     name: Baseline Triage Review
     runs-on: ubuntu-latest
-    if: github.event.pull_request.draft == false
+    # #EDGE: fork PRs are excluded because secrets.ANTHROPIC_API_KEY is not
+    # available to pull_request runs from forks; without the gate the job
+    # would fail at startup on every fork PR and add noise. Same-repo PRs
+    # are the only traffic in this solo-maintainer org today.
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository
     timeout-minutes: 15
     permissions:
       # #CRITICAL: contents: read is for checkout only; this reviewer never

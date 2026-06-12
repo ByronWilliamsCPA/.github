@@ -15,7 +15,7 @@ the latest reviewed commit on `main` and is re-pointed as changes land.
 
 - `claude-baseline-review.yml`: repo-local Tier 0 PR triage review powered by
   `anthropics/claude-code-action` (SHA-pinned, advisory-only). Classifies each
-  non-draft PR (renovate-deps, pattern-series, docs-only, config-tweak,
+  non-draft same-repo PR (renovate-deps, pattern-series, docs-only, config-tweak,
   substantive), runs class-appropriate spot checks including tag-to-SHA
   verification on Renovate action bumps, and posts a sticky BASELINE-OK or
   ESCALATE verdict comment. ESCALATE applies the `needs-deep-review` label,

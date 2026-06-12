@@ -52,8 +52,11 @@ Constraints that shape the design:
 
 ### Tier 0 (new, this PR): universal automated baseline
 
-`.github/workflows/claude-baseline-review.yml` runs on every non-draft PR
-targeting `main`. It is a single capped `claude-code-action` pass
+`.github/workflows/claude-baseline-review.yml` runs on every non-draft,
+same-repo PR targeting `main` (fork PRs are skipped: `pull_request` runs
+from forks cannot read the API-key secret, so the job would only ever fail
+at startup there; PR description edits re-trigger reclassification). It is
+a single capped `claude-code-action` pass
 (Sonnet 4.6, max 30 turns, 15-minute timeout) that:
 
 1. Classifies the PR into one of five classes:
