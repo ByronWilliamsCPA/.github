@@ -128,9 +128,13 @@ Key properties, in the order an auditor would check them:
   follow, embedded instructions. The agent is comment-only: no pushes, no
   approvals, no code execution beyond the allowlisted `gh` reads.
 - Tool allowlist is deliberately narrow: `gh pr view/diff/comment/edit`,
-  `gh api repos/*` (tag and commit reads for pin verification),
-  `gh label`. Notably `gh pr` is NOT allowlisted wholesale because that
-  would include `gh pr merge`.
+  `gh api` limited to the two read-only tag-resolution endpoints
+  (`repos/*/git/ref/tags/*` and `repos/*/git/tags/*`, owner/repo
+  wildcarded because third-party action repos are arbitrary), and
+  `gh label create` for the single escalation label only. Notably `gh pr`
+  is NOT allowlisted wholesale because that would include `gh pr merge`.
+  The repo's checked-in `.claude/settings.json` deny rules (gh api
+  mutations, destructive git) apply to the CI run as well.
 - Cost containment: concurrency group cancels superseded runs;
   `--max-turns 30`; `timeout-minutes: 15`.
 

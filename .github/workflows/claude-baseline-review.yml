@@ -122,11 +122,11 @@ jobs:
 
             STEP 1: GATHER. Using the gh CLI with REPO and PR_NUMBER:
             - gh pr view with --json title,body,labels,headRefName,
-              additions,deletions,files,statusCheckRollup (note check
-              failures; distinguish still-running checks)
+              additions,deletions,files,statusCheckRollup,reviews (note
+              check failures and distinguish still-running checks; use the
+              reviews field to record whether Copilot and CodeRabbit have
+              reported yet)
             - gh pr diff
-            - gh api repos/$REPO/pulls/$PR_NUMBER/reviews to record whether
-              Copilot and CodeRabbit have reported yet.
 
             STEP 2: CLASSIFY into exactly one class:
             - renovate-deps: head branch renovate/*, or labels
@@ -196,7 +196,13 @@ jobs:
               --description "Queued for full pr-review skill pass"
               (ignore failure if the label already exists)
             - gh pr edit $PR_NUMBER --add-label needs-deep-review
+          # #CRITICAL: the gh api patterns are limited to the two read-only
+          # tag-resolution endpoints used for pin verification; owner/repo
+          # stay wildcarded because third-party action repos are arbitrary.
+          # gh label is limited to creating the one escalation label. The
+          # repo's checked-in .claude/settings.json deny rules (gh api
+          # mutations, git reset, rm -rf) also apply to this run.
           claude_args: |
             --max-turns 30
             --model claude-sonnet-4-6
-            --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(gh pr edit:*),Bash(gh api repos/*),Bash(gh label:*)"
+            --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(gh pr edit:*),Bash(gh api repos/*/git/ref/tags/*),Bash(gh api repos/*/git/tags/*),Bash(gh label create needs-deep-review*)"
