@@ -137,6 +137,13 @@ Key properties, in the order an auditor would check them:
   mutations, destructive git) apply to the CI run as well.
 - Cost containment: concurrency group cancels superseded runs;
   `--max-turns 30`; `timeout-minutes: 15`.
+- Tamper protection (verified on this PR's own CI run): the action's
+  app-token exchange validates that the workflow file content matches the
+  default branch and skips gracefully when it does not. Consequence one:
+  the baseline does not review the PR that introduces or modifies
+  `claude-baseline-review.yml` itself; it starts working after merge.
+  Consequence two: a PR cannot run a tampered version of the reviewer
+  against itself.
 
 ## 5. What does not change
 
