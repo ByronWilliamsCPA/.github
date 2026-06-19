@@ -1,40 +1,67 @@
 # ============================================================================
-# Claude Baseline PR Review (Tier 0)
+# Claude Baseline PR Review (Tier 0) -- reusable workflow
 # ============================================================================
-# Lightweight universal triage review that runs on every non-draft PR.
-# It classifies the PR (renovate-deps, pattern-series, docs-only,
-# config-tweak, substantive), runs class-appropriate spot checks (including
-# tag-to-SHA verification on Renovate action bumps), folds in Copilot and
-# CodeRabbit status, and posts a single sticky verdict comment:
-# BASELINE-OK or ESCALATE. On ESCALATE it applies the needs-deep-review
-# label, which queues the PR for the full /pr-review skill (Tier 1).
+# Lightweight universal triage review for a single PR. Classifies the PR
+# (renovate-deps, pattern-series, docs-only, config-tweak, substantive), runs
+# class-appropriate spot checks (including tag-to-SHA verification on Renovate
+# action bumps), folds in Copilot and CodeRabbit status, and posts a single
+# sticky verdict comment: BASELINE-OK or ESCALATE. On ESCALATE it applies the
+# needs-deep-review label, which queues the PR for the full /pr-review skill
+# (Tier 1).
 #
-# The verdict is advisory: this job does not fail the PR on ESCALATE. It
-# fails only on operational errors (auth, action failure).
+# The verdict is advisory: this job does not fail the PR on ESCALATE. It fails
+# only on operational errors (auth, action failure).
 #
-# SETUP REQUIREMENTS (one-time):
-#   - Repository secret ANTHROPIC_API_KEY (Claude API key).
-#   - Claude GitHub App installed on the repository, used for OIDC token
+# REUSABLE: this is a workflow_call reusable consumed by a thin per-repo caller
+# that triggers on pull_request. Each caller supplies repo-specific framing via
+# inputs so one shared prompt serves every repo and is tuned in one place. The
+# repo-local caller in this repo is
+# .github/workflows/claude-baseline-review-pr.yml; consuming repos add their own
+# caller pinning this reusable by SHA (the .claude and homelab-infra repos are
+# the first consumers).
+#
+# SETUP REQUIREMENTS (per consuming repo):
+#   - ANTHROPIC_API_KEY secret (org-level, visibility all, already satisfies
+#     every repo) passed through by the caller (secrets: inherit).
+#   - Claude GitHub App installed on the consuming repo, used for OIDC token
 #     exchange. Alternative: pass a github_token input instead.
 #
 # COST PROFILE:
 #   Average duration: 2-5 minutes (capped by --max-turns 30 and
 #   timeout-minutes: 15)
 #   Model: Sonnet 4.6 (repo default tier per .claude/CLAUDE.md)
-#   Recommended for: every PR (that is the point of a universal baseline)
 # ============================================================================
 name: Claude Baseline Review
 
 on:
-  pull_request:
-    # #EDGE: edited is included because classification reads the PR body
-    # (precedent-PR citations) and title. labeled/unlabeled are deliberately
-    # excluded: this workflow applies the needs-deep-review label itself via
-    # an app token, and app-token events trigger workflows, so reacting to
-    # label events would self-trigger a loop.
-    types: [opened, synchronize, reopened, ready_for_review, edited]
-    branches:
-      - main
+  workflow_call:
+    inputs:
+      repo-description:
+        description: >-
+          One or two sentences describing the consuming repository, injected
+          into the reviewer prompt as context so classification reflects what
+          the repo actually contains.
+        required: true
+        type: string
+      sensitive-paths:
+        description: >-
+          Comma or space separated path prefixes whose modification forces the
+          substantive class (and therefore the full spot checks). Example for a
+          workflow library: ".github/workflows/, workflow-templates/, scripts/".
+        required: true
+        type: string
+      escalation-guidance:
+        description: >-
+          Repo-specific escalation triggers, appended verbatim to the universal
+          trigger list in the prompt. Plain text; describe the change types that
+          must force a deep review in this repo (for example, edits to executable
+          hooks, permission/deny config, or secret handling).
+        required: true
+        type: string
+    secrets:
+      ANTHROPIC_API_KEY:
+        description: 'Claude API key for the baseline reviewer.'
+        required: true
 
 # #CRITICAL: deny-all default; the single job below requests only what it
 # needs. Keep workflow-level permissions empty.
@@ -52,9 +79,17 @@ jobs:
     # available to pull_request runs from forks; without the gate the job
     # would fail at startup on every fork PR and add noise. Same-repo PRs
     # are the only traffic in this solo-maintainer org today.
+    # #CRITICAL: the trailing clause skips bot-initiated `edited` events. The
+    # claude-code-action OIDC app-token exchange aborts when the initiating
+    # actor is a bot, and CodeRabbit edits the PR body (an `edited` event with
+    # sender.type == Bot) on most PRs, which would fail the check on every run.
+    # Renovate in this org runs as a User PAT (not a bot), so its opened and
+    # synchronize events are NOT skipped by this clause and are still reviewed.
+    # Human edits (action == edited, sender == User) also still re-classify.
     if: >-
       github.event.pull_request.draft == false &&
-      github.event.pull_request.head.repo.full_name == github.repository
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (github.event.action != 'edited' || github.event.sender.type != 'Bot')
     timeout-minutes: 15
     permissions:
       # #CRITICAL: contents: read is for checkout only; this reviewer never
@@ -85,6 +120,12 @@ jobs:
           # the gh CLI, not local git history.
           fetch-depth: 1
           persist-credentials: false
+          # #CRITICAL: caller repos symlink files under .claude/ (e.g.
+          # .claude/commands/review-pr.md) into .submodules/. Without submodule
+          # checkout those symlinks dangle and claude-code-action aborts with
+          # `ENOENT ... statx '.claude/commands/review-pr.md'`. Recursive
+          # checkout resolves them. Submodules are public, so no extra token.
+          submodules: recursive
 
       - name: Run baseline triage review
         uses: anthropics/claude-code-action@ebcdfe6dc6bb7511eb63e59e07df256dbcf59a2e  # v1.0.145
@@ -92,20 +133,22 @@ jobs:
           # #CRITICAL: secret reference; ANTHROPIC_API_KEY must exist as a
           # repository or organization secret or this step fails at startup.
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          # #EDGE: only repository and PR number are interpolated into the
-          # prompt; both come from trusted event context. PR title, body,
-          # diff, and comments are attacker-influenced on fork PRs and are
-          # fetched by the agent as data, never interpolated here.
+          # #EDGE: only github.repository, the PR number, and caller-supplied
+          # inputs are interpolated into the prompt. github.repository and the
+          # PR number come from trusted event context; the inputs come from the
+          # caller workflow file (repo-author-controlled, on the default
+          # branch), not from PR event data. PR title, body, diff, and comments
+          # are attacker-influenced on fork PRs and are fetched by the agent as
+          # data, never interpolated here.
           prompt: |
             REPO: ${{ github.repository }}
             PR_NUMBER: ${{ github.event.pull_request.number }}
 
-            You are the Tier 0 baseline reviewer for this repository, an
-            org-level .github repo containing reusable GitHub Actions
-            workflows, workflow templates, operator shell scripts, and
-            community health files. Read .claude/CLAUDE.md first and follow
-            its writing rules in everything you post (in particular: never
-            use em-dashes).
+            You are the Tier 0 baseline reviewer for this repository:
+            ${{ inputs.repo-description }}
+            Read the repository's CLAUDE.md (at the repo root, and
+            .claude/CLAUDE.md if present) first and follow its writing rules in
+            everything you post (in particular: never use em-dashes).
 
             A deeper Tier 1 review pipeline (the pr-review skill) exists but
             is expensive. Your job: give every PR a fast, class-appropriate
@@ -138,14 +181,14 @@ jobs:
             - config-tweak: only tool config (renovate.json, .yamllint,
               .claude/settings.json, labels, dotfiles), no workflow logic.
             - substantive: everything else.
-            PRECEDENCE: if the PR changes any file under .github/workflows/,
-            workflow-templates/, or scripts/, it CANNOT be renovate-deps,
-            docs-only, or config-tweak; classify it substantive (or
-            pattern-series only if it cites a matching precedent). This
-            guarantees the substantive spot checks and the STEP 4
-            deterministic triggers are evaluated against the full diff for any
-            PR that touches workflow logic or operator scripts, even a pin
-            bump that edits a workflow uses: line.
+            PRECEDENCE: if the PR changes any file under these
+            repo-sensitive paths: ${{ inputs.sensitive-paths }} -- it CANNOT be
+            renovate-deps, docs-only, or config-tweak; classify it substantive
+            (or pattern-series only if it cites a matching precedent). This
+            guarantees the substantive spot checks and the STEP 4 deterministic
+            triggers are evaluated against the full diff for any PR that touches
+            this repo's security-sensitive surface, even a pin bump that edits a
+            single line.
 
             STEP 3: CLASS-APPROPRIATE CHECKS (do only these; no full review):
             - renovate-deps: for EVERY changed action pin, verify the tag
@@ -170,18 +213,16 @@ jobs:
               permission scope widening, secret handling changes, and PR
               description claims that the diff does not support.
 
-            STEP 4: ESCALATION DECISION. ESCALATE if ANY of:
-            1. Changes under .github/workflows/ or workflow-templates/ that
-               touch permissions:, secrets, id-token, on: triggers, or add
-               or change workflow_call inputs.
-            2. Changes under scripts/ that perform writes via gh api,
-               handle secrets, or transfer/delete resources.
-            3. breaking-change label, or ! in the conventional-commit title.
-            4. More than 500 changed lines, excluding lockfiles,
-               checksums.txt, and generated files.
-            5. Any renovate-deps tag/SHA mismatch, or a major action update.
-            6. Your judgment: security-sensitive or architectural
-               implications a one-pass review cannot clear.
+            STEP 4: ESCALATION DECISION. ESCALATE if ANY of the following.
+            Repo-specific triggers:
+            ${{ inputs.escalation-guidance }}
+            Universal triggers:
+            - breaking-change label, or ! in the conventional-commit title.
+            - More than 500 changed lines, excluding lockfiles,
+              checksums.txt, and generated files.
+            - Any renovate-deps tag/SHA mismatch, or a major action update.
+            - Your judgment: security-sensitive or architectural
+              implications a one-pass review cannot clear.
             Do NOT escalate solely for: docs-only changes, pattern-series
             PRs that match their precedent, or patch/minor pin bumps that
             verify clean.
