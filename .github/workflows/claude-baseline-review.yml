@@ -120,6 +120,12 @@ jobs:
           # the gh CLI, not local git history.
           fetch-depth: 1
           persist-credentials: false
+          # #CRITICAL: caller repos symlink files under .claude/ (e.g.
+          # .claude/commands/review-pr.md) into .submodules/. Without submodule
+          # checkout those symlinks dangle and claude-code-action aborts with
+          # `ENOENT ... statx '.claude/commands/review-pr.md'`. Recursive
+          # checkout resolves them. Submodules are public, so no extra token.
+          submodules: recursive
 
       - name: Run baseline triage review
         uses: anthropics/claude-code-action@ebcdfe6dc6bb7511eb63e59e07df256dbcf59a2e  # v1.0.145
