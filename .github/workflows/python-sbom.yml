@@ -732,7 +732,7 @@ jobs:
 
       # Checkout only scripts/compare_scanner_parity.py from this reusable
       # workflow repo, pinned to the same commit as this workflow file. See the
-      # license-checker job for the full rationale on job.workflow_sha pinning
+      # license-compliance job for the full rationale on job.workflow_sha pinning
       # (it preserves the SHA-pin guarantee and avoids a TOCTOU window).
       - name: Checkout parity comparison script
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
@@ -743,6 +743,9 @@ jobs:
             scripts/compare_scanner_parity.py
           sparse-checkout-cone-mode: false
           path: _checker
+          # This checkout only reads one script; do not leave the auth token in
+          # _checker/.git/config where it could be picked up by later steps.
+          persist-credentials: false
 
       # sparse-checkout with cone-mode false exits 0 even when the requested
       # path does not exist in the ref; fail loudly instead of a raw python
