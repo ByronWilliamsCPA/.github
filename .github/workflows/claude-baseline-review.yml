@@ -138,6 +138,14 @@ jobs:
             - config-tweak: only tool config (renovate.json, .yamllint,
               .claude/settings.json, labels, dotfiles), no workflow logic.
             - substantive: everything else.
+            PRECEDENCE: if the PR changes any file under .github/workflows/,
+            workflow-templates/, or scripts/, it CANNOT be renovate-deps,
+            docs-only, or config-tweak; classify it substantive (or
+            pattern-series only if it cites a matching precedent). This
+            guarantees the substantive spot checks and the STEP 4
+            deterministic triggers are evaluated against the full diff for any
+            PR that touches workflow logic or operator scripts, even a pin
+            bump that edits a workflow uses: line.
 
             STEP 3: CLASS-APPROPRIATE CHECKS (do only these; no full review):
             - renovate-deps: for EVERY changed action pin, verify the tag
@@ -196,12 +204,30 @@ jobs:
               --description "Queued for full pr-review skill pass"
               (ignore failure if the label already exists)
             - gh pr edit $PR_NUMBER --add-label needs-deep-review
+            - Confirm the label landed: re-read labels with
+              gh pr view $PR_NUMBER --json labels. If needs-deep-review is
+              absent (label create failed for a reason other than
+              already-exists, or the add did not take), the escalation never
+              entered the Tier 1 queue. Do not let that fail silently: add an
+              Important finding to the sticky comment stating the label could
+              not be applied and the PR needs manual deep review, so a dropped
+              escalation is visible.
           # #CRITICAL: the gh api patterns are limited to the two read-only
           # tag-resolution endpoints used for pin verification; owner/repo
           # stay wildcarded because third-party action repos are arbitrary.
           # gh label is limited to creating the one escalation label. The
-          # repo's checked-in .claude/settings.json deny rules (gh api
-          # mutations, git reset, rm -rf) also apply to this run.
+          # effective CI-side guardrail is this --allowedTools allowlist plus
+          # the job token scopes: no contents: write and no mutating gh api
+          # verb is allowlisted, so even with owner/repo wildcarded only the
+          # two GET tag endpoints are reachable and no third-party repo can be
+          # mutated. The repo's local .claude/settings.json deny rules harden
+          # interactive sessions; do not rely on them as the CI boundary
+          # unless confirmed loaded by claude-code-action in the runner.
+          # #EDGE: gh pr edit:* permits more than --add-label (for example
+          # --base retargeting); accepted residual because the token lacks
+          # contents: write and gh pr merge is not allowlisted, so the agent
+          # can neither merge nor push regardless of base, and it is also
+          # prompt-constrained to comment-only.
           claude_args: |
             --max-turns 30
             --model claude-sonnet-4-6
