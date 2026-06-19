@@ -11,6 +11,19 @@ the latest reviewed commit on `main` and is re-pointed as changes land.
 
 ## [Unreleased]
 
+### Added
+
+- `claude-baseline-review.yml`: repo-local Tier 0 PR triage review powered by
+  `anthropics/claude-code-action` (SHA-pinned, advisory-only). Classifies each
+  non-draft same-repo PR (renovate-deps, pattern-series, docs-only, config-tweak,
+  substantive), runs class-appropriate spot checks including tag-to-SHA
+  verification on Renovate action bumps, and posts a sticky BASELINE-OK or
+  ESCALATE verdict comment. ESCALATE applies the `needs-deep-review` label,
+  queueing the PR for the full pr-review skill (Tier 1). Requires the
+  `ANTHROPIC_API_KEY` repository secret and the Claude GitHub App (or a
+  `github_token` input) to operate; until those are configured the job fails
+  at startup without blocking other checks.
+
 ### Fixed
 
 - `python-release.yml`: move PSR step before build so `dist/` carries the bumped version. PSR with `commit: "false"` stamps the bump into the working tree and tags the pre-bump commit, so a post-PSR same-commit tag checkout with a version guard now protects the uncommitted bump that `uv build` reads (fixes #204).

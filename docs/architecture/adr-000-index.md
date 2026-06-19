@@ -11,3 +11,11 @@ Index of ADRs for the ByronWilliamsCPA/.github reusable workflow library.
 
 Each ADR covers: Context, Decision, Consequences.
 Use status: Proposed / Accepted / Deprecated / Superseded.
+
+## Reference Documents
+
+Architecture references that are not decision records (no Context/Decision/Consequences format):
+
+| Document | Title | Status | Date |
+|----------|-------|--------|------|
+| [tiered-pr-review](tiered-pr-review.md) | Tiered PR Review Architecture: Reference for Reviewers | Proposed | 2026-06-12 |
