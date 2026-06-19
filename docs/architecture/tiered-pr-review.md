@@ -1,6 +1,6 @@
 # Tiered PR Review Architecture: Reference for Reviewers
 
-Status: proposed (this document ships with the PR that introduces Tier 0)
+Status: Proposed (this document ships with the PR that introduces Tier 0)
 Date: 2026-06-12
 Owners: ByronWilliamsCPA (solo maintainer)
 Scope: ByronWilliamsCPA/.github first; fleet-wide after tuning
@@ -133,13 +133,18 @@ Key properties, in the order an auditor would check them:
   wildcarded because third-party action repos are arbitrary), and
   `gh label create` for the single escalation label only. Notably `gh pr`
   is NOT allowlisted wholesale because that would include `gh pr merge`.
-  The repo's checked-in `.claude/settings.json` deny rules (gh api
-  mutations, destructive git) apply to the CI run as well.
+  The effective CI-side guardrail is this allowlist plus the job token
+  scopes (no `contents: write`, no mutating `gh api` verb allowlisted); the
+  repo's `.claude/settings.json` deny rules harden interactive sessions and
+  should not be relied on as the CI boundary unless confirmed loaded by
+  `claude-code-action` in the runner.
 - Cost containment: concurrency group cancels superseded runs;
   `--max-turns 30`; `timeout-minutes: 15`.
-- Tamper protection (verified on this PR's own CI run): the action's
-  app-token exchange validates that the workflow file content matches the
-  default branch and skips gracefully when it does not. Consequence one:
+- Tamper protection (an upstream `claude-code-action` behavior; confirm
+  empirically once the API key and Claude GitHub App are configured): the
+  action's app-token exchange validates that the workflow file content
+  matches the default branch and skips gracefully when it does not.
+  Consequence one:
   the baseline does not review the PR that introduces or modifies
   `claude-baseline-review.yml` itself; it starts working after merge.
   Consequence two: a PR cannot run a tampered version of the reviewer
