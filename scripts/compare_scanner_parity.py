@@ -110,7 +110,13 @@ def _parse_trivy_location(text: str) -> tuple[str, str, str] | None:
     match = _TRIVY_LOCATION.match(text)
     if match is None:
         return None
-    return _normalize_artifact(match["eco"], match["name"], match["ver"])
+    artifact = _normalize_artifact(match["eco"], match["name"], match["ver"])
+    # Guard against an empty version (e.g. "Python: requests@   "), mirroring
+    # parse_purl. A version of "" can never join against a real scanner finding
+    # and would otherwise inflate the trivy-only bucket with a phantom entry.
+    if not artifact[2]:
+        return None
+    return artifact
 
 
 def _purls_for_result(result: dict, rule: dict) -> list[str]:
@@ -120,9 +126,43 @@ def _purls_for_result(result: dict, rule: dict) -> list[str]:
     return list(purls or [])
 
 
-def extract_findings(sarif: dict) -> list[Finding]:
-    """Extract artifact-level findings from one SARIF document."""
+def _artifacts_for_result(result: dict, rule: dict) -> list[tuple[str, str, str]]:
+    """Resolve one result's affected artifacts.
+
+    PURLs (Grype) take precedence; the Trivy location-message text is the
+    fallback. Returns an empty list when neither shape yields a parseable
+    artifact, which the caller treats as a dropped result.
+    """
+    artifacts = [
+        parsed
+        for purl in _purls_for_result(result, rule)
+        if (parsed := parse_purl(purl)) is not None
+    ]
+    if artifacts:
+        return artifacts
+    return [
+        parsed
+        for location in result.get("locations", [])
+        if (
+            parsed := _parse_trivy_location(
+                (location.get("message") or {}).get("text", "")
+            )
+        )
+        is not None
+    ]
+
+
+def extract_findings(sarif: dict) -> tuple[list[Finding], int]:
+    """Extract artifact-level findings from one SARIF document.
+
+    Returns the findings and the count of results that carried a ruleId but
+    yielded no parseable artifact (neither a PURL nor a Trivy location matched).
+    A nonzero drop count on an otherwise well-formed SARIF is the signature of a
+    scanner output-format change; it is surfaced as a parity warning so a silent
+    under-count cannot masquerade as a clean result.
+    """
     findings: list[Finding] = []
+    dropped = 0
     for run in sarif.get("runs", []):
         rules = {
             rule.get("id"): rule
@@ -131,55 +171,74 @@ def extract_findings(sarif: dict) -> list[Finding]:
         }
         for result in run.get("results", []):
             advisory = str(result.get("ruleId", ""))
-            rule = rules.get(advisory, {})
-            artifacts = [
-                parsed
-                for purl in _purls_for_result(result, rule)
-                if (parsed := parse_purl(purl)) is not None
-            ]
+            artifacts = _artifacts_for_result(result, rules.get(advisory, {}))
             if not artifacts:
-                for location in result.get("locations", []):
-                    text = (location.get("message") or {}).get("text", "")
-                    parsed = _parse_trivy_location(text)
-                    if parsed is not None:
-                        artifacts.append(parsed)
-            for ecosystem, name, version in artifacts:
-                findings.append(
-                    Finding(
-                        ecosystem=ecosystem,
-                        name=name,
-                        version=version,
-                        advisory_id=advisory,
-                    )
+                dropped += 1
+                continue
+            findings.extend(
+                Finding(
+                    ecosystem=ecosystem,
+                    name=name,
+                    version=version,
+                    advisory_id=advisory,
                 )
-    return findings
+                for ecosystem, name, version in artifacts
+            )
+    return findings, dropped
 
 
-def load_findings_from_dir(path: str) -> tuple[list[Finding], int]:
+class LoadResult(TypedDict):
+    """Findings plus the data-loss signals gathered while loading a directory.
+
+    The counters exist so a silently lost SARIF cannot be reported as a clean
+    zero. files_failed and non_sarif_json distinguish "no SARIF present" from
+    "SARIF present but unreadable/unrecognized"; dropped_results flags a
+    well-formed SARIF whose results no longer match the expected purl/location
+    shape (a scanner output-format change).
+    """
+
+    findings: list[Finding]
+    files_parsed: int  # valid SARIF documents (a dict with a "runs" key)
+    files_failed: int  # files that did not parse as JSON (corrupt/truncated)
+    non_sarif_json: int  # valid JSON lacking a "runs" key (unexpected shape)
+    dropped_results: int  # results yielding no parseable artifact
+
+
+def load_findings_from_dir(path: str) -> LoadResult:
     """Load findings from every SARIF document under a directory.
 
     A SARIF document is any file that parses as JSON with a "runs" key,
-    regardless of extension. Returns the findings and the count of SARIF
-    documents parsed (0 distinguishes "directory missing or no SARIF" from
-    "SARIF present but empty").
+    regardless of extension. Alongside the findings, returns counters that make
+    data loss observable: files_parsed (0 distinguishes "directory missing or no
+    SARIF" from "SARIF present but empty"), files_failed, non_sarif_json, and
+    dropped_results.
     """
-    if not os.path.isdir(path):
-        return [], 0
     findings: list[Finding] = []
-    files_parsed = 0
-    for root, _dirs, names in os.walk(path):
-        for name in sorted(names):
-            file_path = os.path.join(root, name)
-            try:
-                with open(file_path, encoding="utf-8") as handle:
-                    data = json.load(handle)
-            except (json.JSONDecodeError, OSError, UnicodeDecodeError):
-                continue
-            if not isinstance(data, dict) or "runs" not in data:
-                continue
-            files_parsed += 1
-            findings.extend(extract_findings(data))
-    return findings, files_parsed
+    files_parsed = files_failed = non_sarif_json = dropped_results = 0
+    if os.path.isdir(path):
+        for root, _dirs, names in os.walk(path):
+            for name in sorted(names):
+                file_path = os.path.join(root, name)
+                try:
+                    with open(file_path, encoding="utf-8") as handle:
+                        data = json.load(handle)
+                except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+                    files_failed += 1
+                    continue
+                if not isinstance(data, dict) or "runs" not in data:
+                    non_sarif_json += 1
+                    continue
+                files_parsed += 1
+                file_findings, dropped = extract_findings(data)
+                findings.extend(file_findings)
+                dropped_results += dropped
+    return LoadResult(
+        findings=findings,
+        files_parsed=files_parsed,
+        files_failed=files_failed,
+        non_sarif_json=non_sarif_json,
+        dropped_results=dropped_results,
+    )
 
 
 def package_key(finding: Finding) -> tuple[str, str, str]:
@@ -233,8 +292,34 @@ def _details_block(title: str, keys: list[tuple[str, str, str]]) -> list[str]:
     return lines
 
 
-def _verdict(comparison: Comparison, trivy_result: str, grype_result: str) -> str:
+def _parse_warning_count(trivy: LoadResult, grype: LoadResult) -> int:
+    """Total data-loss signals across both scanners (parse/shape/drop)."""
+    return sum(
+        side[key]
+        for side in (trivy, grype)
+        for key in ("files_failed", "non_sarif_json", "dropped_results")
+    )
+
+
+def _verdict(
+    comparison: Comparison,
+    trivy: LoadResult,
+    grype: LoadResult,
+    trivy_result: str,
+    grype_result: str,
+) -> str:
     if comparison["trivy_pkgs"] == 0 and comparison["grype_pkgs"] == 0:
+        # A zero-zero result is only trustworthy when nothing was lost in
+        # loading. Parse failures, unrecognized JSON, or dropped results mean
+        # the zero may be data loss, not a true empty scan, so do not declare
+        # parity at zero on the strength of the scan job result alone.
+        if _parse_warning_count(trivy, grype):
+            return (
+                "**Parity inconclusive:** both scanners reported zero packages, but "
+                "parse warnings were recorded (see the warning above). The zero counts "
+                "may reflect lost or unrecognized SARIF data rather than a true empty "
+                "result. Review the scan job logs before drawing conclusions."
+            )
         if trivy_result == "success" and grype_result == "success":
             return "Both scanners reported zero package-level findings. Parity at zero."
         return (
@@ -252,10 +337,27 @@ def _verdict(comparison: Comparison, trivy_result: str, grype_result: str) -> st
     )
 
 
+def _warning_line(trivy: LoadResult, grype: LoadResult) -> list[str]:
+    """A visible warning block when any SARIF data was lost during loading."""
+    if not _parse_warning_count(trivy, grype):
+        return []
+    failed = trivy["files_failed"] + grype["files_failed"]
+    non_sarif = trivy["non_sarif_json"] + grype["non_sarif_json"]
+    dropped = trivy["dropped_results"] + grype["dropped_results"]
+    return [
+        "",
+        f"> **Warning:** {failed} file(s) failed to parse, {non_sarif} JSON file(s) "
+        f"lacked a SARIF `runs` key, and {dropped} result(s) produced no parseable "
+        "artifact. These were excluded, so the counts above may understate true "
+        "findings. A corrupted artifact or a scanner output-format change is the "
+        "most likely cause; review the scan job logs.",
+    ]
+
+
 def render_markdown(
     comparison: Comparison,
-    trivy_files: int,
-    grype_files: int,
+    trivy: LoadResult,
+    grype: LoadResult,
     trivy_result: str,
     grype_result: str,
 ) -> str:
@@ -271,16 +373,17 @@ def render_markdown(
         "",
         "| Scanner | Job result | SARIF files | Packages flagged |",
         "|---------|------------|-------------|------------------|",
-        f"| Trivy (gating) | {trivy_result} | {trivy_files} | {comparison['trivy_pkgs']} |",
-        f"| Grype (advisory) | {grype_result} | {grype_files} | {comparison['grype_pkgs']} |",
+        f"| Trivy (gating) | {trivy_result} | {trivy['files_parsed']} | {comparison['trivy_pkgs']} |",
+        f"| Grype (advisory) | {grype_result} | {grype['files_parsed']} | {comparison['grype_pkgs']} |",
         "",
         "| Bucket | Count |",
         "|--------|-------|",
         f"| Detected by both | {comparison['both']} |",
         f"| Trivy only (missed by Grype) | {comparison['trivy_only']} |",
         f"| Grype only (missed by Trivy) | {comparison['grype_only']} |",
+        *_warning_line(trivy, grype),
         "",
-        _verdict(comparison, trivy_result, grype_result),
+        _verdict(comparison, trivy, grype, trivy_result, grype_result),
     ]
     lines.extend(_details_block("Detected by both", comparison["both_keys"]))
     lines.extend(
@@ -299,23 +402,32 @@ def main() -> int:
     trivy_result = os.environ.get("TRIVY_RESULT", "unknown")
     grype_result = os.environ.get("GRYPE_RESULT", "unknown")
 
-    trivy_findings, trivy_files = load_findings_from_dir(trivy_dir)
-    grype_findings, grype_files = load_findings_from_dir(grype_dir)
-    comparison = compare(trivy_findings, grype_findings)
+    trivy = load_findings_from_dir(trivy_dir)
+    grype = load_findings_from_dir(grype_dir)
+    comparison = compare(trivy["findings"], grype["findings"])
 
-    report = render_markdown(
-        comparison, trivy_files, grype_files, trivy_result, grype_result
-    )
+    report = render_markdown(comparison, trivy, grype, trivy_result, grype_result)
 
     summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary_path:
-        with open(summary_path, "a", encoding="utf-8") as handle:
-            handle.write(report)
+        # Guard the summary write: a failure here must not crash the advisory
+        # tool (it always exits 0) or skip the stdout fallback below.
+        try:
+            with open(summary_path, "a", encoding="utf-8") as handle:
+                handle.write(report)
+        except OSError as exc:
+            print(
+                f"Warning: could not write GITHUB_STEP_SUMMARY ({exc}); "
+                "report is in the step log only.",
+                file=sys.stderr,
+            )
     # Always print the report for log durability; the step summary is not
     # retrievable via the API for later aggregation.
     print(report)
 
     # Single machine-readable line for log scraping and cross-PR aggregation.
+    # The *_files_failed and *_dropped fields let an aggregator detect data
+    # loss without parsing the markdown report.
     print(
         "parity "
         f"pkg_both={comparison['both']} "
@@ -323,8 +435,12 @@ def main() -> int:
         f"pkg_grype_only={comparison['grype_only']} "
         f"trivy_pkgs={comparison['trivy_pkgs']} "
         f"grype_pkgs={comparison['grype_pkgs']} "
-        f"trivy_files={trivy_files} "
-        f"grype_files={grype_files}"
+        f"trivy_files={trivy['files_parsed']} "
+        f"grype_files={grype['files_parsed']} "
+        f"trivy_files_failed={trivy['files_failed']} "
+        f"grype_files_failed={grype['files_failed']} "
+        f"trivy_dropped={trivy['dropped_results']} "
+        f"grype_dropped={grype['dropped_results']}"
     )
     return 0
 

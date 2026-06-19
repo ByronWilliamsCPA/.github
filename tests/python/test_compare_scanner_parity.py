@@ -17,6 +17,12 @@ Coverage:
 7. Both empty: parity at zero
 8. SARIF files are read by content, not filename extension (Grype "output")
 9. Markdown rendering and machine-readable stdout line via main()
+10. Ecosystem alias (Python -> pypi) pinned directly so cross-tool parity
+    cannot pass vacuously
+11. Data-loss observability: empty-version drop, no-artifact drop, failed-file
+    and non-SARIF-JSON counts
+12. Verdict branches: parity-at-zero, inconclusive-on-parse-warning,
+    inconclusive-when-scanner-absent, divergence via render_markdown
 """
 
 from __future__ import annotations
@@ -135,14 +141,16 @@ def test_parse_purl_invalid_returns_none() -> None:
 
 def test_extract_trivy_from_location_message() -> None:
     sarif = trivy_sarif([("CVE-2026-4539", "Python", "Pygments", "2.19.2")])
-    keys = {csp.package_key(f) for f in csp.extract_findings(sarif)}
-    assert keys == {("pypi", "pygments", "2.19.2")}
+    findings, dropped = csp.extract_findings(sarif)
+    assert {csp.package_key(f) for f in findings} == {("pypi", "pygments", "2.19.2")}
+    assert dropped == 0
 
 
 def test_extract_grype_from_purls() -> None:
     sarif = grype_sarif([("GHSA-5239-wwwm-4pmq", "pypi", "Pygments", "2.19.2")])
-    keys = {csp.package_key(f) for f in csp.extract_findings(sarif)}
-    assert keys == {("pypi", "pygments", "2.19.2")}
+    findings, dropped = csp.extract_findings(sarif)
+    assert {csp.package_key(f) for f in findings} == {("pypi", "pygments", "2.19.2")}
+    assert dropped == 0
 
 
 # ---------------------------------------------------------------------------
@@ -151,7 +159,7 @@ def test_extract_grype_from_purls() -> None:
 
 
 def test_cross_tool_same_package_is_parity_not_divergence() -> None:
-    trivy = csp.extract_findings(
+    trivy, _ = csp.extract_findings(
         trivy_sarif(
             [
                 ("CVE-2026-4539", "Python", "Pygments", "2.19.2"),
@@ -159,7 +167,7 @@ def test_cross_tool_same_package_is_parity_not_divergence() -> None:
             ]
         )
     )
-    grype = csp.extract_findings(
+    grype, _ = csp.extract_findings(
         grype_sarif(
             [
                 ("GHSA-5239-wwwm-4pmq", "pypi", "Pygments", "2.19.2"),
@@ -173,20 +181,71 @@ def test_cross_tool_same_package_is_parity_not_divergence() -> None:
     assert result["grype_only"] == 0
 
 
+def test_ecosystem_alias_maps_python_to_pypi() -> None:
+    # The core fix depends on this alias: Trivy spells the ecosystem "Python"
+    # while Grype emits the PURL type "pypi". Without the alias the same package
+    # would land in two different keys and read as divergence. Pinning the alias
+    # directly means the cross-tool parity test above cannot pass vacuously.
+    assert csp._normalize_ecosystem("Python") == "pypi"
+    assert csp._normalize_ecosystem("pypi") == "pypi"
+
+
 # ---------------------------------------------------------------------------
 # 6. Genuine divergence
 # ---------------------------------------------------------------------------
 
 
 def test_genuine_divergence_reported() -> None:
-    trivy = csp.extract_findings(
+    trivy, _ = csp.extract_findings(
         trivy_sarif([("CVE-1", "Python", "requests", "2.0.0")])
     )
-    grype = csp.extract_findings(grype_sarif([("GHSA-2", "pypi", "urllib3", "1.0.0")]))
+    grype, _ = csp.extract_findings(
+        grype_sarif([("GHSA-2", "pypi", "urllib3", "1.0.0")])
+    )
     result = csp.compare(trivy, grype)
     assert result["both"] == 0
     assert result["trivy_only"] == 1
     assert result["grype_only"] == 1
+
+
+def test_extract_empty_version_location_is_dropped_not_phantom() -> None:
+    # A Trivy location with an empty version ("Python: requests@   ") must not
+    # become a phantom finding with version="" that inflates the trivy-only
+    # bucket; it is dropped and counted instead.
+    sarif = {
+        "runs": [
+            {
+                "tool": {"driver": {"name": "Trivy", "rules": []}},
+                "results": [
+                    {
+                        "ruleId": "CVE-EMPTY",
+                        "locations": [{"message": {"text": "Python: requests@   "}}],
+                    }
+                ],
+            }
+        ]
+    }
+    assert csp._parse_trivy_location("Python: requests@   ") is None
+    findings, dropped = csp.extract_findings(sarif)
+    assert findings == []
+    assert dropped == 1
+
+
+def test_extract_counts_results_with_no_parseable_artifact() -> None:
+    # A result carrying a ruleId but neither a PURL nor a parseable location is
+    # the signature of a scanner output-format change. It is dropped and the
+    # drop is counted so a silent under-count is visible downstream.
+    sarif = {
+        "runs": [
+            {
+                "tool": {"driver": {"name": "Grype", "rules": []}},
+                "results": [{"ruleId": "GHSA-shape-change", "properties": {}}],
+            }
+        ]
+    }
+    findings, dropped = csp.extract_findings(sarif)
+    assert findings == []
+    assert dropped == 1
 
 
 # ---------------------------------------------------------------------------
@@ -201,27 +260,52 @@ def test_load_dir_reads_files_without_sarif_extension(tmp_path: Path) -> None:
     (d / "output").write_text(
         json.dumps(grype_sarif([("GHSA-x", "pypi", "Pygments", "2.19.2")]))
     )
-    findings, files = csp.load_findings_from_dir(str(d))
-    assert files == 1
-    assert {csp.package_key(f) for f in findings} == {("pypi", "pygments", "2.19.2")}
+    result = csp.load_findings_from_dir(str(d))
+    assert result["files_parsed"] == 1
+    assert result["files_failed"] == 0
+    assert {csp.package_key(f) for f in result["findings"]} == {
+        ("pypi", "pygments", "2.19.2")
+    }
 
 
 def test_load_dir_missing_returns_empty(tmp_path: Path) -> None:
-    findings, files = csp.load_findings_from_dir(str(tmp_path / "does-not-exist"))
-    assert findings == []
-    assert files == 0
+    result = csp.load_findings_from_dir(str(tmp_path / "does-not-exist"))
+    assert result["findings"] == []
+    assert result["files_parsed"] == 0
+    assert result["files_failed"] == 0
 
 
-def test_load_dir_ignores_non_json(tmp_path: Path) -> None:
+def test_load_dir_reads_valid_sarif_and_counts_unparseable_sibling(
+    tmp_path: Path,
+) -> None:
+    # A non-JSON sibling does not pollute findings or corrupt the valid SARIF
+    # read, but it is counted as files_failed rather than silently ignored, so
+    # a corrupted/truncated artifact cannot vanish without a trace.
     d = tmp_path / "trivy"
     d.mkdir()
     (d / "note.txt").write_text("not json")
     (d / "trivy.sarif").write_text(
         json.dumps(trivy_sarif([("CVE-9", "Python", "flask", "3.0.0")]))
     )
-    findings, files = csp.load_findings_from_dir(str(d))
-    assert files == 1
-    assert {csp.package_key(f) for f in findings} == {("pypi", "flask", "3.0.0")}
+    result = csp.load_findings_from_dir(str(d))
+    assert result["files_parsed"] == 1
+    assert result["files_failed"] == 1
+    assert {csp.package_key(f) for f in result["findings"]} == {
+        ("pypi", "flask", "3.0.0")
+    }
+
+
+def test_load_dir_counts_non_sarif_json(tmp_path: Path) -> None:
+    # Valid JSON that lacks a "runs" key (e.g. a future enveloped SARIF shape)
+    # is counted separately so the divergence between "no SARIF" and
+    # "unrecognized SARIF" is visible.
+    d = tmp_path / "grype"
+    d.mkdir()
+    (d / "enveloped.json").write_text(json.dumps({"schema": "x", "sarif": {}}))
+    result = csp.load_findings_from_dir(str(d))
+    assert result["files_parsed"] == 0
+    assert result["non_sarif_json"] == 1
+    assert result["findings"] == []
 
 
 # ---------------------------------------------------------------------------
@@ -253,9 +337,12 @@ def test_main_writes_summary_and_machine_line(tmp_path: Path, capsys) -> None:  
     assert rc == 0
 
     body = summary.read_text()
-    # package-level parity is the headline; the one shared package collapses
-    assert "Package-level" in body or "package" in body.lower()
-    assert "Pygments" in body or "pygments" in body
+    # Assert the exact verdict, not just the presence of the word "package"
+    # (which also appears in the table headers): a broken verdict must fail.
+    assert "**Package-level parity confirmed.**" in body
+    assert "pygments" in body.lower()
+    # A clean run records no parse warnings.
+    assert "**Warning:**" not in body
 
     out = capsys.readouterr().out
     # machine-readable line for log/API aggregation
@@ -263,3 +350,70 @@ def test_main_writes_summary_and_machine_line(tmp_path: Path, capsys) -> None:  
     assert "pkg_both=1" in out
     assert "pkg_trivy_only=0" in out
     assert "pkg_grype_only=0" in out
+    assert "trivy_files_failed=0" in out
+    assert "grype_files_failed=0" in out
+
+
+# ---------------------------------------------------------------------------
+# 10. Verdict branches and parse-warning gating
+# ---------------------------------------------------------------------------
+
+
+def _load_result(
+    findings: list[csp.Finding],
+    *,
+    files_parsed: int = 1,
+    files_failed: int = 0,
+    non_sarif_json: int = 0,
+    dropped_results: int = 0,
+) -> csp.LoadResult:
+    return csp.LoadResult(
+        findings=findings,
+        files_parsed=files_parsed,
+        files_failed=files_failed,
+        non_sarif_json=non_sarif_json,
+        dropped_results=dropped_results,
+    )
+
+
+def test_verdict_parity_at_zero_when_clean() -> None:
+    empty = _load_result([], files_parsed=1)
+    comparison = csp.compare([], [])
+    verdict = csp._verdict(comparison, empty, empty, "success", "success")
+    assert "Parity at zero" in verdict
+
+
+def test_verdict_inconclusive_on_parse_warning_despite_success() -> None:
+    # Both scanners "succeeded" and report zero packages, but a SARIF failed to
+    # parse. The zero must NOT be reported as parity at zero: this is the
+    # false-green case the observability counters exist to prevent.
+    clean = _load_result([], files_parsed=1)
+    lossy = _load_result([], files_parsed=0, files_failed=1)
+    comparison = csp.compare([], [])
+    verdict = csp._verdict(comparison, lossy, clean, "success", "success")
+    assert "inconclusive" in verdict.lower()
+    assert "Parity at zero" not in verdict
+
+
+def test_verdict_inconclusive_when_scanner_did_not_run() -> None:
+    empty = _load_result([], files_parsed=0)
+    comparison = csp.compare([], [])
+    verdict = csp._verdict(comparison, empty, empty, "failure", "success")
+    assert "inconclusive" in verdict.lower()
+
+
+def test_render_markdown_reports_divergence_and_warning() -> None:
+    trivy_findings, _ = csp.extract_findings(
+        trivy_sarif([("CVE-1", "Python", "requests", "2.0.0")])
+    )
+    grype_findings, _ = csp.extract_findings(
+        grype_sarif([("GHSA-2", "pypi", "urllib3", "1.0.0")])
+    )
+    comparison = csp.compare(trivy_findings, grype_findings)
+    trivy = _load_result(trivy_findings, files_parsed=1, dropped_results=2)
+    grype = _load_result(grype_findings, files_parsed=1)
+    report = csp.render_markdown(comparison, trivy, grype, "success", "success")
+    assert "**Package-level divergence detected.**" in report
+    # The dropped results surface as a visible warning block.
+    assert "**Warning:**" in report
+    assert "2 result(s) produced no parseable artifact" in report
