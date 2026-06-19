@@ -678,21 +678,29 @@ jobs:
   # and defeat the purpose of the 30-day parity window.
   #
   # SARIF artifacts are uploaded by scan-runtime (`trivy-sarif`) and
-  # scan-runtime-grype (`grype-sarif`). This job downloads both, extracts the
-  # rule IDs (CVE-* identifiers), and emits a set-diff to the step summary.
+  # scan-runtime-grype (`grype-sarif`). This job downloads both and runs
+  # scripts/compare_scanner_parity.py, which joins findings by the affected
+  # artifact (ecosystem, PEP 503 package name, version), NOT by advisory ID.
+  #
+  # #CRITICAL: the two scanners use different advisory namespaces (Trivy emits
+  # CVE-* rule IDs, Grype emits GHSA-* rule IDs) for the same vulnerability, so
+  # a raw rule-ID set-diff reports false divergence. The package-key join is the
+  # only comparison that reflects true detection parity. The script also reads
+  # SARIF by content rather than filename, because the Grype artifact downloads
+  # without a .sarif extension.
   #
   # #EDGE: if either scan job is cancelled or its SARIF artifact is missing
-  # (e.g., the scan action genuinely crashed), the corresponding side of the
-  # comparison reports "no SARIF available" and the job notes the gap in the
-  # summary rather than failing.
+  # (e.g., the scan action genuinely crashed), the corresponding side reports
+  # zero SARIF files parsed and the verdict notes the gap rather than failing.
   # ============================================================================
   parity-summary:
     name: Trivy vs Grype Parity Summary
     needs: [scan-runtime, scan-runtime-grype]
     if: always()
     runs-on: ubuntu-latest
-    permissions: {}
-    timeout-minutes: 2
+    permissions:
+      contents: read  # sparse-checkout of the comparison script from this repo
+    timeout-minutes: 5
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411  # v2.19.4
@@ -717,109 +725,46 @@ jobs:
           name: grype-sarif
           path: grype-sarif
 
-      - name: Compare findings and write parity summary
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      # Checkout only scripts/compare_scanner_parity.py from this reusable
+      # workflow repo, pinned to the same commit as this workflow file. See the
+      # license-checker job for the full rationale on job.workflow_sha pinning
+      # (it preserves the SHA-pin guarantee and avoids a TOCTOU window).
+      - name: Checkout parity comparison script
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          sparse-checkout: |
+            scripts/compare_scanner_parity.py
+          sparse-checkout-cone-mode: false
+          path: _checker
+
+      # sparse-checkout with cone-mode false exits 0 even when the requested
+      # path does not exist in the ref; fail loudly instead of a raw python
+      # "can't open file" error.
+      - name: Verify parity comparison script is present
         env:
+          CHECKER_REF: ${{ job.workflow_sha }}
+        run: |
+          if [ ! -f "_checker/scripts/compare_scanner_parity.py" ]; then
+            echo "::error::scripts/compare_scanner_parity.py not found after sparse checkout of ByronWilliamsCPA/.github@${CHECKER_REF}. Path mismatch or failed checkout."
+            exit 1
+          fi
+
+      - name: Compare findings and write parity summary
+        # The script joins findings by affected artifact (ecosystem, package,
+        # version), not by advisory ID, and reads SARIF by content. It is
+        # advisory: it always exits 0 and never gates the build. All inputs
+        # reach it via env vars (the injection-safe boundary).
+        env:
+          TRIVY_SARIF_DIR: trivy-sarif
+          GRYPE_SARIF_DIR: grype-sarif
           TRIVY_RESULT: ${{ needs.scan-runtime.result }}
           GRYPE_RESULT: ${{ needs.scan-runtime-grype.result }}
         run: |
-          set -euo pipefail
-
-          # Extract sorted, unique rule IDs from a SARIF file directory.
-          # SARIF rule IDs for Trivy and Grype are CVE-* identifiers, which
-          # is the granularity we want for parity comparison.
-          # Writes to a file at $1, empty if no SARIF was found.
-          extract_ids() {
-            local sarif_dir="$1"
-            local out_file="$2"
-            : > "$out_file"
-            if [ ! -d "$sarif_dir" ]; then
-              return 0
-            fi
-            # Both Trivy and Grype produce one .sarif file per scan
-            find "$sarif_dir" -type f -name '*.sarif' -print0 \
-              | xargs -0 -r jq -r '.runs[]?.results[]?.ruleId // empty' \
-              | sort -u > "$out_file"
-          }
-
-          extract_ids trivy-sarif trivy-ids.txt
-          extract_ids grype-sarif grype-ids.txt
-
-          trivy_count=$(wc -l < trivy-ids.txt | tr -d ' ')
-          grype_count=$(wc -l < grype-ids.txt | tr -d ' ')
-
-          # Findings only in one scanner (set differences).
-          comm -23 trivy-ids.txt grype-ids.txt > trivy-only.txt
-          comm -13 trivy-ids.txt grype-ids.txt > grype-only.txt
-          comm -12 trivy-ids.txt grype-ids.txt > both.txt
-
-          trivy_only_count=$(wc -l < trivy-only.txt | tr -d ' ')
-          grype_only_count=$(wc -l < grype-only.txt | tr -d ' ')
-          both_count=$(wc -l < both.txt | tr -d ' ')
-
-          trivy_artifact_status="present"
-          if [ ! -s trivy-ids.txt ] && [ "$TRIVY_RESULT" != "success" ]; then
-            trivy_artifact_status="missing (Trivy job result: $TRIVY_RESULT)"
-          elif [ ! -s trivy-ids.txt ]; then
-            trivy_artifact_status="empty (no findings, or SARIF not produced)"
-          fi
-
-          grype_artifact_status="present"
-          if [ ! -s grype-ids.txt ] && [ "$GRYPE_RESULT" != "success" ]; then
-            grype_artifact_status="missing (Grype job result: $GRYPE_RESULT)"
-          elif [ ! -s grype-ids.txt ]; then
-            grype_artifact_status="empty (no findings, or SARIF not produced)"
-          fi
-
-          {
-            echo "### Trivy vs Grype Finding Parity (issue #152)"
-            echo ""
-            echo "Compares CVE-level findings extracted from each scanner's SARIF output."
-            echo ""
-            echo "| Scanner          | Job result        | SARIF status              | Findings |"
-            echo "|------------------|-------------------|---------------------------|----------|"
-            echo "| Trivy (gating)   | $TRIVY_RESULT     | $trivy_artifact_status    | $trivy_count |"
-            echo "| Grype (advisory) | $GRYPE_RESULT     | $grype_artifact_status    | $grype_count |"
-            echo ""
-            if [ "$trivy_count" -eq 0 ] && [ "$grype_count" -eq 0 ]; then
-              if [ "$TRIVY_RESULT" = "success" ] && [ "$GRYPE_RESULT" = "success" ]; then
-                echo "Both scanners completed and reported zero findings. Parity confirmed."
-              else
-                echo "**Parity inconclusive:** at least one scanner did not produce SARIF."
-                echo "Review the failed job logs before drawing conclusions."
-              fi
-            elif [ "$trivy_only_count" -eq 0 ] && [ "$grype_only_count" -eq 0 ]; then
-              echo "**Finding sets match exactly.** $both_count CVE(s) detected by both scanners."
-            else
-              echo "**Finding-set divergence detected.**"
-              echo ""
-              echo "| Bucket                  | Count |"
-              echo "|-------------------------|-------|"
-              echo "| Detected by both        | $both_count |"
-              echo "| Trivy only (missed by Grype) | $trivy_only_count |"
-              echo "| Grype only (missed by Trivy) | $grype_only_count |"
-              if [ "$trivy_only_count" -gt 0 ]; then
-                echo ""
-                echo "<details><summary>CVEs found by Trivy only</summary>"
-                echo ""
-                echo '```'
-                head -50 trivy-only.txt
-                if [ "$trivy_only_count" -gt 50 ]; then
-                  echo "... ($((trivy_only_count - 50)) more)"
-                fi
-                echo '```'
-                echo "</details>"
-              fi
-              if [ "$grype_only_count" -gt 0 ]; then
-                echo ""
-                echo "<details><summary>CVEs found by Grype only</summary>"
-                echo ""
-                echo '```'
-                head -50 grype-only.txt
-                if [ "$grype_only_count" -gt 50 ]; then
-                  echo "... ($((grype_only_count - 50)) more)"
-                fi
-                echo '```'
-                echo "</details>"
-              fi
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
+          python _checker/scripts/compare_scanner_parity.py

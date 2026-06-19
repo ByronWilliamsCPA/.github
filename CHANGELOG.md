@@ -26,10 +26,33 @@ the latest reviewed commit on `main` and is re-pointed as changes land.
 
 ### Fixed
 
+- `sbom-nightly.yml`: grant `contents: read` and `security-events: write` on the
+  calling job. The caller previously set `permissions: {}`, which is below the
+  ceiling the reusable `python-sbom.yml` SARIF-upload jobs require, so every
+  scheduled run failed with `startup_failure` (since 2026-05-30) before any job
+  executed and the nightly parity feed gathered no data. Corrected the
+  accompanying RAD comment: a called workflow's token is bounded by the caller's
+  permissions, not the callee's own per-job blocks (refs #152).
+- `python-sbom.yml`: the `parity-summary` job compared raw SARIF rule IDs, so
+  Trivy's CVE-namespace IDs and Grype's GHSA-namespace IDs for the same
+  vulnerability registered as total divergence; it also globbed `*.sarif`, which
+  missed the Grype artifact (downloaded without a `.sarif` extension), reading
+  Grype findings as zero. Both defects masked true detection parity (refs #152).
 - `python-release.yml`: move PSR step before build so `dist/` carries the bumped version. PSR with `commit: "false"` stamps the bump into the working tree and tags the pre-bump commit, so a post-PSR same-commit tag checkout with a version guard now protects the uncommitted bump that `uv build` reads (fixes #204).
 
 ### Changed
 
+- `python-sbom.yml`: rewrote the `parity-summary` (issue #152) comparison to
+  join Trivy and Grype findings by affected artifact (ecosystem, PEP 503 package
+  name, version) instead of raw advisory ID, so the same vulnerability reported
+  under a CVE ID by Trivy and a GHSA ID by Grype is correctly counted as parity,
+  not divergence. The logic is extracted to `scripts/compare_scanner_parity.py`
+  (typed, env-var driven, mirrors `check_licenses.py`) with a 15-case pytest
+  suite; the job sparse-checks out the script pinned to `job.workflow_sha`. The
+  script reads SARIF by content rather than filename and prints a
+  machine-readable `parity pkg_both=... pkg_trivy_only=... pkg_grype_only=...`
+  line to stdout so results are aggregatable from run logs, not locked in the
+  step summary.
 - `python-sbom.yml`: extracted the `license-compliance` inline Python checker
   to `scripts/check_licenses.py` (importable module with typed API) and added
   a pytest suite (`tests/python/`) covering all nine issue-#193 acceptance

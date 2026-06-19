@@ -46,21 +46,31 @@ on:
         required: false
         default: 'true'
 
-# #CRITICAL: permissions are set to empty at the workflow level; the
-# reusable workflow (python-sbom.yml) grants its own per-job permissions.
-# Reusable workflows run with the permissions of the CALLEE, not the caller,
-# when the callee defines its own permissions blocks. This means this
-# workflow does not need elevated permissions even though the child jobs
-# write to security-events.
-# #VERIFY: confirm that upload-sarif succeeds in the first nightly run by
-# checking the Security > Code scanning alerts tab for nightly-triggered
-# entries distinct from PR-triggered ones (different ref/sha on the alert).
+# Workflow-level default is no permissions; the calling job below grants the
+# minimum the reusable workflow needs.
+#
+# #CRITICAL: a called (reusable) workflow runs with a GITHUB_TOKEN bounded by
+# the CALLER job's permissions. The caller sets the ceiling; a callee job that
+# requests a scope the caller did not grant fails at startup (startup_failure),
+# before any job runs. This is the opposite of the earlier assumption that the
+# callee's own per-job permissions blocks are self-sufficient. The reusable's
+# scan jobs declare security-events: write to upload SARIF, so this caller must
+# grant contents: read + security-events: write on the sbom job, matching the
+# python-standard-stack.yml caller. Setting permissions: {} here (as before)
+# made every scheduled run startup_failure.
+# #VERIFY: confirm the next scheduled run's conclusion is no longer
+# startup_failure (gh run list --workflow=sbom-nightly.yml), and that
+# upload-sarif succeeds (Security > Code scanning alerts shows nightly-triggered
+# entries on a distinct ref/sha from PR-triggered ones).
 permissions: {}
 
 jobs:
   sbom:
     # #ASSUME: when triggered via schedule, inputs.* is empty; the || fallbacks
     # below supply the production defaults. workflow_dispatch overrides them.
+    permissions:
+      contents: read
+      security-events: write  # ceiling for the reusable's SARIF-upload jobs
     uses: ./.github/workflows/python-sbom.yml
     with:
       python-version: ${{ inputs.python-version || '3.12' }}
