@@ -183,6 +183,20 @@ other.
 | 3 | Promote to a `workflow_call` reusable consumed by fleet repos | Same conventions as the other `python-*` reusables; templates plus docs |
 | 4 | Replace the prompt-encoded baseline with a skill-native baseline mode invoked headlessly from CI | `.claude` repo packaged as a plugin marketplace; skill gains a non-interactive mode |
 
+### Status (2026-06-19): Phase 3 started as a scoped evaluation cohort
+
+`claude-baseline-review.yml` has been converted from a repo-local
+`pull_request` workflow into a `workflow_call` reusable. Repo-specific framing
+(`repo-description`, `sensitive-paths`, `escalation-guidance`) is now supplied
+by thin per-repo callers, so the shared prompt is tuned in one place. The
+`.github` repo calls it via `claude-baseline-review-pr.yml`; `.claude` and
+`homelab-infra` were added as the first downstream consumers to gather precision
+data faster than `.github`'s PR volume alone allows. This is a deliberate
+narrow expansion of Phase 1 evaluation, not the full fleet rollout: the Phase 2
+threshold-tuning gate still governs going wider. The conversion also folded in a
+guard that skips bot-initiated `edited` events (CodeRabbit body edits), which
+were failing the `claude-code-action` OIDC exchange on every PR.
+
 ## 8. Setup prerequisites (phase 1)
 
 1. Repository (or org) secret `ANTHROPIC_API_KEY`.

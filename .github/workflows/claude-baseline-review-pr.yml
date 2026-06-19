@@ -1,0 +1,45 @@
+# ============================================================================
+# Claude Baseline Review -- this repo's caller
+# ============================================================================
+# Thin caller that runs the reusable Tier 0 baseline reviewer on this repo's
+# own PRs. The reviewer logic, security posture, and prompt live in the
+# reusable (.github/workflows/claude-baseline-review.yml); this file only
+# supplies the trigger, the permission ceiling, and this repo's framing.
+#
+# #CRITICAL: a called (reusable) workflow runs with a token bounded by the
+# CALLER job's permissions. The four scopes below are the ceiling the reusable
+# needs (id-token for the Claude App OIDC exchange); omitting any one fails the
+# run at startup.
+# ============================================================================
+name: Claude Baseline Review (PR)
+
+on:
+  pull_request:
+    # edited is included so a human editing the PR body re-classifies; the
+    # reusable skips bot-initiated edited events (CodeRabbit) internally.
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+    branches:
+      - main
+
+permissions: {}
+
+jobs:
+  review:
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+    uses: ./.github/workflows/claude-baseline-review.yml
+    with:
+      repo-description: >-
+        an org-level .github repo containing reusable GitHub Actions workflows,
+        workflow templates, operator shell scripts, and community health files.
+      sensitive-paths: '.github/workflows/, workflow-templates/, scripts/'
+      escalation-guidance: |
+        - Changes under .github/workflows/ or workflow-templates/ that touch
+          permissions:, secrets, id-token, on: triggers, or add or change
+          workflow_call inputs.
+        - Changes under scripts/ that perform writes via gh api, handle
+          secrets, or transfer/delete resources.
+    secrets: inherit  # pragma: allowlist secret

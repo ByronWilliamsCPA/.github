@@ -50,6 +50,15 @@ the latest reviewed commit on `main` and is re-pointed as changes land.
 
 ### Changed
 
+- `claude-baseline-review.yml`: converted the Tier 0 baseline reviewer from a
+  repo-local `pull_request` workflow into a `workflow_call` reusable. Repo-specific
+  framing (`repo-description`, `sensitive-paths`, `escalation-guidance`) is now
+  supplied by a thin per-repo caller, so the shared prompt is tuned in one place.
+  This repo calls it via the new `claude-baseline-review-pr.yml`. Also added a
+  guard that skips bot-initiated `edited` events (CodeRabbit body edits), which
+  were failing the `claude-code-action` OIDC exchange on every PR; Renovate runs
+  as a User in this org and is unaffected. First downstream consumers: the
+  `.claude` and `homelab-infra` repos (issue: tiered-pr-review Phase 3 eval cohort).
 - `python-sbom.yml`: rewrote the `parity-summary` (issue #152) comparison to
   join Trivy and Grype findings by affected artifact (ecosystem, PEP 503 package
   name, version) instead of raw advisory ID, so the same vulnerability reported
