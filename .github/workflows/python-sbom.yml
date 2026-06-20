@@ -120,7 +120,7 @@ jobs:
           egress-policy: audit
 
       - name: Checkout repository
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
 
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
@@ -250,7 +250,7 @@ jobs:
 
       # Checkout to get .trivyignore and provide git context for SARIF upload
       - name: Checkout repository (for trivyignore and SARIF context)
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
         with:
           sparse-checkout: |
             .trivyignore
@@ -370,7 +370,7 @@ jobs:
       # The sparse-checkout uses the caller-configured grype-config-path so a custom
       # path (e.g., configs/.grype.yaml) is fetched too. Path is validated above.
       - name: Checkout repository (for grype config and SARIF context)
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
         with:
           sparse-checkout: |
             ${{ inputs.grype-config-path }}
@@ -505,7 +505,7 @@ jobs:
           egress-policy: audit
 
       - name: Checkout repository (for SARIF context)
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
         with:
           sparse-checkout: |
             .git
@@ -604,7 +604,7 @@ jobs:
       # #VERIFY: on first caller run, confirm the checked-out script SHA matches
       # the called workflow ref in the job log.
       - name: Checkout license checker script
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
         with:
           repository: ${{ job.workflow_repository }}
           ref: ${{ job.workflow_sha }}
@@ -735,7 +735,7 @@ jobs:
       # license-compliance job for the full rationale on job.workflow_sha pinning
       # (it preserves the SHA-pin guarantee and avoids a TOCTOU window).
       - name: Checkout parity comparison script
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
         with:
           repository: ${{ job.workflow_repository }}
           ref: ${{ job.workflow_sha }}
