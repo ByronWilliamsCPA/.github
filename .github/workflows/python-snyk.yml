@@ -1,0 +1,304 @@
+# Python Snyk (Reusable)
+# Snyk AI-code-security layer: Code (SAST), optional Open Source (SCA cross-check),
+# and AI-BOM. Complements the existing OSV/Renovate SCA stack; it does not replace it.
+#
+# Usage from downstream repos:
+#   jobs:
+#     snyk:
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-snyk.yml@v1
+#       permissions:
+#         contents: read
+#         security-events: write   # SARIF upload to the Security tab
+#       with:
+#         source-directory: 'src'
+#         run-code: true           # Snyk Code (SAST)
+#         run-oss: false           # SCA cross-check (OSV/Renovate are primary)
+#         run-aibom: false         # AI-BOM (set true for LLM/RAG/MCP repos)
+#         fail-on-high: true
+#       secrets:
+#         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+#
+# Caller permission contract:
+# #CRITICAL: reusable caller/callee permission inheritance. Callers MUST grant
+#   security-events: write at workflow or calling-job level, or the run fails at
+#   startup ("startup_failure" / generic "workflow file issue") before any job runs.
+# #ASSUME: SNYK_TOKEN may be absent; the workflow no-ops cleanly when it is.
+# #VERIFY: after changing permissions or the secrets block, trigger one caller run and
+#   confirm `gh run view <id> --json conclusion` is not "startup_failure".
+
+name: Python Snyk (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      source-directory:
+        description: 'Source code directory to scan'
+        type: string
+        required: false
+        default: 'src'
+      python-version:
+        description: 'Python version for dependency resolution'
+        type: string
+        required: false
+        default: '3.12'
+      run-code:
+        description: 'Run Snyk Code (SAST)'
+        type: boolean
+        required: false
+        default: true
+      run-oss:
+        description: 'Run Snyk Open Source (SCA cross-check). Advisory; OSV/Renovate are primary.'
+        type: boolean
+        required: false
+        default: false
+      run-aibom:
+        description: 'Generate an AI-BOM (Python only; for LLM/RAG/MCP repos)'
+        type: boolean
+        required: false
+        default: false
+      fail-on-high:
+        description: 'Fail the build on HIGH/CRITICAL Snyk Code findings'
+        type: boolean
+        required: false
+        default: true
+      no-build:
+        description: 'Pass --no-build to uv sync (disable for projects with a build backend)'
+        type: boolean
+        required: false
+        default: true
+    secrets:
+      SNYK_TOKEN:
+        description: 'Snyk API token. When absent, all scan jobs no-op.'
+        required: false
+
+permissions: {}
+
+jobs:
+  detect-config:
+    name: Detect Config
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      has-token: ${{ steps.check.outputs.has-token }}
+      state: ${{ steps.detect.outputs.state }}
+    permissions:
+      contents: read
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411  # v2.19.4
+        with:
+          egress-policy: audit
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+      # Secrets-in-if antipattern guard: read presence via env, decide in shell.
+      - name: Check for SNYK_TOKEN
+        id: check
+        env:
+          HAS_TOKEN: ${{ secrets.SNYK_TOKEN != '' }}
+        run: |
+          if [ "$HAS_TOKEN" = "true" ]; then
+            echo "has-token=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has-token=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::SNYK_TOKEN not set; Snyk scan jobs will be skipped."
+          fi
+        shell: bash
+      - name: Detect repo state
+        id: detect
+        run: |
+          if [ ! -f pyproject.toml ]; then
+            echo "state=skip" >> "$GITHUB_OUTPUT"
+            echo "::notice::No pyproject.toml at repo root; Snyk scans will be skipped."
+          elif [ -f poetry.lock ] || grep -qE '^\[tool\.poetry(\.|])' pyproject.toml; then
+            echo "state=poetry-not-supported" >> "$GITHUB_OUTPUT"
+            echo "::error::This repo uses Poetry. python-snyk.yml is uv-only by org policy."
+            exit 1
+          elif [ -f uv.lock ]; then
+            echo "state=uv-locked" >> "$GITHUB_OUTPUT"
+          else
+            echo "state=uv-no-lock" >> "$GITHUB_OUTPUT"
+          fi
+        shell: bash
+
+  snyk-code:
+    name: Snyk Code (SAST)
+    needs: detect-config
+    if: >-
+      ${{ inputs.run-code
+        && needs.detect-config.outputs.has-token == 'true'
+        && (needs.detect-config.outputs.state == 'uv-locked' || needs.detect-config.outputs.state == 'uv-no-lock') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411  # v2.19.4
+        with:
+          egress-policy: audit
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+      - name: Setup Snyk CLI
+        uses: snyk/actions/setup@9adf32b1121593767fc3c057af55b55db032dc04  # v1.0.0
+      - name: Run Snyk Code
+        id: code
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          SRC_DIR: ${{ inputs.source-directory }}
+          FAIL_ON_HIGH: ${{ inputs.fail-on-high }}
+        shell: bash
+        run: |
+          set +e
+          THRESHOLD=high
+          [ "$FAIL_ON_HIGH" = "true" ] || THRESHOLD=critical
+          snyk code test "$SRC_DIR" \
+            --severity-threshold="$THRESHOLD" \
+            --sarif-file-output=snyk-code.sarif
+          CODE=$?
+          # Exit 0 = no issues; 1 = issues at/above threshold; >1 = real error.
+          if [ "$CODE" -gt 1 ]; then
+            echo "::error::Snyk Code failed to run (exit $CODE)."
+            exit "$CODE"
+          fi
+          if [ "$CODE" -eq 1 ] && [ "$FAIL_ON_HIGH" = "true" ]; then
+            echo "::error::Snyk Code found findings at/above $THRESHOLD."
+            echo "gate=fail" >> "$GITHUB_OUTPUT"
+          fi
+          exit 0
+      - name: Upload Snyk Code SARIF
+        if: always() && hashFiles('snyk-code.sarif') != ''
+        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e  # v4.36.2
+        continue-on-error: true
+        with:
+          sarif_file: snyk-code.sarif
+          category: snyk-code
+      - name: Enforce gate
+        if: steps.code.outputs.gate == 'fail'
+        run: exit 1
+
+  snyk-oss:
+    name: Snyk Open Source (SCA cross-check)
+    needs: detect-config
+    if: >-
+      ${{ inputs.run-oss
+        && needs.detect-config.outputs.has-token == 'true'
+        && needs.detect-config.outputs.state == 'uv-locked' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Advisory by default: OSV + Renovate are the primary SCA gate. This job never fails the build.
+    continue-on-error: true
+    permissions:
+      contents: read
+      security-events: write
+    env:
+      NO_BUILD_FLAG: ${{ inputs.no-build && '--no-build' || '' }}
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411  # v2.19.4
+        with:
+          egress-policy: audit
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: ${{ inputs.python-version }}
+      - name: Install UV
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
+        with:
+          enable-cache: true
+      # Snyk SCA does not parse uv.lock. Export the committed lockfile to a requirements file Snyk understands. Restricted to uv-locked state so this never triggers a live network resolve.
+      - name: Export requirements for Snyk
+        shell: bash
+        run: uv export --format requirements-txt --no-emit-project -o requirements-snyk.txt
+      - name: Setup Snyk CLI
+        uses: snyk/actions/setup@9adf32b1121593767fc3c057af55b55db032dc04  # v1.0.0
+      - name: Run Snyk Open Source
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        shell: bash
+        run: |
+          set +e
+          snyk test --file=requirements-snyk.txt --package-manager=pip \
+            --severity-threshold=high \
+            --sarif-file-output=snyk-oss.sarif
+          # Advisory: do not propagate the exit code.
+          exit 0
+      - name: Upload Snyk OSS SARIF
+        if: always() && hashFiles('snyk-oss.sarif') != ''
+        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e  # v4.36.2
+        continue-on-error: true
+        with:
+          sarif_file: snyk-oss.sarif
+          category: snyk-oss
+
+  snyk-aibom:
+    name: Snyk AI-BOM
+    needs: detect-config
+    if: >-
+      ${{ inputs.run-aibom
+        && needs.detect-config.outputs.has-token == 'true'
+        && (needs.detect-config.outputs.state == 'uv-locked' || needs.detect-config.outputs.state == 'uv-no-lock') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411  # v2.19.4
+        with:
+          egress-policy: audit
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+      - name: Setup Snyk CLI
+        uses: snyk/actions/setup@9adf32b1121593767fc3c057af55b55db032dc04  # v1.0.0
+      - name: Generate AI-BOM
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        shell: bash
+        run: |
+          set +e
+          # #VERIFY: confirm aibom.json is non-empty on a known LLM/RAG repo during the live phase; AI-BOM detection may require resolved dependencies.
+          snyk aibom --json > aibom.json
+          CODE=$?
+          if [ "$CODE" -ne 0 ]; then
+            echo "::warning::snyk aibom exited $CODE (often: no supported AI project). Continuing."
+          fi
+          exit 0
+      - name: Upload AI-BOM artifact
+        if: always() && hashFiles('aibom.json') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: snyk-aibom
+          path: aibom.json
+
+  snyk-gate:
+    name: Snyk Gate
+    needs: [detect-config, snyk-code, snyk-oss, snyk-aibom]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411  # v2.19.4
+        with:
+          egress-policy: audit
+      - name: Validate Snyk results
+        env:
+          R_CODE: ${{ needs.snyk-code.result }}
+          R_OSS: ${{ needs.snyk-oss.result }}
+          R_AIBOM: ${{ needs.snyk-aibom.result }}
+        run: |
+          echo "Snyk Code: $R_CODE | OSS: $R_OSS | AI-BOM: $R_AIBOM"
+          is_ok() { [[ "$1" == "success" || "$1" == "skipped" ]]; }
+          # OSS is advisory (continue-on-error), so it reports success even with findings.
+          # snyk-oss is in needs for ordering only and is intentionally excluded from the gate decision.
+          if is_ok "$R_CODE" && is_ok "$R_AIBOM"; then
+            echo "Snyk gate passed"
+          else
+            echo "Snyk gate failed - review Snyk Code findings"
+            exit 1
+          fi
