@@ -22,9 +22,13 @@
 # For advanced configuration (matrix testing, mutation, fuzzing, custom
 # Scorecard gates), call the individual workflows directly.
 #
+# An optional Snyk AI-code-security job runs when run-snyk is true and a
+# SNYK_TOKEN secret is supplied; it no-ops when the token is absent.
+#
 # Nesting depth: caller (1) -> standard-stack (2) ->
-#   python-ci / python-security-analysis / python-sbom (3).
-# Within GitHub's 4-level reusable workflow limit.
+#   python-ci / python-security-analysis / python-sbom / python-snyk (3).
+# python-snyk's own jobs are not nested reusable calls, so this stays within
+# GitHub's 4-level reusable workflow limit.
 # ============================================================================
 
 name: Standard Stack (Reusable)
@@ -55,6 +59,17 @@ on:
         type: boolean
         required: false
         default: true
+
+      run-snyk:
+        description: 'Run the Snyk AI-code-security layer (requires SNYK_TOKEN)'
+        type: boolean
+        required: false
+        default: false
+
+    secrets:
+      SNYK_TOKEN:
+        description: 'Snyk API token; forwarded to python-snyk.yml when run-snyk is true'
+        required: false
 
 # Workflow-level permissions are the ceiling for all jobs in this workflow.
 # Each job below declares only what it actually needs.
@@ -95,3 +110,18 @@ jobs:
     with:
       python-version: ${{ inputs.python-version }}
       fail-on-vulnerabilities: ${{ inputs.fail-on-high }}
+
+  snyk:
+    name: Snyk
+    needs: [ci]
+    if: ${{ inputs.run-snyk }}
+    uses: ./.github/workflows/python-snyk.yml
+    permissions:
+      contents: read
+      security-events: write
+    with:
+      python-version: ${{ inputs.python-version }}
+      source-directory: ${{ inputs.source-directory }}
+      fail-on-high: ${{ inputs.fail-on-high }}
+    secrets:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
