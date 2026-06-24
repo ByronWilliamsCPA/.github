@@ -11,6 +11,7 @@ into a single workflow call.
 - pytest with coverage measurement
 - Bandit security scan
 - pip-audit dependency vulnerability scan
+- Optional: Snyk AI-code-security layer (when `run-snyk: true`)
 
 ## Minimal usage
 
@@ -41,6 +42,11 @@ jobs:
 | `source-directory` | string | no | `src` | Source code directory |
 | `coverage-threshold` | number | no | `80` | Minimum line coverage percentage |
 | `fail-on-high` | boolean | no | `true` | Fail on HIGH or CRITICAL security findings |
+| `run-snyk` | boolean | no | `false` | Run the Snyk AI-code-security layer; requires SNYK_TOKEN |
+
+When `run-snyk: true`, pass `SNYK_TOKEN` (via `secrets: inherit` or an explicit
+`secrets:` block) and ensure the caller grants `security-events: write`. The Snyk
+layer is documented in [python-snyk.md](python-snyk.md).
 
 ## Extending the stack
 

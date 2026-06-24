@@ -13,6 +13,19 @@ the latest reviewed commit on `main` and is re-pointed as changes land.
 
 ### Added
 
+- `python-snyk.yml`: new reusable Snyk AI-code-security workflow. Runs Snyk Code
+  (SAST) as the primary added value over Bandit, an advisory Snyk Open Source
+  (SCA) cross-check that is default-off and `continue-on-error` (OSV plus Renovate
+  remain the primary SCA gate), and an AI-BOM inventory for LLM/RAG/MCP repos. The
+  workflow is opt-in and token-gated: it no-ops cleanly when `SNYK_TOKEN` is absent.
+  It is uv-only (Poetry repos are rejected), and the OSS job exports the committed
+  `uv.lock` to a requirements file because Snyk SCA does not parse `uv.lock`.
+  Callers must grant `contents: read` and `security-events: write`. Documented in
+  `docs/workflows/python-snyk.md` and ADR-003.
+- `python-standard-stack.yml`: optional `run-snyk` input (default `false`) and a
+  `SNYK_TOKEN` secret passthrough that wire the Snyk Code/OSS layer into the
+  quickstart composite when enabled; AI-BOM remains reachable only via a direct
+  `python-snyk.yml` caller. Covered by the repo self-test.
 - `claude-baseline-review.yml`: repo-local Tier 0 PR triage review powered by
   `anthropics/claude-code-action` (SHA-pinned, advisory-only). Classifies each
   non-draft same-repo PR (renovate-deps, pattern-series, docs-only, config-tweak,
