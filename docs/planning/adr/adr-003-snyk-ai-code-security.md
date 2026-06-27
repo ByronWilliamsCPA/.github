@@ -59,12 +59,20 @@ Snyk Code provides cross-file dataflow SAST, an escalation layer over Bandit. Sn
 Open Source (SCA) is advisory, default-off, and `continue-on-error`: OSV plus
 Renovate remain the primary SCA gate. The OSS job never fails the build.
 
-### D4: AI-BOM is reachable only through a direct caller, not the quickstart composite
+### D4: AI-BOM is reachable via the quickstart composite or a direct caller
 
-AI-BOM is available by calling `python-snyk.yml` directly with `run-aibom: true`.
-It is intentionally NOT wired through the `python-standard-stack` quickstart
-composite, keeping that composite minimal and consistent with how it constrains
-the other layers.
+**Updated 2026-06-27**: the initial restriction (direct caller only) was lifted.
+
+AI-BOM is now available via two paths:
+
+- **Via `python-standard-stack.yml`**: set `enable-aibom: true` alongside
+  `run-snyk: true`. The input defaults to `false`, preserving the opt-in intent.
+- **Via a direct caller**: call `python-snyk.yml` directly with `run-aibom: true`.
+
+The original decision reserved AI-BOM for direct callers to keep the quickstart
+composite minimal. Adding `enable-aibom: false` (default off) achieves the same
+intent without requiring a direct caller for LLM/RAG/MCP repos that use the
+standard stack.
 
 ### D5: One Snyk Organization for both GitHub owners
 
@@ -149,3 +157,18 @@ when any of these become true:
 1. The Free 5-monitored-project cap becomes binding on private repos.
 2. The private SAST test cap (100 per month) becomes binding.
 3. A 1-seat Team checkout is confirmed affordable (see Pricing reality).
+
+---
+
+## Future Decisions
+
+### FD1: Snyk MCP Scan / Agent Scan
+
+Snyk MCP Scan (from the Invariant Labs acquisition) scans MCP server configurations
+for prompt injection and tool poisoning. As of 2026-06, this capability is pre-GA
+(preview). The "AI agent surface" section already targets trial runs against
+zen-mcp-server and homelab-infra MCP configs.
+
+**Condition for implementation**: GA announcement in the Snyk changelog. Until GA,
+do not implement a `python-snyk-mcp.yml` workflow or automate agent-scan in CI;
+the Snyk MCP server inside the coding agent covers interactive use.
