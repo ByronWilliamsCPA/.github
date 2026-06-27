@@ -91,6 +91,7 @@ Calling repos must provide:
 - **[REUSE Compliance](.github/workflows/python-reuse.yml)** (`python-reuse.yml`) - FSFE REUSE 3.0 license and copyright compliance
 - **[SBOM](.github/workflows/python-sbom.yml)** (`python-sbom.yml`) - Software Bill of Materials generation and dependency vulnerability scanning
 - **[Snyk](docs/workflows/python-snyk.md)** (`python-snyk.yml`) - Snyk AI-code-security layer: Code/SAST, advisory OSS cross-check, AI-BOM
+- **[Snyk IaC](docs/workflows/python-snyk-iac.md)** (`python-snyk-iac.yml`) - Snyk IaC scanning: Terraform, Kubernetes, and Docker Compose
 - **[OpenSSF Scorecard](.github/workflows/python-scorecard.yml)** (`python-scorecard.yml`) - Repository security health scoring via OpenSSF Scorecard
 - **[Supplemental Checks](.github/workflows/python-supplemental-checks.yml)** (`python-supplemental-checks.yml`) - Optional PR checks including link validation and changelog enforcement
 - **[Standard Stack](.github/workflows/python-standard-stack.yml)** (`python-standard-stack.yml`) - Bundled standard checks for typical Python repositories
