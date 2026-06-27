@@ -191,8 +191,6 @@ jobs:
     permissions:
       contents: read
       security-events: write
-    env:
-      NO_BUILD_FLAG: ${{ inputs.no-build && '--no-build' || '' }}
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411  # v2.19.4
@@ -208,7 +206,8 @@ jobs:
         uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39  # v8.2.0
         with:
           enable-cache: true
-      # Snyk SCA does not parse uv.lock. Export the committed lockfile to a requirements file Snyk understands. Restricted to uv-locked state so this never triggers a live network resolve.
+      # Snyk SCA does not parse uv.lock; export the committed lockfile to a requirements file Snyk
+      # understands. Restricted to uv-locked state so this never triggers a live network resolve.
       - name: Export requirements for Snyk
         shell: bash
         run: uv export --format requirements-txt --no-emit-project -o requirements-snyk.txt
@@ -260,10 +259,13 @@ jobs:
         run: |
           set +e
           # #VERIFY: confirm aibom.json is non-empty on a known LLM/RAG repo during the live phase; AI-BOM detection may require resolved dependencies.
-          snyk aibom --json > aibom.json
+          snyk aibom --json > aibom.json.tmp
           CODE=$?
           if [ "$CODE" -ne 0 ]; then
             echo "::warning::snyk aibom exited $CODE (often: no supported AI project). Continuing."
+            rm -f aibom.json.tmp
+          else
+            mv aibom.json.tmp aibom.json
           fi
           exit 0
       - name: Upload AI-BOM artifact
@@ -288,17 +290,19 @@ jobs:
           egress-policy: audit
       - name: Validate Snyk results
         env:
+          R_DETECT: ${{ needs.detect-config.result }}
           R_CODE: ${{ needs.snyk-code.result }}
           R_OSS: ${{ needs.snyk-oss.result }}
           R_AIBOM: ${{ needs.snyk-aibom.result }}
+        shell: bash
         run: |
-          echo "Snyk Code: $R_CODE | OSS: $R_OSS | AI-BOM: $R_AIBOM"
+          echo "Detect: $R_DETECT | Snyk Code: $R_CODE | OSS: $R_OSS | AI-BOM: $R_AIBOM"
           is_ok() { [[ "$1" == "success" || "$1" == "skipped" ]]; }
           # OSS is advisory (continue-on-error), so it reports success even with findings.
           # snyk-oss is in needs for ordering only and is intentionally excluded from the gate decision.
-          if is_ok "$R_CODE" && is_ok "$R_AIBOM"; then
+          if is_ok "$R_DETECT" && is_ok "$R_CODE" && is_ok "$R_AIBOM"; then
             echo "Snyk gate passed"
           else
-            echo "Snyk gate failed - review Snyk Code findings"
+            echo "Snyk gate failed - review Snyk findings in the Security tab"
             exit 1
           fi
