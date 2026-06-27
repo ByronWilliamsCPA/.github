@@ -149,3 +149,15 @@ jobs:
       fail-on-high: false
     secrets:
       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+  test-python-snyk-iac:
+    name: Self-test python-snyk-iac
+    uses: ./.github/workflows/python-snyk-iac.yml
+    permissions:
+      contents: read
+      security-events: write
+    with:
+      terraform-dirs: 'scripts'
+      fail-on-high: false
+    secrets:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
