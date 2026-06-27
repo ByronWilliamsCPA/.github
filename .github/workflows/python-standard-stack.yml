@@ -22,9 +22,13 @@
 # For advanced configuration (matrix testing, mutation, fuzzing, custom
 # Scorecard gates), call the individual workflows directly.
 #
+# An optional Snyk AI-code-security job runs when run-snyk is true and a
+# SNYK_TOKEN secret is supplied; it no-ops when the token is absent.
+#
 # Nesting depth: caller (1) -> standard-stack (2) ->
-#   python-ci / python-security-analysis / python-sbom (3).
-# Within GitHub's 4-level reusable workflow limit.
+#   python-ci / python-security-analysis / python-sbom / python-snyk (3).
+# python-snyk's own jobs are not nested reusable calls, so this stays within
+# GitHub's 4-level reusable workflow limit.
 # ============================================================================
 
 name: Standard Stack (Reusable)
@@ -55,6 +59,29 @@ on:
         type: boolean
         required: false
         default: true
+
+      run-snyk:
+        description: 'Run the Snyk AI-code-security layer (requires SNYK_TOKEN)'
+        # #CRITICAL: callers setting run-snyk: true must also grant
+        # security-events: write at workflow or job level; python-snyk.yml's
+        # per-job grant is bounded by the caller's ceiling, and a missing write
+        # causes startup_failure before any job runs.
+        # #VERIFY: after enabling run-snyk in a caller, confirm no startup_failure
+        # via `gh run view <id> --json conclusion`.
+        type: boolean
+        required: false
+        default: false
+
+      enable-aibom:
+        description: 'Generate an AI-BOM (requires run-snyk: true and SNYK_TOKEN; for LLM/RAG/MCP repos)'
+        type: boolean
+        required: false
+        default: false
+
+    secrets:
+      SNYK_TOKEN:
+        description: 'Snyk API token; forwarded to python-snyk.yml when run-snyk is true'
+        required: false
 
 # Workflow-level permissions are the ceiling for all jobs in this workflow.
 # Each job below declares only what it actually needs.
@@ -95,3 +122,23 @@ jobs:
     with:
       python-version: ${{ inputs.python-version }}
       fail-on-vulnerabilities: ${{ inputs.fail-on-high }}
+
+  snyk:
+    name: Snyk
+    needs: [ci]
+    if: ${{ inputs.run-snyk }}
+    uses: ./.github/workflows/python-snyk.yml
+    permissions:
+      contents: read
+      security-events: write
+    with:
+      python-version: ${{ inputs.python-version }}
+      source-directory: ${{ inputs.source-directory }}
+      fail-on-high: ${{ inputs.fail-on-high }}
+      # enable-aibom maps to run-aibom in python-snyk.yml. Rename is intentional:
+      # enable-* signals a feature gate subordinate to run-snyk, not a peer job toggle.
+      # #ASSUME python-snyk.yml exposes run-aibom as a boolean input (verified: line 54).
+      # #VERIFY run with run-snyk: true, enable-aibom: true; confirm no startup_failure.
+      run-aibom: ${{ inputs.enable-aibom }}
+    secrets:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}

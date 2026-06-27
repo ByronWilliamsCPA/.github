@@ -13,6 +13,27 @@ the latest reviewed commit on `main` and is re-pointed as changes land.
 
 ### Added
 
+- `python-snyk.yml`: new reusable Snyk AI-code-security workflow. Runs Snyk Code
+  (SAST) as the primary added value over Bandit, an advisory Snyk Open Source
+  (SCA) cross-check that is default-off and `continue-on-error` (OSV plus Renovate
+  remain the primary SCA gate), and an AI-BOM inventory for LLM/RAG/MCP repos. The
+  workflow is opt-in and token-gated: it no-ops cleanly when `SNYK_TOKEN` is absent.
+  It is uv-only (Poetry repos are rejected), and the OSS job exports the committed
+  `uv.lock` to a requirements file because Snyk SCA does not parse `uv.lock`.
+  Callers must grant `contents: read` and `security-events: write`. Documented in
+  `docs/workflows/python-snyk.md` and ADR-003.
+- `python-snyk-iac.yml`: new reusable Snyk IaC scanning workflow. Covers
+  Terraform, Kubernetes manifests, and Docker Compose files with independent
+  SARIF uploads per category (`snyk-iac-terraform`, `snyk-iac-kubernetes`,
+  `snyk-iac-compose`). Token-gated and detect-then-scan: a preflight job probes
+  for IaC file presence before any scan runs, preventing `snyk iac test` exit 2
+  on repos with no supported files. No-ops cleanly when `SNYK_TOKEN` is absent.
+  Callers must grant `contents: read` and `security-events: write`. Documented
+  in `docs/workflows/python-snyk-iac.md` and ADR-003.
+- `python-standard-stack.yml`: optional `run-snyk` input (default `false`),
+  `enable-aibom` input, and a `SNYK_TOKEN` secret passthrough that wire the Snyk
+  Code/OSS/AI-BOM layer into the quickstart composite when enabled. Covered by
+  the repo self-test.
 - `claude-baseline-review.yml`: repo-local Tier 0 PR triage review powered by
   `anthropics/claude-code-action` (SHA-pinned, advisory-only). Classifies each
   non-draft same-repo PR (renovate-deps, pattern-series, docs-only, config-tweak,

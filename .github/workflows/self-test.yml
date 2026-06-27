@@ -134,3 +134,30 @@ jobs:
 
       - name: Check workflows match docs/python-versions.md
         run: scripts/check-python-versions.sh
+
+  test-python-snyk:
+    name: Self-test python-snyk
+    uses: ./.github/workflows/python-snyk.yml
+    permissions:
+      contents: read
+      security-events: write
+    with:
+      source-directory: 'scripts'
+      run-code: true
+      run-oss: false
+      run-aibom: false
+      fail-on-high: false
+    secrets:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+  test-python-snyk-iac:
+    name: Self-test python-snyk-iac
+    uses: ./.github/workflows/python-snyk-iac.yml
+    permissions:
+      contents: read
+      security-events: write
+    with:
+      terraform-dirs: 'scripts'
+      fail-on-high: false
+    secrets:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}

@@ -1,0 +1,353 @@
+# Python Snyk IaC (Reusable)
+# Snyk Infrastructure-as-Code scanning layer: Terraform, Kubernetes manifests,
+# and Docker Compose. Token-gated; no-ops cleanly when SNYK_TOKEN is absent
+# or when no IaC files are present in the configured directories.
+#
+# Usage from downstream repos:
+#   jobs:
+#     snyk-iac:
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-snyk-iac.yml@v1
+#       permissions:
+#         contents: read
+#         security-events: write   # required for SARIF upload
+#       with:
+#         terraform-dirs: 'infra'
+#         k8s-dirs: 'k8s manifests'  # space-separated; empty = skip
+#         compose-dirs: ''           # empty = skip
+#         fail-on-high: true
+#       secrets:
+#         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+#
+# Caller permission contract:
+# #CRITICAL: callers MUST grant security-events: write at workflow or calling-job
+#   level, or the run fails at startup ("startup_failure") before any job runs.
+#   See memory entry "Reusable startup_failure causes".
+# #ASSUME: SNYK_TOKEN may be absent; the workflow no-ops cleanly when it is.
+# #ASSUME: directory paths do not contain spaces (org policy; IFS splitting on
+#   space-separated input would break paths with spaces).
+# #EDGE: snyk iac test exits 2 (error) when no supported files are found.
+#   The detect-iac job probes for file presence before each scan job runs.
+# #VERIFY: after wiring a new caller, confirm detect-iac outputs has-terraform=true
+#   (or has-k8s / has-compose) in the Actions run log.
+
+name: Python Snyk IaC (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      terraform-dirs:
+        description: 'Space-separated directories to scan for Terraform files (.tf). Default scans repo root.'
+        type: string
+        required: false
+        default: '.'
+      k8s-dirs:
+        description: 'Space-separated directories to scan for Kubernetes manifests. Empty = skip.'
+        type: string
+        required: false
+        default: ''
+      compose-dirs:
+        description: 'Space-separated directories to scan for Docker Compose files. Empty = skip.'
+        type: string
+        required: false
+        default: ''
+      fail-on-high:
+        description: 'Fail the build on HIGH/CRITICAL Snyk IaC findings'
+        type: boolean
+        required: false
+        default: true
+    secrets:
+      SNYK_TOKEN:
+        description: 'Snyk API token. When absent, all scan jobs no-op.'
+        required: false
+
+permissions: {}
+
+jobs:
+  detect-iac:
+    name: Detect IaC Files
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      has-token: ${{ steps.check-token.outputs.has-token }}
+      has-terraform: ${{ steps.detect.outputs.has-terraform }}
+      has-k8s: ${{ steps.detect.outputs.has-k8s }}
+      has-compose: ${{ steps.detect.outputs.has-compose }}
+    permissions:
+      contents: read
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411  # v2.19.4
+        with:
+          egress-policy: audit
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+      - name: Check for SNYK_TOKEN
+        id: check-token
+        env:
+          HAS_TOKEN: ${{ secrets.SNYK_TOKEN != '' }}
+        run: |
+          if [ "$HAS_TOKEN" = "true" ]; then
+            echo "has-token=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has-token=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::SNYK_TOKEN not set; Snyk IaC scan jobs will be skipped."
+          fi
+        shell: bash
+      - name: Detect IaC files
+        id: detect
+        env:
+          TERRAFORM_DIRS: ${{ inputs.terraform-dirs }}
+          K8S_DIRS: ${{ inputs.k8s-dirs }}
+          COMPOSE_DIRS: ${{ inputs.compose-dirs }}
+        shell: bash
+        run: |
+          # Terraform: probe terraform-dirs for .tf files.
+          # Default is '.'; if the repo root has no .tf files, has-terraform=false
+          # and the scan job skips, preventing snyk iac test exit 2.
+          has_terraform=false
+          if [ -n "$TERRAFORM_DIRS" ]; then
+            IFS=' ' read -ra dirs <<< "$TERRAFORM_DIRS"
+            for dir in "${dirs[@]}"; do
+              if find "$dir" -maxdepth 5 -name '*.tf' -print -quit 2>/dev/null | grep -q .; then
+                has_terraform=true
+                break
+              fi
+            done
+          fi
+          echo "has-terraform=$has_terraform" >> "$GITHUB_OUTPUT"
+          [ "$has_terraform" = "true" ] || echo "::notice::No .tf files found; Terraform scan skipped."
+
+          # Kubernetes: probe k8s-dirs for .yaml/.yml files (dirs are k8s-specific by convention).
+          has_k8s=false
+          if [ -n "$K8S_DIRS" ]; then
+            IFS=' ' read -ra dirs <<< "$K8S_DIRS"
+            for dir in "${dirs[@]}"; do
+              if find "$dir" -maxdepth 5 \( -name '*.yaml' -o -name '*.yml' \) \
+                  -print -quit 2>/dev/null | grep -q .; then
+                has_k8s=true
+                break
+              fi
+            done
+          fi
+          echo "has-k8s=$has_k8s" >> "$GITHUB_OUTPUT"
+          [ "$has_k8s" = "true" ] || echo "::notice::No YAML files in k8s-dirs; Kubernetes scan skipped."
+
+          # Docker Compose: probe compose-dirs for all canonical Docker Compose v2
+          # filenames: compose.yaml, compose.yml, docker-compose*.yaml, docker-compose*.yml.
+          has_compose=false
+          if [ -n "$COMPOSE_DIRS" ]; then
+            IFS=' ' read -ra dirs <<< "$COMPOSE_DIRS"
+            for dir in "${dirs[@]}"; do
+              if find "$dir" -maxdepth 5 \
+                  \( -name 'compose.yaml' -o -name 'compose.yml' \
+                     -o -name 'docker-compose*.yaml' -o -name 'docker-compose*.yml' \) \
+                  -print -quit 2>/dev/null | grep -q .; then
+                has_compose=true
+                break
+              fi
+            done
+          fi
+          echo "has-compose=$has_compose" >> "$GITHUB_OUTPUT"
+          [ "$has_compose" = "true" ] || \
+            echo "::notice::No Compose files found in compose-dirs; Compose scan skipped."
+
+  snyk-terraform:
+    name: Snyk IaC (Terraform)
+    needs: detect-iac
+    if: >-
+      ${{ inputs.terraform-dirs != ''
+        && needs.detect-iac.outputs.has-token == 'true'
+        && needs.detect-iac.outputs.has-terraform == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411  # v2.19.4
+        with:
+          egress-policy: audit
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+      - name: Setup Snyk CLI
+        uses: snyk/actions/setup@9adf32b1121593767fc3c057af55b55db032dc04  # v1.0.0
+      - name: Run Snyk IaC (Terraform)
+        id: terraform
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          TERRAFORM_DIRS: ${{ inputs.terraform-dirs }}
+          FAIL_ON_HIGH: ${{ inputs.fail-on-high }}
+        shell: bash
+        run: |
+          set +e
+          THRESHOLD=high
+          [ "$FAIL_ON_HIGH" = "true" ] || THRESHOLD=critical
+          IFS=' ' read -ra dirs <<< "$TERRAFORM_DIRS"
+          snyk iac test "${dirs[@]}" \
+            --severity-threshold="$THRESHOLD" \
+            --sarif-file-output=iac-terraform.sarif
+          CODE=$?
+          # 0 = no issues; 1 = issues at/above threshold; >1 = real error.
+          if [ "$CODE" -gt 1 ]; then
+            echo "::error::Snyk IaC Terraform scan failed (exit $CODE)."
+            exit "$CODE"
+          fi
+          if [ "$CODE" -eq 1 ] && [ "$FAIL_ON_HIGH" = "true" ]; then
+            echo "::error::Snyk IaC found Terraform findings at/above $THRESHOLD."
+            echo "gate=fail" >> "$GITHUB_OUTPUT"
+          fi
+          exit 0
+      - name: Upload Terraform SARIF
+        if: always() && hashFiles('iac-terraform.sarif') != ''
+        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e  # v4.36.2
+        continue-on-error: true
+        with:
+          sarif_file: iac-terraform.sarif
+          category: snyk-iac-terraform
+      - name: Enforce gate
+        if: steps.terraform.outputs.gate == 'fail'
+        run: exit 1
+
+  snyk-kubernetes:
+    name: Snyk IaC (Kubernetes)
+    needs: detect-iac
+    if: >-
+      ${{ inputs.k8s-dirs != ''
+        && needs.detect-iac.outputs.has-token == 'true'
+        && needs.detect-iac.outputs.has-k8s == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411  # v2.19.4
+        with:
+          egress-policy: audit
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+      - name: Setup Snyk CLI
+        uses: snyk/actions/setup@9adf32b1121593767fc3c057af55b55db032dc04  # v1.0.0
+      - name: Run Snyk IaC (Kubernetes)
+        id: kubernetes
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          K8S_DIRS: ${{ inputs.k8s-dirs }}
+          FAIL_ON_HIGH: ${{ inputs.fail-on-high }}
+        shell: bash
+        run: |
+          set +e
+          THRESHOLD=high
+          [ "$FAIL_ON_HIGH" = "true" ] || THRESHOLD=critical
+          IFS=' ' read -ra dirs <<< "$K8S_DIRS"
+          snyk iac test "${dirs[@]}" \
+            --severity-threshold="$THRESHOLD" \
+            --sarif-file-output=iac-k8s.sarif
+          CODE=$?
+          if [ "$CODE" -gt 1 ]; then
+            echo "::error::Snyk IaC Kubernetes scan failed (exit $CODE)."
+            exit "$CODE"
+          fi
+          if [ "$CODE" -eq 1 ] && [ "$FAIL_ON_HIGH" = "true" ]; then
+            echo "::error::Snyk IaC found Kubernetes findings at/above $THRESHOLD."
+            echo "gate=fail" >> "$GITHUB_OUTPUT"
+          fi
+          exit 0
+      - name: Upload Kubernetes SARIF
+        if: always() && hashFiles('iac-k8s.sarif') != ''
+        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e  # v4.36.2
+        continue-on-error: true
+        with:
+          sarif_file: iac-k8s.sarif
+          category: snyk-iac-kubernetes
+      - name: Enforce gate
+        if: steps.kubernetes.outputs.gate == 'fail'
+        run: exit 1
+
+  snyk-compose:
+    name: Snyk IaC (Docker Compose)
+    needs: detect-iac
+    if: >-
+      ${{ inputs.compose-dirs != ''
+        && needs.detect-iac.outputs.has-token == 'true'
+        && needs.detect-iac.outputs.has-compose == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411  # v2.19.4
+        with:
+          egress-policy: audit
+      - name: Checkout repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10  # v6.0.3
+      - name: Setup Snyk CLI
+        uses: snyk/actions/setup@9adf32b1121593767fc3c057af55b55db032dc04  # v1.0.0
+      - name: Run Snyk IaC (Docker Compose)
+        id: compose
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          COMPOSE_DIRS: ${{ inputs.compose-dirs }}
+          FAIL_ON_HIGH: ${{ inputs.fail-on-high }}
+        shell: bash
+        run: |
+          set +e
+          THRESHOLD=high
+          [ "$FAIL_ON_HIGH" = "true" ] || THRESHOLD=critical
+          IFS=' ' read -ra dirs <<< "$COMPOSE_DIRS"
+          snyk iac test "${dirs[@]}" \
+            --severity-threshold="$THRESHOLD" \
+            --sarif-file-output=iac-compose.sarif
+          CODE=$?
+          if [ "$CODE" -gt 1 ]; then
+            echo "::error::Snyk IaC Docker Compose scan failed (exit $CODE)."
+            exit "$CODE"
+          fi
+          if [ "$CODE" -eq 1 ] && [ "$FAIL_ON_HIGH" = "true" ]; then
+            echo "::error::Snyk IaC found Docker Compose findings at/above $THRESHOLD."
+            echo "gate=fail" >> "$GITHUB_OUTPUT"
+          fi
+          exit 0
+      - name: Upload Docker Compose SARIF
+        if: always() && hashFiles('iac-compose.sarif') != ''
+        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e  # v4.36.2
+        continue-on-error: true
+        with:
+          sarif_file: iac-compose.sarif
+          category: snyk-iac-compose
+      - name: Enforce gate
+        if: steps.compose.outputs.gate == 'fail'
+        run: exit 1
+
+  snyk-iac-gate:
+    name: Snyk IaC Gate
+    needs: [detect-iac, snyk-terraform, snyk-kubernetes, snyk-compose]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411  # v2.19.4
+        with:
+          egress-policy: audit
+      - name: Validate IaC results
+        env:
+          R_TERRAFORM: ${{ needs.snyk-terraform.result }}
+          R_K8S: ${{ needs.snyk-kubernetes.result }}
+          R_COMPOSE: ${{ needs.snyk-compose.result }}
+        shell: bash
+        run: |
+          echo "Terraform: $R_TERRAFORM | Kubernetes: $R_K8S | Compose: $R_COMPOSE"
+          is_ok() { [[ "$1" == "success" || "$1" == "skipped" ]]; }
+          if is_ok "$R_TERRAFORM" && is_ok "$R_K8S" && is_ok "$R_COMPOSE"; then
+            echo "Snyk IaC gate passed"
+          else
+            echo "Snyk IaC gate failed - review IaC findings in the Security tab"
+            exit 1
+          fi
