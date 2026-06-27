@@ -129,6 +129,10 @@ jobs:
       python-version: ${{ inputs.python-version }}
       source-directory: ${{ inputs.source-directory }}
       fail-on-high: ${{ inputs.fail-on-high }}
+      # enable-aibom maps to run-aibom in python-snyk.yml. Rename is intentional:
+      # enable-* signals a feature gate subordinate to run-snyk, not a peer job toggle.
+      # #ASSUME python-snyk.yml exposes run-aibom as a boolean input (verified: line 54).
+      # #VERIFY run with run-snyk: true, enable-aibom: true; confirm no startup_failure.
       run-aibom: ${{ inputs.enable-aibom }}
     secrets:
       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
