@@ -62,6 +62,12 @@ on:
 
       run-snyk:
         description: 'Run the Snyk AI-code-security layer (requires SNYK_TOKEN)'
+        # #CRITICAL: callers setting run-snyk: true must also grant
+        # security-events: write at workflow or job level; python-snyk.yml's
+        # per-job grant is bounded by the caller's ceiling, and a missing write
+        # causes startup_failure before any job runs.
+        # #VERIFY: after enabling run-snyk in a caller, confirm no startup_failure
+        # via `gh run view <id> --json conclusion`.
         type: boolean
         required: false
         default: false
