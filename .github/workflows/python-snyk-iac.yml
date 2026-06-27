@@ -132,12 +132,15 @@ jobs:
           echo "has-k8s=$has_k8s" >> "$GITHUB_OUTPUT"
           [ "$has_k8s" = "true" ] || echo "::notice::No YAML files in k8s-dirs; Kubernetes scan skipped."
 
-          # Docker Compose: probe compose-dirs for docker-compose*.yml files.
+          # Docker Compose: probe compose-dirs for all canonical Docker Compose v2
+          # filenames: compose.yaml, compose.yml, docker-compose*.yaml, docker-compose*.yml.
           has_compose=false
           if [ -n "$COMPOSE_DIRS" ]; then
             IFS=' ' read -ra dirs <<< "$COMPOSE_DIRS"
             for dir in "${dirs[@]}"; do
-              if find "$dir" -maxdepth 5 -name 'docker-compose*.yml' \
+              if find "$dir" -maxdepth 5 \
+                  \( -name 'compose.yaml' -o -name 'compose.yml' \
+                     -o -name 'docker-compose*.yaml' -o -name 'docker-compose*.yml' \) \
                   -print -quit 2>/dev/null | grep -q .; then
                 has_compose=true
                 break
@@ -146,7 +149,7 @@ jobs:
           fi
           echo "has-compose=$has_compose" >> "$GITHUB_OUTPUT"
           [ "$has_compose" = "true" ] || \
-            echo "::notice::No docker-compose*.yml files in compose-dirs; Compose scan skipped."
+            echo "::notice::No Compose files found in compose-dirs; Compose scan skipped."
 
   snyk-terraform:
     name: Snyk IaC (Terraform)
@@ -338,6 +341,7 @@ jobs:
           R_TERRAFORM: ${{ needs.snyk-terraform.result }}
           R_K8S: ${{ needs.snyk-kubernetes.result }}
           R_COMPOSE: ${{ needs.snyk-compose.result }}
+        shell: bash
         run: |
           echo "Terraform: $R_TERRAFORM | Kubernetes: $R_K8S | Compose: $R_COMPOSE"
           is_ok() { [[ "$1" == "success" || "$1" == "skipped" ]]; }
