@@ -106,8 +106,39 @@ token is bounded by the caller's permissions.
   never triggers a live network resolve.
 - **OSS is advisory and default-off.** OSV plus Renovate remain the primary SCA gate;
   the OSS job is `continue-on-error` and is excluded from the gate decision.
-- **AI-BOM is reachable via a direct caller only.** It is intentionally not wired
-  through `python-standard-stack.yml`, to keep that quickstart composite minimal.
+- **AI-BOM** is enabled via `enable-aibom: true` in `python-standard-stack.yml`
+  (requires `run-snyk: true` and `SNYK_TOKEN`), or by setting `run-aibom: true`
+  in a direct caller of this workflow.
+
+## Reading Results
+
+### Snyk Code (SAST)
+
+SARIF results appear in the repository's Security tab under Code Scanning. Each
+finding includes:
+
+- **Severity**: CRITICAL, HIGH, MEDIUM, or LOW, based on Snyk's CVSS scoring
+- **Rule**: the Snyk Code rule that fired (e.g., `javascript/SQLInjection`)
+- **Data flow**: for cross-file findings, a path from source to sink
+
+### Snyk Open Source (SCA)
+
+When `run-oss: true`, `snyk test --json` output includes exploit maturity fields
+on any paid Snyk plan:
+
+- `isExploitable` (boolean): `true` when a public PoC or in-the-wild exploit exists
+- `exploitMaturity`: one of `No Known Exploit`, `Proof of Concept`, `Functional`,
+  or `Mature`
+
+These fields are the primary reason to run the OSS job even when Renovate is the
+fix-PR source: Snyk surfaces vulnerabilities in the pre-NVD window (days to weeks
+before CVE assignment) and labels them as exploitable before NVD data is available.
+Renovate's advisories trail NVD by design, so a Snyk OSS finding with
+`exploitMaturity: Functional` and no CVE yet is a genuine early-warning signal worth
+acting on rather than waiting for a Renovate fix-PR.
+
+Results appear in the Snyk dashboard (app.snyk.io) under the connected project, not
+in the GitHub Security tab (OSS findings are not uploaded as SARIF).
 
 See [ADR-003](../planning/adr/adr-003-snyk-ai-code-security.md) for the adoption
 rationale.
