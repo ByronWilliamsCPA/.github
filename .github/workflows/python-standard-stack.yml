@@ -66,6 +66,12 @@ on:
         required: false
         default: false
 
+      enable-aibom:
+        description: 'Generate an AI-BOM (requires run-snyk: true and SNYK_TOKEN; for LLM/RAG/MCP repos)'
+        type: boolean
+        required: false
+        default: false
+
     secrets:
       SNYK_TOKEN:
         description: 'Snyk API token; forwarded to python-snyk.yml when run-snyk is true'
@@ -123,5 +129,6 @@ jobs:
       python-version: ${{ inputs.python-version }}
       source-directory: ${{ inputs.source-directory }}
       fail-on-high: ${{ inputs.fail-on-high }}
+      run-aibom: ${{ inputs.enable-aibom }}
     secrets:
       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
