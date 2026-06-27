@@ -43,10 +43,13 @@ jobs:
 | `coverage-threshold` | number | no | `80` | Minimum line coverage percentage |
 | `fail-on-high` | boolean | no | `true` | Fail on HIGH or CRITICAL security findings |
 | `run-snyk` | boolean | no | `false` | Run the Snyk AI-code-security layer; requires SNYK_TOKEN |
+| `enable-aibom` | boolean | no | `false` | Generate an AI-BOM (requires `run-snyk: true` and SNYK_TOKEN; for LLM/RAG/MCP repos) |
 
 When `run-snyk: true`, pass `SNYK_TOKEN` (via `secrets: inherit` or an explicit
 `secrets:` block) and ensure the caller grants `security-events: write`. The Snyk
-layer is documented in [python-snyk.md](python-snyk.md).
+layer is documented in [python-snyk.md](python-snyk.md). Set `enable-aibom: true`
+alongside `run-snyk: true` to generate a CycloneDX AI-BOM for repos that host LLM
+integrations, RAG pipelines, or MCP servers.
 
 ## Extending the stack
 
@@ -55,5 +58,6 @@ After `python-standard-stack.yml` passes, chain additional workflows for:
 - Coverage upload: `python-codecov.yml`
 - SBOM generation: `python-sbom.yml`
 - Release: `python-release.yml`
+- IaC scanning (Terraform/Kubernetes/Compose): `python-snyk-iac.yml` (see [python-snyk-iac.md](python-snyk-iac.md))
 
 See [docs/workflows/](.) for individual workflow documentation.
