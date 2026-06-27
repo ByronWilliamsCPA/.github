@@ -72,9 +72,11 @@ Detection logic:
 
 - For Terraform: searches up to 5 directory levels deep for any `*.tf` file in
   `terraform-dirs`
-- For Kubernetes: searches for `*.yaml` or `*.yml` files in `k8s-dirs`
-- For Compose: searches for `docker-compose*.yml` or `docker-compose*.yaml`
-  in `compose-dirs`
+- For Kubernetes: searches up to 5 directory levels deep for `*.yaml` or `*.yml`
+  files in `k8s-dirs`
+- For Compose: searches up to 5 directory levels deep for `docker-compose*.yml`
+  files in `compose-dirs` (`.yaml` extension is not matched; name compose files
+  with `.yml` to ensure detection)
 
 A scan job only runs when its input directory is non-empty, `SNYK_TOKEN` is
 present, AND the corresponding file type was detected.
