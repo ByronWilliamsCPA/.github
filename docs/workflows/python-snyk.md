@@ -87,15 +87,16 @@ token is bounded by the caller's permissions.
    snyk auth
    ```
 
-4. **AI-BOM usage.** Generate an AI-BOM locally, or wire it into CI through a direct
-   caller.
+4. **AI-BOM usage.** Generate an AI-BOM locally, or wire it into CI.
 
    ```bash
    # Local
    snyk aibom --json > aibom.json
    ```
 
-   In CI, set `run-aibom: true` in a direct caller of `python-snyk.yml`.
+   In CI, enable it via `enable-aibom: true` in `python-standard-stack.yml`
+   (requires `run-snyk: true` and `SNYK_TOKEN`), or by setting `run-aibom: true`
+   in a direct caller of `python-snyk.yml`.
 
 ## Notes
 
@@ -117,8 +118,8 @@ token is bounded by the caller's permissions.
 SARIF results appear in the repository's Security tab under Code Scanning. Each
 finding includes:
 
-- **Severity**: CRITICAL, HIGH, MEDIUM, or LOW, based on Snyk's CVSS scoring
-- **Rule**: the Snyk Code rule that fired (e.g., `javascript/SQLInjection`)
+- **Severity**: CRITICAL, HIGH, MEDIUM, or LOW, based on Snyk Code's severity rating
+- **Rule**: the Snyk Code rule that fired (e.g., `python/SqlInjection`)
 - **Data flow**: for cross-file findings, a path from source to sink
 
 ### Snyk Open Source (SCA)
