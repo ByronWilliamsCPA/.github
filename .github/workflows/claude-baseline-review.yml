@@ -128,7 +128,7 @@ jobs:
           submodules: recursive
 
       - name: Run baseline triage review
-        uses: anthropics/claude-code-action@2fee15510437d71399d9139ed60433470484a8fb  # v1.0.153
+        uses: anthropics/claude-code-action@74eedf1a1892082d619c3edb66b9402da6520e7f  # v1.0.156
         with:
           # #CRITICAL: secret reference; ANTHROPIC_API_KEY must exist as a
           # repository or organization secret or this step fails at startup.
