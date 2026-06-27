@@ -120,12 +120,22 @@ jobs:
           # the gh CLI, not local git history.
           fetch-depth: 1
           persist-credentials: false
-          # #CRITICAL: caller repos symlink files under .claude/ (e.g.
-          # .claude/commands/review-pr.md) into .submodules/. Without submodule
-          # checkout those symlinks dangle and claude-code-action aborts with
-          # `ENOENT ... statx '.claude/commands/review-pr.md'`. Recursive
-          # checkout resolves them. Submodules are public, so no extra token.
-          submodules: recursive
+
+      - name: Initialize submodules (best-effort)
+        # #CRITICAL: caller repos symlink files under .claude/ (e.g.
+        # .claude/commands/review-pr.md) into .submodules/. Without submodule
+        # checkout those symlinks dangle and claude-code-action aborts with
+        # `ENOENT ... statx '.claude/commands/review-pr.md'`. Submodule init
+        # resolves them. Submodules are public, so no extra token.
+        # #CRITICAL: this is a best-effort step, NOT `submodules: recursive` on
+        # actions/checkout. Third-party submodules (e.g. obra/superpowers)
+        # rebase and force-push, so a pinned commit can vanish upstream; with
+        # recursive checkout `git` then exits 128 and fails the ENTIRE job for
+        # every PR, fleet-wide. continue-on-error degrades gracefully: a stale
+        # upstream pin leaves one symlink dangling instead of blocking all
+        # reviews. The owning repo should still re-pin the stale submodule.
+        continue-on-error: true
+        run: git submodule update --init --recursive
 
       - name: Run baseline triage review
         uses: anthropics/claude-code-action@74eedf1a1892082d619c3edb66b9402da6520e7f  # v1.0.156

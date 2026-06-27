@@ -47,6 +47,14 @@ the latest reviewed commit on `main` and is re-pointed as changes land.
 
 ### Fixed
 
+- `claude-baseline-review.yml`: initialize submodules as a best-effort step
+  (`git submodule update --init --recursive` with `continue-on-error: true`)
+  instead of `submodules: recursive` on `actions/checkout`. Third-party
+  submodules (e.g. `obra/superpowers`) rebase and force-push, so a pinned commit
+  can vanish upstream; recursive checkout then fails with `git` exit 128 and
+  blocks the entire review job on every PR, fleet-wide. The best-effort step
+  degrades gracefully so a stale upstream pin in one consumer leaves a symlink
+  dangling rather than breaking all reviews.
 - `sbom-nightly.yml`: grant `contents: read` and `security-events: write` on the
   calling job. The caller previously set `permissions: {}`, which is below the
   ceiling the reusable `python-sbom.yml` SARIF-upload jobs require, so every
