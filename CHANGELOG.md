@@ -79,6 +79,16 @@ the latest reviewed commit on `main` and is re-pointed as changes land.
 
 ### Changed
 
+- `python-sbom.yml`: **Grype is now the gating runtime-dependency CVE scanner**,
+  completing the issue #152 Trivy-to-Grype cutover. The parallel-run window
+  confirmed package-level and severity-level detection parity (Grype missed
+  nothing Trivy caught, at identical CVSS scores, including HIGH findings) before
+  cutover. The promoted Grype job keeps the status-check name `Scan Runtime
+  Dependencies` (the name the former Trivy job used) so consumer rulesets that
+  require that context keep passing without per-repo reconfiguration. Motivation:
+  Trivy's release infrastructure was compromised in March 2026 with vulnerability
+  database updates suspended, making the scanner itself a supply-chain risk;
+  Grype (Anchore) is unaffected. OSV-Scanner remains a second keyless gate.
 - `claude-baseline-review.yml`: converted the Tier 0 baseline reviewer from a
   repo-local `pull_request` workflow into a `workflow_call` reusable. Repo-specific
   framing (`repo-description`, `sensitive-paths`, `escalation-guidance`) is now
@@ -229,6 +239,22 @@ the latest reviewed commit on `main` and is re-pointed as changes land.
   to report-only.
 
 ### Breaking Changes
+
+- `python-sbom.yml`: the issue #152 Trivy cutover removes Trivy and its
+  parallel-run scaffolding. Downstream-visible surface changes:
+
+  1. **`trivyignore-path` input removed.** Trivy no longer runs, so the input
+     has no effect. Unlike the `run-safety` removal below, this is verified safe:
+     no caller in the org passes `trivyignore-path` (checked every consumer's
+     SBOM caller), so no `workflow_call` input-validation startup_failure can
+     occur. Use `grype-config-path` (default `.grype.yaml`) for CVE suppression.
+  2. **Gating scanner swapped Trivy to Grype.** The merge gate is now Grype
+     (Anchore) plus the existing OSV-Scanner gate. Parity was validated over the
+     parallel-run window (zero divergence in either direction, identical CVSS
+     scores). The gating job retains the `Scan Runtime Dependencies` check name,
+     so required-status-check configuration in consumer rulesets is unaffected.
+  3. **`parity-summary` job and `scripts/compare_scanner_parity.py` removed.**
+     These existed only to compare the two scanners during parallel-run.
 
 - `python-security-analysis.yml`: the `safety` SCA scanner has been
   removed from the reusable workflow and its `workflow-templates/`
