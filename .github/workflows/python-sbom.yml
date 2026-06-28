@@ -13,8 +13,7 @@
 #
 # Features:
 #   - CycloneDX SBOM generation
-#   - Trivy vulnerability scanning (gating, SBOM-ingest)
-#   - Grype vulnerability scanning (advisory parallel-run; see issue #152)
+#   - Grype vulnerability scanning (gating, SBOM-ingest)
 #   - OSV-Scanner vulnerability scanning (fast keyless gate, SBOM-ingest)
 #   - License compliance checking
 #   - SARIF upload to GitHub Security tab
@@ -31,7 +30,7 @@ on:
         type: string
         default: '3.12'
       fail-on-vulnerabilities:
-        description: 'Fail workflow on CRITICAL/HIGH vulnerabilities. Parallel-run: applies to Trivy only; Grype always runs non-gating (see issue #152).'
+        description: 'Fail workflow on CRITICAL/HIGH vulnerabilities.'
         required: false
         type: boolean
         default: true
@@ -60,11 +59,6 @@ on:
         required: false
         type: string
         default: '["certifi:MPL"]'
-      trivyignore-path:
-        description: 'Path to .trivyignore file for suppressing known CVEs (relative to repo root). DEPRECATED: removed at Trivy cutover (see issue #152).'
-        required: false
-        type: string
-        default: '.trivyignore'
       no-build:
         description: 'Pass --no-build to uv sync/run commands (disable for projects with a build backend like hatchling)'
         required: false
@@ -231,108 +225,30 @@ jobs:
           if-no-files-found: error
 
   # ============================================================================
-  # Job 2: Scan Runtime Dependencies
+  # Job 2: Scan Runtime Dependencies (Grype, gating)
   # ============================================================================
-  scan-runtime:
+  # Grype (Anchore) is the gating runtime-dependency CVE scanner. It ingests the
+  # CycloneDX SBOM produced by generate-sbom and fails the build when a finding
+  # at or above the translated severity cutoff is present (when
+  # fail-on-vulnerabilities is true). Grype replaced Trivy at the issue #152
+  # cutover: Trivy's release infrastructure was compromised in March 2026, which
+  # made the scanner itself a supply-chain risk. The parallel-run window
+  # confirmed package-level and severity-level detection parity before cutover.
+  #
+  # #CRITICAL: the job NAME is intentionally "Scan Runtime Dependencies" (the
+  # name the former Trivy job used) so consumer rulesets that require that
+  # status-check context keep passing without per-repo reconfiguration. Do not
+  # rename it without auditing every caller repo's required-check configuration.
+  # #VERIFY: after merge, confirm a caller PR's "Scan Runtime Dependencies"
+  # check still reports (gh pr view <pr> --json statusCheckRollup) and gates on
+  # a HIGH finding.
+  # ============================================================================
+  scan-runtime-grype:
     name: Scan Runtime Dependencies
     needs: generate-sbom
     if: needs.generate-sbom.outputs.state == 'uv-locked' || needs.generate-sbom.outputs.state == 'uv-no-lock'
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    permissions:
-      contents: read
-      security-events: write  # Required for SARIF upload
-    steps:
-      - name: Harden Runner
-        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411  # v2.19.4
-        with:
-          egress-policy: audit
-
-      # Checkout to get .trivyignore and provide git context for SARIF upload
-      - name: Checkout repository (for trivyignore and SARIF context)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
-        with:
-          sparse-checkout: |
-            .trivyignore
-            .git
-
-      - name: Download SBOM artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
-        with:
-          name: sboms
-
-      - name: Check for trivyignore file
-        id: trivyignore
-        env:
-          TRIVYIGNORE_PATH: ${{ inputs.trivyignore-path }}
-        run: |
-          if [ -f "$TRIVYIGNORE_PATH" ]; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-            echo "Found trivyignore at: $TRIVYIGNORE_PATH"
-            cat "$TRIVYIGNORE_PATH"
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-            echo "No trivyignore file found at: $TRIVYIGNORE_PATH"
-          fi
-
-      - name: Trivy SBOM scan (runtime)
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
-        with:
-          scan-type: sbom
-          scan-ref: sbom-runtime.cdx.json
-          format: table
-          severity: ${{ inputs.severity-threshold }}
-          exit-code: ${{ inputs.fail-on-vulnerabilities && '1' || '0' }}
-          trivyignores: ${{ steps.trivyignore.outputs.exists == 'true' && inputs.trivyignore-path || '' }}
-
-      - name: Trivy SBOM scan (runtime - detailed report)
-        if: always()
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
-        with:
-          scan-type: sbom
-          scan-ref: sbom-runtime.cdx.json
-          format: sarif
-          output: trivy-runtime-results.sarif
-          trivyignores: ${{ steps.trivyignore.outputs.exists == 'true' && inputs.trivyignore-path || '' }}
-
-      - name: Upload Trivy results to GitHub Security tab
-        if: always()
-        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e  # v4.36.2
-        continue-on-error: true  # Don't fail if Code Scanning not enabled on repo
-        with:
-          sarif_file: trivy-runtime-results.sarif
-          category: trivy-runtime-deps
-
-      # Upload SARIF as a workflow artifact so the parity-summary job (added
-      # 2026-05-25 for issue #152) can compare Trivy findings against Grype
-      # findings. Removed at Trivy cutover along with the parity-summary job.
-      - name: Upload Trivy SARIF artifact (for parity-summary)
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
-        with:
-          name: trivy-sarif
-          path: trivy-runtime-results.sarif
-          retention-days: 7
-          if-no-files-found: warn
-
-  # ============================================================================
-  # Job 2b: Scan Runtime Dependencies (Grype - advisory, parallel-run)
-  # ============================================================================
-  # Added 2026-05-25 per issue #152. Runs alongside scan-runtime (Trivy) for a
-  # 30-day parity window. Grype is non-gating via `continue-on-error: true` at
-  # the JOB level (not step level): genuine action failures still surface as a
-  # failed step in the logs, but the job result is `success` so the workflow
-  # caller never blocks on Grype. `fail-build: false` on the action separately
-  # prevents Grype from failing when it finds vulnerabilities. At Trivy cutover
-  # this job is promoted to gating (remove the job-level continue-on-error) and
-  # the Trivy job is removed in a separate PR.
-  # ============================================================================
-  scan-runtime-grype:
-    name: Scan Runtime Dependencies (Grype - advisory)
-    needs: generate-sbom
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    continue-on-error: true  # parallel-run: never block caller on Grype, but let individual steps fail visibly
     permissions:
       contents: read
       security-events: write  # Required for SARIF upload
@@ -423,25 +339,28 @@ jobs:
           echo "cutoff=$cutoff" >> $GITHUB_OUTPUT
           echo "Translated '$INPUT_SEVERITY' -> Grype severity-cutoff '$cutoff'"
 
-      # Non-gating semantic is now provided at the JOB level via
-      # `continue-on-error: true` on `scan-runtime-grype`. Removing the
-      # step-level `continue-on-error` here means a genuine action failure
-      # (binary crash, DB download timeout, malformed SBOM input) surfaces
-      # as a red step in the logs instead of being silently masked.
+      # Gating scan: fail-build mirrors fail-on-vulnerabilities, so a finding at
+      # or above the severity cutoff blocks the caller exactly as the former
+      # Trivy gate did. The SARIF report step below runs with `if: always()` and
+      # `fail-build: false`, so the Security-tab upload still happens even when
+      # this gating step fails the build.
+      # #CRITICAL: fail-on-vulnerabilities is the merge gate. With it true
+      # (default), any finding at/above severity-cutoff fails this step and the
+      # caller's required check. Setting it false makes the scan advisory.
       - name: Grype SBOM scan (runtime)
         id: grype-table
         uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2  # v7.4.0
         with:
           sbom: sbom-runtime.cdx.json
-          fail-build: false  # parallel-run: do not fail on vulnerabilities found
+          fail-build: ${{ inputs.fail-on-vulnerabilities }}
           severity-cutoff: ${{ steps.severity.outputs.cutoff }}
           output-format: table
           config: ${{ steps.grypeconfig.outputs.exists == 'true' && inputs.grype-config-path || '' }}
 
-      # #CRITICAL: SARIF upload category MUST differ from Trivy's `trivy-runtime-deps`
-      # or codeql-action/upload-sarif overwrites the prior upload in the Security tab.
-      # #VERIFY: after first run, confirm both `trivy-runtime-deps` and
-      # `grype-runtime-deps` categories appear under Security > Code scanning alerts.
+      # Distinct SARIF category `grype-runtime-deps` keeps Grype's findings in
+      # their own Security-tab partition, separate from the OSV-Scanner upload
+      # below (`osv-runtime-deps`); a shared category would make one
+      # codeql-action/upload-sarif call overwrite the other.
       - name: Grype SBOM scan (runtime - SARIF report)
         id: grype-sarif
         if: always()
@@ -461,24 +380,12 @@ jobs:
           sarif_file: ${{ steps.grype-sarif.outputs.sarif }}
           category: grype-runtime-deps
 
-      # Upload SARIF as a workflow artifact so the parity-summary job can
-      # compare Grype findings against Trivy findings. `if-no-files-found: warn`
-      # avoids failing the job if the scan step did not produce SARIF.
-      - name: Upload Grype SARIF artifact (for parity-summary)
-        if: always() && steps.grype-sarif.outputs.sarif != ''
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
-        with:
-          name: grype-sarif
-          path: ${{ steps.grype-sarif.outputs.sarif }}
-          retention-days: 7
-          if-no-files-found: warn
-
   # ============================================================================
-  # Job 2c: Scan Runtime Dependencies (OSV-Scanner - fast keyless gate)
+  # Job 2b: Scan Runtime Dependencies (OSV-Scanner - fast keyless gate)
   # ============================================================================
   # OSV-Scanner ingests the shared SBOM artifact produced by generate-sbom so
   # both tools share one source of truth and no second resolver pass occurs.
-  # Benefits over Trivy/Grype for this slot: sub-second on typical Python
+  # Benefits over Grype for this slot: sub-second on typical Python
   # dependency graphs, no API key required, and cross-database coverage (OSV,
   # NVD, GitHub Advisory, PyPI Advisory) that catches transitives sometimes
   # missed by Snyk free tier. Gating by default; opt out with run-osv: false.
@@ -486,8 +393,8 @@ jobs:
   # #CRITICAL: security-events: write is required for upload-sarif. This
   # permission is inherited by the caller in a reusable workflow context.
   # #VERIFY: confirm `osv-sbom-runtime-deps` category appears separately in
-  # Security > Code scanning alerts after the first run alongside Trivy and
-  # Grype categories.
+  # Security > Code scanning alerts after the first run alongside the Grype
+  # category.
   # ============================================================================
   scan-runtime-osv:
     name: Scan Runtime Dependencies (OSV-Scanner)
@@ -664,110 +571,3 @@ jobs:
             echo "$ALLOWED_PACKAGES"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-
-  # ============================================================================
-  # Job 4: Parity Summary (Trivy vs Grype, parallel-run only)
-  # ============================================================================
-  # Removed at Trivy cutover. See issue #152.
-  #
-  # Compares the actual SARIF findings emitted by the two scanners, not just
-  # the job results. Job results alone are insufficient because Grype is
-  # configured as non-gating (continue-on-error at job level + fail-build:
-  # false on the action) and therefore reports `success` regardless of
-  # findings. Comparing job results would produce "match" 100% of the time
-  # and defeat the purpose of the 30-day parity window.
-  #
-  # SARIF artifacts are uploaded by scan-runtime (`trivy-sarif`) and
-  # scan-runtime-grype (`grype-sarif`). This job downloads both and runs
-  # scripts/compare_scanner_parity.py, which joins findings by the affected
-  # artifact (ecosystem, PEP 503 package name, version), NOT by advisory ID.
-  #
-  # #CRITICAL: the two scanners use different advisory namespaces (Trivy emits
-  # CVE-* rule IDs, Grype emits GHSA-* rule IDs) for the same vulnerability, so
-  # a raw rule-ID set-diff reports false divergence. The package-key join is the
-  # only comparison that reflects true detection parity. The script also reads
-  # SARIF by content rather than filename, because the Grype artifact downloads
-  # without a .sarif extension.
-  #
-  # #EDGE: if either scan job is cancelled or its SARIF artifact is missing
-  # (e.g., the scan action genuinely crashed), the corresponding side reports
-  # zero SARIF files parsed and the verdict notes the gap rather than failing.
-  # ============================================================================
-  parity-summary:
-    name: Trivy vs Grype Parity Summary
-    needs: [scan-runtime, scan-runtime-grype]
-    if: always()
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read  # sparse-checkout of the comparison script from this repo
-    timeout-minutes: 5
-    steps:
-      - name: Harden Runner
-        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411  # v2.19.4
-        with:
-          egress-policy: audit
-
-      - name: Download Trivy SARIF artifact
-        id: download-trivy
-        if: always()
-        continue-on-error: true  # Tolerate missing artifact; summary reports the gap
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
-        with:
-          name: trivy-sarif
-          path: trivy-sarif
-
-      - name: Download Grype SARIF artifact
-        id: download-grype
-        if: always()
-        continue-on-error: true  # Tolerate missing artifact; summary reports the gap
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
-        with:
-          name: grype-sarif
-          path: grype-sarif
-
-      - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
-        with:
-          python-version: ${{ inputs.python-version }}
-
-      # Checkout only scripts/compare_scanner_parity.py from this reusable
-      # workflow repo, pinned to the same commit as this workflow file. See the
-      # license-compliance job for the full rationale on job.workflow_sha pinning
-      # (it preserves the SHA-pin guarantee and avoids a TOCTOU window).
-      - name: Checkout parity comparison script
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
-        with:
-          repository: ${{ job.workflow_repository }}
-          ref: ${{ job.workflow_sha }}
-          sparse-checkout: |
-            scripts/compare_scanner_parity.py
-          sparse-checkout-cone-mode: false
-          path: _checker
-          # This checkout only reads one script; do not leave the auth token in
-          # _checker/.git/config where it could be picked up by later steps.
-          persist-credentials: false
-
-      # sparse-checkout with cone-mode false exits 0 even when the requested
-      # path does not exist in the ref; fail loudly instead of a raw python
-      # "can't open file" error.
-      - name: Verify parity comparison script is present
-        env:
-          CHECKER_REF: ${{ job.workflow_sha }}
-        run: |
-          if [ ! -f "_checker/scripts/compare_scanner_parity.py" ]; then
-            echo "::error::scripts/compare_scanner_parity.py not found after sparse checkout of ByronWilliamsCPA/.github@${CHECKER_REF}. Path mismatch or failed checkout."
-            exit 1
-          fi
-
-      - name: Compare findings and write parity summary
-        # The script joins findings by affected artifact (ecosystem, package,
-        # version), not by advisory ID, and reads SARIF by content. It is
-        # advisory: it always exits 0 and never gates the build. All inputs
-        # reach it via env vars (the injection-safe boundary).
-        env:
-          TRIVY_SARIF_DIR: trivy-sarif
-          GRYPE_SARIF_DIR: grype-sarif
-          TRIVY_RESULT: ${{ needs.scan-runtime.result }}
-          GRYPE_RESULT: ${{ needs.scan-runtime-grype.result }}
-        run: |
-          python _checker/scripts/compare_scanner_parity.py

@@ -205,9 +205,6 @@ jobs:
 
           **Scan for vulnerabilities:**
           ```bash
-          # Using Trivy
-          trivy sbom sbom-runtime.json
-
           # Using Grype
           grype sbom:sbom-runtime.json
           ```
