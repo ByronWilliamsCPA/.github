@@ -5,6 +5,14 @@
 **Next branch:** claude/snyk-iac-aibom-1
 **Session date:** 2026-06-25
 
+> **STATUS: IMPLEMENTED (as of PR #224)**
+> Items 1-3 below were fully delivered by PR #224 (merged 2026-06-09):
+> `python-snyk-iac.yml`, `enable-aibom` input on `python-standard-stack.yml`,
+> exploit maturity docs, and the IaC self-test job are all on `main`.
+> The base branch `claude/snyk-integration-0` was deleted after squash-merge.
+> The only open item is **item 4 (MCP Scan stub)**, which intentionally awaits GA.
+> This document is preserved as a historical record and reference for that TODO.
+
 ---
 
 ## Context
@@ -26,8 +34,10 @@ Files on that branch:
 - `docs/workflows/python-snyk.md` -- operator guide
 
 The evaluation compared Snyk against Cycode, Checkmarx One, and Endor Labs.
-Snyk was selected. The full comparison JSON is in the scratchpad at:
-`/tmp/claude-1000/-home-byron-dev--github/b617e56f-1680-44d7-83bc-ff79cc722db5/scratchpad/security-tool-comparison.json`
+Snyk was selected on: breadth of coverage (SAST + SCA + IaC + secrets), GitHub
+Actions native integration, MCP Server availability (Invariant Labs acquisition),
+and a free tier that covers the org's use pattern. Cycode and Checkmarx One both
+require enterprise sales contacts; Endor Labs lacks an MCP integration.
 
 ---
 

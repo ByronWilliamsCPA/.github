@@ -4,6 +4,13 @@
 **Branch:** claude/snyk-developer-experience-0 (new branch, off main)
 **Session date:** 2026-06-25
 
+> **SCOPE NOTE:** All work items below target the `~/.claude/` global config
+> repository (symlinked from `~/dev/.github`), NOT the ByronWilliamsCPA/.github
+> org repo. Files created or edited are under `~/.claude/rules/`,
+> `~/.claude/standards/`, and `~/.claude/settings.json`. This PR lives in the
+> `.github` repo only because `~/.claude/` is symlinked there; the actual
+> changes will land in that global config repo's working tree.
+
 ---
 
 ## Context
@@ -24,8 +31,11 @@ The capabilities being wired in:
 - **MCP Scan** (`ai-mcp-scan`): rated HIGH but pre-GA as of 2026-06. Document
   the gap; implement the hook stub when GA.
 
-Reference evaluation data:
-`/tmp/claude-1000/-home-byron-dev--github/b617e56f-1680-44d7-83bc-ff79cc722db5/scratchpad/security-tool-comparison.json`
+Evaluation summary: Snyk was selected over Cycode, Checkmarx One, and Endor Labs
+based on breadth of coverage (SAST + SCA + IaC + secrets), GitHub Actions native
+integration, MCP Server availability (Invariant Labs acquisition), and a free tier
+matching the org's use pattern. See `handoff-snyk-cicd.md` for full selection
+rationale.
 
 ---
 
@@ -56,7 +66,9 @@ Content to cover:
 **One-time setup (per workstation):**
 ```bash
 # Install Snyk CLI globally
-npm install -g snyk          # or: brew install snyk
+npm install -g snyk          # pin to a specific version; e.g. snyk@1.1293.1
+                             # check latest: https://github.com/snyk/cli/releases
+                             # or: brew install snyk (brew manages versions separately)
 
 # Authenticate (browser opens; use GitHub SSO or personal token)
 snyk auth
@@ -164,6 +176,10 @@ hook configuration to avoid duplicates).
 **Add** a `PostToolUse` hook that fires when Write or Edit modifies
 `pyproject.toml` or `requirements*.txt`:
 
+<!-- #ASSUME: `"condition": "match_files(...)"` is valid PostToolUse hook schema. -->
+<!-- #VERIFY: Read `~/.claude/rules/settings-and-permissions.md` and inspect -->
+<!-- the live `~/.claude/settings.json` schema before pasting. The `condition` -->
+<!-- field may be silently inert or absent from older Claude Code hook schemas. -->
 ```json
 {
   "hooks": {
