@@ -161,3 +161,16 @@ jobs:
       fail-on-high: false
     secrets:
       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+  # The org repo has no uv.lock or package.json, so detect-config reports
+  # "no ecosystems scanned" and the report records a clean cycle. open-issue is
+  # false here to avoid creating a self-test issue on every run; the artifact
+  # path still exercises the report assembler end to end.
+  test-python-dependency-provenance:
+    name: Self-test python-dependency-provenance
+    uses: ./.github/workflows/python-dependency-provenance.yml
+    permissions:
+      contents: read
+      issues: write
+    with:
+      open-issue: false

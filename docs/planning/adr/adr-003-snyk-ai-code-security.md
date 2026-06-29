@@ -172,3 +172,27 @@ zen-mcp-server and homelab-infra MCP configs.
 **Condition for implementation**: GA announcement in the Snyk changelog. Until GA,
 do not implement a `python-snyk-mcp.yml` workflow or automate agent-scan in CI;
 the Snyk MCP server inside the coding agent covers interactive use.
+
+---
+
+## Role boundary (added 2026-06-29)
+
+To keep the security stack's responsibilities unambiguous now that a deterministic
+provenance workflow exists alongside Snyk:
+
+- **Snyk owns** SAST (Snyk Code), IaC (`python-snyk-iac.yml`), and AIBOM
+  (`snyk aibom`). These are the capabilities that justified adoption (D3, D4) and
+  have no equivalent elsewhere in the stack.
+- **Open Source (SCA) stays advisory.** Snyk OSS remains default-off and
+  `continue-on-error` (D3); OSV plus Renovate remain the primary SCA gate. Snyk
+  does not own the SCA gate and does not consume hosted test quota in routine CI.
+- **Transitive-provenance reporting is handled by the new deterministic
+  workflow**, `python-dependency-provenance.yml`, plus a local interpretation
+  agent. That workflow is keyless (OSV-Scanner, `uv tree --invert`, `npm why`),
+  consumes no Snyk hosted quota and no Anthropic API key, and only produces the
+  report; deciding which fix to apply is the local agent's job, run separately on
+  the operator's subscription. See
+  [docs/workflows/python-dependency-provenance.md](../../workflows/python-dependency-provenance.md)
+  and ByronWilliamsCPA/.claude ADR-009 for the interpretation-agent boundary.
+
+This note records the division of labour; it does not change any decision above.
