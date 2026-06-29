@@ -1,0 +1,74 @@
+# ============================================================================
+# Org-Level Weekly Dependency Provenance Scan
+# ============================================================================
+# Runs python-dependency-provenance.yml on a weekly schedule so the sticky
+# provenance issue is refreshed against the latest OSV database snapshot. The
+# org self-test skips cleanly here (no uv.lock or package.json in .github), but
+# it proves the trigger machinery works and keeps the workflow "live".
+#
+# Downstream pattern: add a schedule trigger to your own caller workflow:
+#
+#   on:
+#     schedule:
+#       - cron: '23 6 * * 1'   # weekly, Monday 06:23 UTC (off-peak, non-:00)
+#     workflow_dispatch:
+#   jobs:
+#     provenance:
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-dependency-provenance.yml@v1
+#       permissions:
+#         contents: read
+#         issues: write
+#       with:
+#         python-version: '3.12'
+#         open-issue: true
+#
+# The schedule trigger pulls a fresh OSV snapshot each week, so transitive
+# vulnerabilities disclosed since the last run are surfaced (with their
+# introducing direct dependency) without waiting for a code change.
+# ============================================================================
+
+name: Dependency Provenance Weekly
+
+on:
+  schedule:
+    # 06:23 UTC every Monday - off-peak and offset from the hour to reduce
+    # Actions queue contention.
+    - cron: '23 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      python-version:
+        description: 'Python version for dependency resolution'
+        required: false
+        default: '3.12'
+      open-issue:
+        description: 'Post/update the sticky provenance issue (true/false)'
+        required: false
+        default: 'true'
+
+# Workflow-level default is no permissions; the calling job below grants the
+# minimum the reusable workflow needs.
+#
+# #CRITICAL: a called (reusable) workflow runs with a GITHUB_TOKEN bounded by
+# the CALLER job's permissions. The reusable's post-issue job declares
+# issues: write, so this caller must grant contents: read + issues: write on
+# the provenance job. Setting permissions: {} only at workflow level (without
+# the per-job grant below) makes the post-issue job fail to open the issue.
+# #VERIFY: confirm the next scheduled run's conclusion is not startup_failure
+# (gh run list --workflow=dependency-provenance-weekly.yml) and the sticky
+# issue is created/updated.
+permissions: {}
+
+jobs:
+  provenance:
+    # #ASSUME: when triggered via schedule, inputs.* is empty; the || fallbacks
+    # below supply the production defaults. workflow_dispatch overrides them.
+    permissions:
+      contents: read
+      issues: write  # ceiling for the reusable's post-issue job
+    uses: ./.github/workflows/python-dependency-provenance.yml
+    with:
+      python-version: ${{ inputs.python-version || '3.12' }}
+      # #EDGE: workflow_dispatch inputs are always strings; cast to boolean via
+      # comparison. When triggered by schedule, the expression resolves to true
+      # via the || fallback before the == comparison.
+      open-issue: ${{ (inputs.open-issue || 'true') == 'true' }}

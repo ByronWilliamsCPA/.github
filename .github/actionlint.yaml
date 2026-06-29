@@ -13,3 +13,6 @@ paths:
   .github/workflows/python-sbom.yml:
     ignore:
       - 'property "(workflow_sha|workflow_repository)" is not defined in object type'
+  .github/workflows/python-dependency-provenance.yml:
+    ignore:
+      - 'property "(workflow_sha|workflow_repository)" is not defined in object type'

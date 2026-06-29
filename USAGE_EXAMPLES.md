@@ -211,6 +211,47 @@ jobs:
 
 ---
 
+## Dependency Provenance Example
+
+### Weekly Transitive-Provenance Report (Sticky Issue)
+
+Deterministic, keyless report that shows which DIRECT dependency introduces each
+insecure TRANSITIVE package. No secrets, no hosted-scanner quota, no Anthropic
+API key. Posts a sticky GitHub issue and uploads the report as an artifact.
+
+Create `.github/workflows/dependency-provenance.yml`:
+
+```yaml
+name: Dependency Provenance
+
+on:
+  schedule:
+    - cron: '23 6 * * 1'   # weekly, Monday 06:23 UTC (off-peak, non-:00)
+  workflow_dispatch:
+
+jobs:
+  provenance:
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-dependency-provenance.yml@v1
+    permissions:
+      contents: read
+      issues: write   # only the post-issue job needs this
+    with:
+      python-version: '3.12'
+      open-issue: true
+```
+
+This will:
+- Detect the ecosystem (Python `uv.lock` / `requirements*.txt`, frontend `package.json`)
+- Run OSV-Scanner (keyless) to find vulnerable packages
+- Trace each back to its introducing direct dependency (`uv tree --invert` / `npm why`)
+- Post/update a sticky issue and upload a `dependency-provenance-report` artifact
+
+The gating OSV-Scanner job in `python-sbom.yml` still owns the merge gate; this
+workflow is a reporter that explains where each vulnerable package comes from.
+See [docs/workflows/python-dependency-provenance.md](docs/workflows/python-dependency-provenance.md).
+
+---
+
 ## Version Pinning
 
 This repository publishes two kinds of tags so callers can choose the right
@@ -433,6 +474,7 @@ Workflow runs appear in **your repo's Actions tab**, not the `.github` repo.
 | `python-codecov.yml` | Coverage reporting | `CODECOV_TOKEN` |
 | `python-release.yml` | Release automation | None |
 | `python-sonarcloud.yml` | SonarCloud analysis | `SONAR_TOKEN` |
+| `python-dependency-provenance.yml` | Weekly transitive-provenance report (sticky issue) | None |
 
 ---
 
