@@ -1,0 +1,98 @@
+# ============================================================================
+# Org-Level Weekly Snyk Scan
+# ============================================================================
+# Runs python-snyk.yml (Snyk Code/SAST + optional OSS/AI-BOM) and
+# python-snyk-iac.yml on a WEEKLY schedule instead of per-PR. Snyk hosted tests
+# are metered: the org plan caps the monthly test count, and per-PR scanning
+# exhausts it. Snyk must not run on every pull request, so this caller is the
+# single scheduled entry point and the per-PR self-test no longer invokes Snyk.
+#
+# It mirrors sbom-nightly.yml: scanning the org repo's own scripts/ proves the
+# Snyk reusables' trigger and permission machinery stays green between changes.
+# A maintainer editing python-snyk.yml can validate immediately via the
+# workflow_dispatch trigger below instead of waiting for the weekly run.
+#
+# Downstream pattern: consumers that opt into Snyk (run-snyk: true) should wire
+# it on a schedule, NOT on pull_request, for the same quota reason:
+#
+#   on:
+#     schedule:
+#       - cron: '43 3 * * 1'
+#   jobs:
+#     snyk:
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-snyk.yml@v1
+#       permissions:
+#         contents: read
+#         security-events: write
+#       with:
+#         run-code: true
+#       secrets:
+#         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+#
+# #CRITICAL: a reusable callee runs with a GITHUB_TOKEN bounded by the CALLER
+#   job's permissions. Each job below grants contents: read + security-events:
+#   write (the ceiling python-snyk.yml's SARIF-upload jobs need) or the run fails
+#   at startup_failure before any job runs. Same contract as sbom-nightly.yml.
+# #ASSUME: SNYK_TOKEN may be absent; both reusables no-op cleanly when it is.
+# #VERIFY: confirm the next scheduled run's conclusion is not startup_failure
+#   (gh run list --workflow=snyk-weekly.yml).
+# ============================================================================
+
+name: Snyk Weekly Scan
+
+on:
+  schedule:
+    # 03:43 UTC Monday: off-peak, non-:00, offset from sbom-nightly (02:17 daily)
+    # and dependency-provenance-weekly (06:23 Monday) to spread Actions queue load.
+    - cron: '43 3 * * 1'
+  workflow_dispatch:
+    inputs:
+      source-directory:
+        description: 'Source code directory to scan (Snyk Code)'
+        required: false
+        default: 'scripts'
+      run-oss:
+        description: 'Run Snyk Open Source SCA cross-check (true/false)'
+        required: false
+        default: 'false'
+      run-aibom:
+        description: 'Generate an AI-BOM (true/false)'
+        required: false
+        default: 'false'
+      fail-on-high:
+        description: 'Fail on HIGH/CRITICAL findings (true/false)'
+        required: false
+        default: 'false'
+
+# Workflow-level default is no permissions; each calling job grants the minimum
+# the reusable workflow needs (the ceiling for the callee's jobs).
+permissions: {}
+
+jobs:
+  snyk:
+    # #ASSUME: when triggered via schedule, inputs.* is empty; the || fallbacks
+    # supply the production defaults. workflow_dispatch overrides them. Boolean
+    # inputs arrive as strings, so cast via == comparison (sbom-nightly pattern).
+    permissions:
+      contents: read
+      security-events: write  # ceiling for python-snyk.yml's SARIF-upload jobs
+    uses: ./.github/workflows/python-snyk.yml
+    with:
+      source-directory: ${{ inputs.source-directory || 'scripts' }}
+      run-code: true
+      run-oss: ${{ (inputs.run-oss || 'false') == 'true' }}
+      run-aibom: ${{ (inputs.run-aibom || 'false') == 'true' }}
+      fail-on-high: ${{ (inputs.fail-on-high || 'false') == 'true' }}
+    secrets:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+  snyk-iac:
+    permissions:
+      contents: read
+      security-events: write  # ceiling for python-snyk-iac.yml's SARIF-upload job
+    uses: ./.github/workflows/python-snyk-iac.yml
+    with:
+      terraform-dirs: 'scripts'
+      fail-on-high: ${{ (inputs.fail-on-high || 'false') == 'true' }}
+    secrets:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}

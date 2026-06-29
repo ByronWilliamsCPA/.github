@@ -135,32 +135,12 @@ jobs:
       - name: Check workflows match docs/python-versions.md
         run: scripts/check-python-versions.sh
 
-  test-python-snyk:
-    name: Self-test python-snyk
-    uses: ./.github/workflows/python-snyk.yml
-    permissions:
-      contents: read
-      security-events: write
-    with:
-      source-directory: 'scripts'
-      run-code: true
-      run-oss: false
-      run-aibom: false
-      fail-on-high: false
-    secrets:
-      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-
-  test-python-snyk-iac:
-    name: Self-test python-snyk-iac
-    uses: ./.github/workflows/python-snyk-iac.yml
-    permissions:
-      contents: read
-      security-events: write
-    with:
-      terraform-dirs: 'scripts'
-      fail-on-high: false
-    secrets:
-      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+  # Snyk self-tests moved out of the per-PR path. Snyk hosted tests are metered
+  # (monthly cap), so they run weekly via snyk-weekly.yml, never on pull_request.
+  # That dedicated scheduled caller exercises python-snyk.yml + python-snyk-iac.yml
+  # and validates their trigger/permission machinery (the sbom-nightly.yml model).
+  # A maintainer changing either reusable can validate now via that workflow's
+  # workflow_dispatch trigger instead of waiting for the weekly run.
 
   # The org repo has no uv.lock or package.json, so detect-config reports
   # "no ecosystems scanned" and the report records a clean cycle. open-issue is
