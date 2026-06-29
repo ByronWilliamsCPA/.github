@@ -18,6 +18,10 @@
 #       secrets:
 #         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 #
+# Scheduling: Snyk hosted tests are metered (monthly cap). Invoke this from a
+# WEEKLY scheduled caller (schedule: cron + workflow_dispatch), NOT on
+# pull_request. The org reference caller is snyk-weekly.yml.
+#
 # Caller permission contract:
 # #CRITICAL: callers MUST grant security-events: write at workflow or calling-job
 #   level, or the run fails at startup ("startup_failure") before any job runs.

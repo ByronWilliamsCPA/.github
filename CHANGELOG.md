@@ -79,6 +79,17 @@ the latest reviewed commit on `main` and is re-pointed as changes land.
 
 ### Changed
 
+- **Snyk now runs weekly, not per-PR.** New `snyk-weekly.yml` scheduled caller
+  (Monday 03:43 UTC + `workflow_dispatch`) is the single entry point for
+  `python-snyk.yml` and `python-snyk-iac.yml`; the per-PR `self-test.yml` no
+  longer invokes either. Snyk hosted tests are metered (the org plan caps the
+  monthly test count), so per-PR scanning exhausted the quota. This mirrors the
+  `sbom-nightly.yml` pattern: a dedicated scheduled caller scans the org repo's
+  own `scripts/` to keep the reusables' trigger and permission machinery
+  validated, and maintainers can validate a change immediately via
+  `workflow_dispatch`. The usage headers of both Snyk reusables now document the
+  weekly-schedule (not `pull_request`) convention for downstream callers that opt
+  into `run-snyk: true`.
 - `python-sbom.yml`: **Grype is now the gating runtime-dependency CVE scanner**,
   completing the issue #152 Trivy-to-Grype cutover. The parallel-run window
   confirmed package-level and severity-level detection parity (Grype missed
