@@ -36,7 +36,8 @@
 #       needs: build
 #       uses: ByronWilliamsCPA/.github/.github/workflows/supply-chain-promote-core.yml@v1
 #       with:
-#         local_tar: ${{ needs.build.outputs.local_tar }}
+#         source_kind: oci-tar
+#         source_artifact: ${{ needs.build.outputs.artifact_name }}
 #         ...
 # ============================================================================
 
@@ -83,12 +84,14 @@ on:
       local_tar:
         description: Path to the built OCI/docker image tar on the runner
         value: ${{ jobs.build.outputs.local_tar }}
+      artifact_name:
+        description: Name of the GHA artifact holding the built image tar (pass to promote-core as source_artifact)
+        value: ${{ jobs.build.outputs.artifact_name }}
       built:
         description: "true when the image build succeeded"
         value: ${{ jobs.build.outputs.built }}
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   build:
@@ -99,6 +102,7 @@ jobs:
       contents: read
     outputs:
       local_tar: ${{ steps.build.outputs.local_tar }}
+      artifact_name: ${{ steps.build.outputs.artifact_name }}
       built: ${{ steps.build.outputs.built }}
 
     steps:
@@ -204,10 +208,23 @@ jobs:
         env:
           BUILD_CONTEXT: ${{ inputs.build_context }}
           UV_VERSION: "0.9.7"
+          # #CRITICAL: set UV_INSTALLER_SHA256 to the sha256 of the installer
+          # for this UV_VERSION before wiring callers. Obtain it with:
+          #   curl -fsSL "https://astral.sh/uv/${UV_VERSION}/install.sh" | sha256sum
+          # #VERIFY regenerate when bumping UV_VERSION.
+          UV_INSTALLER_SHA256: ""
         run: |
           set -euo pipefail
+          if [ -z "${UV_INSTALLER_SHA256}" ]; then
+            echo "::error::UV_INSTALLER_SHA256 must be set before this workflow is wired."
+            echo "::error::Run: curl -fsSL \"https://astral.sh/uv/${UV_VERSION}/install.sh\" | sha256sum"
+            exit 1
+          fi
           curl --fail --show-error --silent --location \
-            "https://astral.sh/uv/${UV_VERSION}/install.sh" | sh
+            "https://astral.sh/uv/${UV_VERSION}/install.sh" -o uv_install.sh
+          echo "${UV_INSTALLER_SHA256}  uv_install.sh" | sha256sum --check
+          sh uv_install.sh
+          rm uv_install.sh
           export PATH="${HOME}/.local/bin:${PATH}"
           uv --version
           cd "${BUILD_CONTEXT}"
@@ -273,5 +290,13 @@ jobs:
           fi
 
           echo "local_tar=${OUT_TAR}" >> "${GITHUB_OUTPUT}"
+          echo "artifact_name=build-${IMAGE_ID}-tar" >> "${GITHUB_OUTPUT}"
           echo "built=true" >> "${GITHUB_OUTPUT}"
           echo "Built ${IMAGE_ID}:build -> ${OUT_TAR}"
+
+      - name: Upload built image tar (passes to promote-core)
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: build-${{ inputs.image_id }}-tar
+          path: image.tar
+          retention-days: 1
