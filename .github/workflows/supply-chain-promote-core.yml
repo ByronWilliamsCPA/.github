@@ -35,6 +35,10 @@
 #         write_lock: true
 #       secrets:
 #         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+#         # For an authenticated upstream (mirror path), pass pull credentials so
+#         # the scan job can crane pull the bytes mirror-verify only resolved:
+#         UPSTREAM_REGISTRY_USERNAME: ${{ secrets.DHI_REGISTRY_USERNAME }}
+#         UPSTREAM_REGISTRY_TOKEN: ${{ secrets.DHI_REGISTRY_TOKEN }}
 # ============================================================================
 
 name: Supply Chain Promote Core (Reusable)
@@ -102,6 +106,13 @@ on:
     secrets:
       SNYK_TOKEN:
         required: false
+      # Upstream registry credentials for the scan job's crane pull. Required
+      # when source_kind=registry and the upstream is authenticated (e.g. dhi.io);
+      # omit for anonymous upstreams (e.g. gcr.io distroless).
+      UPSTREAM_REGISTRY_USERNAME:
+        required: false
+      UPSTREAM_REGISTRY_TOKEN:
+        required: false
     outputs:
       promoted:
         value: ${{ jobs.publish.outputs.promoted }}
@@ -157,6 +168,8 @@ jobs:
           SOURCE_KIND: ${{ inputs.source_kind }}
           SOURCE_REF: ${{ inputs.source_ref }}
           PLATFORM: ${{ inputs.platform }}
+          UPSTREAM_USER: ${{ secrets.UPSTREAM_REGISTRY_USERNAME }}
+          UPSTREAM_PASS: ${{ secrets.UPSTREAM_REGISTRY_TOKEN }}
         run: |
           if [ "${SOURCE_KIND}" = "registry" ]; then
             if [ -z "${SOURCE_REF}" ]; then
@@ -168,6 +181,16 @@ jobs:
               echo "::error::source_ref must include @sha256:<64hex>; got '${SOURCE_REF}'"
               echo "::error::Pass the output of mirror-verify (source_ref includes digest)."
               exit 1
+            fi
+            # The scan job pulls the real bytes (mirror-verify only resolved the
+            # digest), so an authenticated upstream like dhi.io needs a login here.
+            # Derive the registry host from source_ref; log in only when creds are
+            # supplied, leaving anonymous upstreams (e.g. gcr.io) untouched.
+            if [ -n "${UPSTREAM_USER}" ] && [ -n "${UPSTREAM_PASS}" ]; then
+              UPSTREAM_REGISTRY="${SOURCE_REF%%/*}"
+              echo "::add-mask::${UPSTREAM_PASS}"
+              printf '%s' "${UPSTREAM_PASS}" | \
+                crane auth login "${UPSTREAM_REGISTRY}" --username "${UPSTREAM_USER}" --password-stdin
             fi
             crane pull --platform "${PLATFORM}" "${SOURCE_REF}" "${IMAGE_TAR}"
           elif [ "${SOURCE_KIND}" = "oci-tar" ]; then
