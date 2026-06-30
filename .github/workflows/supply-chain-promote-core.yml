@@ -203,6 +203,7 @@ jobs:
           # Scan the local tar and write SARIF. --fail-on exits non-zero when any
           # vulnerability at or above FAIL_ON severity is found, BEFORE any public
           # push (red-team RT-4). The report is written even on a failing exit.
+          # #VERIFY grype 0.115.0 supports the docker-archive: scheme and sarif= output.
           grype "docker-archive:${IMAGE_TAR}" \
             --fail-on "${FAIL_ON}" \
             -o "sarif=grype-results.sarif"
