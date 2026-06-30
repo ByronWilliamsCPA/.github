@@ -50,7 +50,9 @@ on:
         description: 'Regexp the OIDC issuer MUST match'
         type: string
         required: false
-        default: 'https://token.actions.githubusercontent.com'
+        # #CRITICAL: anchored and dot-escaped; a bare dot matches any character.
+        # #VERIFY update when wiring non-GitHub-Actions image signers.
+        default: '^https://token\.actions\.githubusercontent\.com$'
 
       lock_file:
         description: 'Optional path to an approved-lock the digest must appear in (empty to skip)'
@@ -111,6 +113,7 @@ jobs:
           echo "image_ref shape OK: $IMAGE_REF"
 
       - name: Lock membership
+        id: lock-check
         if: ${{ inputs.lock_file != '' }}
         env:
           IMAGE_REF: ${{ inputs.image_ref }}
@@ -125,16 +128,19 @@ jobs:
               exit 1
             fi
             echo "::warning::lock_file '$LOCK_FILE' not found (WARN mode, continuing)"
+            echo "lock_passed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           if grep -Fq "$DIGEST" "$LOCK_FILE"; then
             echo "Digest $DIGEST present in $LOCK_FILE"
+            echo "lock_passed=true" >> "$GITHUB_OUTPUT"
           else
             if [ "$ENFORCE" = "true" ]; then
               echo "::error::digest $DIGEST not found in approved-lock $LOCK_FILE"
               exit 1
             fi
             echo "::warning::digest $DIGEST not found in approved-lock $LOCK_FILE (WARN mode, continuing)"
+            echo "lock_passed=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Install Cosign
@@ -148,6 +154,9 @@ jobs:
           ISSUER: ${{ inputs.expected_issuer_regexp }}
           REQUIRE_ATTESTATION: ${{ inputs.require_attestation }}
           ENFORCE: ${{ inputs.enforce }}
+          # 'true' when the lock-check step was skipped (lock_file='') or passed;
+          # 'false' when the lock check failed in WARN mode.
+          LOCK_PASSED: ${{ steps.lock-check.outputs.lock_passed || 'true' }}
         run: |
           set -u
 
@@ -189,6 +198,11 @@ jobs:
           fi
 
           if [ "$failed" -eq 0 ]; then
+            if [ "${LOCK_PASSED}" = "false" ]; then
+              echo "verified=false" >> "$GITHUB_OUTPUT"
+              echo "::warning::cosign verification passed but lock membership check failed (WARN mode)"
+              exit 0
+            fi
             echo "verified=true" >> "$GITHUB_OUTPUT"
             echo "All verification checks passed."
             exit 0
