@@ -1,0 +1,210 @@
+# ============================================================================
+# Supply Chain: Mirror Verify (Reusable)
+# ============================================================================
+# Front-half of the MIRROR path (an existing public upstream image, e.g. a
+# Docker Hardened Image or Google Distroless). Trust root = the external signer.
+#
+# This workflow ONLY resolves the exact upstream digest and (fail-closed)
+# verifies the upstream signer identity. It does NOT copy to a public registry:
+# the copy + scan-before-publish + sign happens in supply-chain-promote-core so
+# that no unscanned bytes ever reach public GHCR (red-team RT-4).
+#
+# Usage from a caller repo:
+#   jobs:
+#     verify:
+#       uses: ByronWilliamsCPA/.github/.github/workflows/supply-chain-mirror-verify.yml@v1
+#       with:
+#         upstream_registry: dhi.io
+#         upstream_name: postgres
+#         upstream_tag: "17"
+#         expected_identity_regexp: '^https://github\.com/docker/...'   # #VERIFY real DHI signer
+#       secrets:
+#         DHI_REGISTRY_USERNAME: ${{ secrets.DHI_REGISTRY_USERNAME }}
+#         DHI_REGISTRY_TOKEN: ${{ secrets.DHI_REGISTRY_TOKEN }}
+#     promote:
+#       needs: verify
+#       uses: ByronWilliamsCPA/.github/.github/workflows/supply-chain-promote-core.yml@v1
+#       with:
+#         source_ref: ${{ needs.verify.outputs.source_ref }}
+#         ...
+# ============================================================================
+
+name: Supply Chain Mirror Verify (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      upstream_registry:
+        description: Source registry hostname (e.g. dhi.io, gcr.io)
+        type: string
+        required: true
+      upstream_name:
+        description: Image name without registry prefix (e.g. postgres)
+        type: string
+        required: true
+      upstream_tag:
+        description: Upstream mutable tag to resolve to a digest
+        type: string
+        required: true
+      platform:
+        description: Target platform for digest resolution
+        type: string
+        required: false
+        default: linux/amd64
+      require_upstream_signature:
+        description: When true, fail closed unless the upstream signature verifies
+        type: boolean
+        required: false
+        default: true
+      expected_identity_regexp:
+        description: Cosign certificate-identity regexp for the upstream signer
+        type: string
+        required: false
+        default: ""
+      expected_issuer_regexp:
+        description: Cosign certificate-oidc-issuer regexp for the upstream signer
+        type: string
+        required: false
+        # #CRITICAL: anchored and dot-escaped; a bare dot matches any character.
+        # #VERIFY update this default when wiring non-GitHub-Actions upstream signers.
+        default: '^https://token\.actions\.githubusercontent\.com$'
+    secrets:
+      DHI_REGISTRY_USERNAME:
+        required: false
+      DHI_REGISTRY_TOKEN:
+        required: false
+    outputs:
+      source_ref:
+        description: Fully-qualified upstream reference with resolved digest (registry/name@sha256:...)
+        value: ${{ jobs.verify.outputs.source_ref }}
+      source_digest:
+        description: sha256 digest resolved from the upstream registry
+        value: ${{ jobs.verify.outputs.source_digest }}
+      verified:
+        description: "true when the upstream signature verified (or verification was not required)"
+        value: ${{ jobs.verify.outputs.verified }}
+
+env:
+  CRANE_VERSION: "0.20.2"
+  # Public release checksum (not a secret); verified before extraction.
+  CRANE_SHA256: "c14340087103ba9dadf61d45acd20675490fd0ccbd56ac7901fc1b502137f44b"  # pragma: allowlist secret
+
+permissions: {}
+
+jobs:
+  verify:
+    name: Resolve and verify upstream
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      source_ref: ${{ steps.resolve.outputs.source_ref }}
+      source_digest: ${{ steps.resolve.outputs.source_digest }}
+      verified: ${{ steps.verify.outputs.verified }}
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Install crane (verify checksum before extraction)
+        run: |
+          CRANE_BASE="https://github.com/google/go-containerregistry/releases/download"
+          CRANE_ASSET="go-containerregistry_Linux_x86_64.tar.gz"
+          curl --fail --show-error --silent --location --proto '=https' \
+            "${CRANE_BASE}/v${CRANE_VERSION}/${CRANE_ASSET}" -o crane.tar.gz
+          echo "${CRANE_SHA256}  crane.tar.gz" | sha256sum --check
+          tar xz -C /usr/local/bin crane < crane.tar.gz
+          rm crane.tar.gz
+          crane version
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Authenticate crane to upstream (optional creds)
+        env:
+          DHI_USER: ${{ secrets.DHI_REGISTRY_USERNAME }}
+          DHI_PASS: ${{ secrets.DHI_REGISTRY_TOKEN }}
+          UPSTREAM_REGISTRY: ${{ inputs.upstream_registry }}
+        run: |
+          if [ -n "${DHI_USER}" ] && [ -n "${DHI_PASS}" ]; then
+            echo "::add-mask::${DHI_PASS}"
+            printf '%s' "${DHI_PASS}" | \
+              crane auth login "${UPSTREAM_REGISTRY}" --username "${DHI_USER}" --password-stdin
+          else
+            echo "No upstream credentials provided; assuming anonymous pull."
+          fi
+
+      - name: Resolve upstream digest (TOCTOU-safe)
+        id: resolve
+        env:
+          UPSTREAM_REGISTRY: ${{ inputs.upstream_registry }}
+          UPSTREAM_NAME: ${{ inputs.upstream_name }}
+          UPSTREAM_TAG: ${{ inputs.upstream_tag }}
+          PLATFORM: ${{ inputs.platform }}
+        run: |
+          SOURCE="${UPSTREAM_REGISTRY}/${UPSTREAM_NAME}:${UPSTREAM_TAG}"
+          SOURCE_DIGEST=$(crane digest "${SOURCE}" --platform "${PLATFORM}")
+
+          # Shape-guard the digest before it enters GITHUB_OUTPUT (red-team RT-11):
+          # a MITM registry returning a newline-bearing value cannot smuggle extra
+          # output lines past this check.
+          if ! printf '%s' "${SOURCE_DIGEST}" | grep -Eq '^sha256:[0-9a-f]{64}$'; then
+            echo "::error::Resolved digest has unexpected shape: ${SOURCE_DIGEST}"
+            exit 1
+          fi
+
+          # Shape-guard caller-controlled inputs before writing to GITHUB_OUTPUT to
+          # prevent newline injection into the output file (red-team RT-11).
+          # #CRITICAL: these inputs are caller-controlled; a newline in either value
+          # would inject extra key=value lines into GITHUB_OUTPUT for downstream steps.
+          if ! printf '%s' "${UPSTREAM_REGISTRY}" | grep -Eq '^[a-zA-Z0-9][a-zA-Z0-9._:-]*$'; then
+            echo "::error::upstream_registry has unexpected characters: ${UPSTREAM_REGISTRY}"
+            exit 1
+          fi
+          if ! printf '%s' "${UPSTREAM_NAME}" | grep -Eq '^[a-z0-9._/-]+$'; then
+            echo "::error::upstream_name has unexpected characters: ${UPSTREAM_NAME}"
+            exit 1
+          fi
+
+          SOURCE_REF="${UPSTREAM_REGISTRY}/${UPSTREAM_NAME}@${SOURCE_DIGEST}"
+          echo "source_digest=${SOURCE_DIGEST}" >> "${GITHUB_OUTPUT}"
+          echo "source_ref=${SOURCE_REF}" >> "${GITHUB_OUTPUT}"
+          echo "Resolved ${SOURCE} -> ${SOURCE_REF}"
+
+      - name: Verify upstream signature (fail-closed)
+        id: verify
+        env:
+          SOURCE_REF: ${{ steps.resolve.outputs.source_ref }}
+          REQUIRE: ${{ inputs.require_upstream_signature }}
+          IDENTITY: ${{ inputs.expected_identity_regexp }}
+          ISSUER: ${{ inputs.expected_issuer_regexp }}
+        run: |
+          if [ "${REQUIRE}" != "true" ]; then
+            echo "::warning::Upstream signature verification not required for this source."
+            # Output contract: "true when verified OR verification was not required."
+            echo "verified=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          if [ -z "${IDENTITY}" ] || [ "${IDENTITY}" = ".*" ]; then
+            # An empty or wildcard identity proves only that *a* signature exists,
+            # not who signed it (red-team RT-6). Refuse it when verification is
+            # required: a real signer identity must be pinned per source tier.
+            echo "::error::require_upstream_signature=true but expected_identity_regexp is empty or '.*'."
+            echo "::error::Pin the real signer identity + issuer per source tier in the caller/catalog."
+            exit 1
+          fi
+
+          if cosign verify \
+              --certificate-identity-regexp="${IDENTITY}" \
+              --certificate-oidc-issuer-regexp="${ISSUER}" \
+              "${SOURCE_REF}" >/dev/null 2>&1; then
+            echo "Upstream signature verified for ${SOURCE_REF}"
+            echo "verified=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "::error::Upstream signature verification FAILED for ${SOURCE_REF} (fail-closed)."
+            exit 1
+          fi

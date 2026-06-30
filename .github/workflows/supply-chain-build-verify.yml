@@ -1,0 +1,304 @@
+# ============================================================================
+# Supply Chain: Build Verify (Reusable)
+# ============================================================================
+# Front-half of the BUILD path. This path builds a container image from
+# INTERNAL source code, so there is NO upstream signature to verify here: the
+# trust root is "reviewed source + verified base images". The gates below
+# enforce that trust root before any bytes are built.
+#
+# This workflow ONLY builds a local image tar (no push, no sign). The
+# scan-before-publish + sign step lives in supply-chain-promote-core so that no
+# unscanned bytes ever reach a public registry. It is INERT until a caller
+# wires it; there is no caller here on purpose.
+#
+# Gates (the A4 build-path gates, in order):
+#   1. Validate every FROM base is digest-pinned AND present in the approved
+#      lock file (fail closed otherwise).
+#   2. uv.lock freshness gate (uv lock --check), when require_uv_lock is true.
+#   3. Build-secret policy: refuse secret-shaped ARG/ENV in the Dockerfile.
+#   4. Build the image to a local tar (no push, no sign).
+#
+# Usage from a caller repo:
+#   jobs:
+#     build:
+#       uses: ByronWilliamsCPA/.github/.github/workflows/supply-chain-build-verify.yml@v1
+#       with:
+#         image_id: my-service
+#         dockerfile_path: ./Dockerfile
+#         build_context: .
+#         platform: linux/amd64
+#         lock_file: catalog/approved-lock.yaml
+#         require_uv_lock: true
+#         build_args: |
+#           VERSION=1.2.3
+#           COMMIT_SHA=${{ github.sha }}
+#     promote:
+#       needs: build
+#       uses: ByronWilliamsCPA/.github/.github/workflows/supply-chain-promote-core.yml@v1
+#       with:
+#         source_kind: oci-tar
+#         source_artifact: ${{ needs.build.outputs.artifact_name }}
+#         ...
+# ============================================================================
+
+name: Supply Chain Build Verify (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      image_id:
+        description: Logical image identifier used to tag the local build (e.g. my-service)
+        type: string
+        required: true
+      dockerfile_path:
+        description: Path to the Dockerfile to build
+        type: string
+        required: false
+        default: ./Dockerfile
+      build_context:
+        description: Docker build context directory
+        type: string
+        required: false
+        default: .
+      platform:
+        description: Target platform for the build (e.g. linux/amd64)
+        type: string
+        required: false
+        default: linux/amd64
+      lock_file:
+        description: Approved-lock file every FROM base digest must appear in
+        type: string
+        required: false
+        default: catalog/approved-lock.yaml
+      require_uv_lock:
+        description: When true, fail unless uv.lock is up to date (uv lock --check)
+        type: boolean
+        required: false
+        default: true
+      build_args:
+        description: Newline-separated KEY=VALUE build args passed to buildx
+        type: string
+        required: false
+        default: ""
+    outputs:
+      local_tar:
+        description: Path to the built OCI/docker image tar on the runner
+        value: ${{ jobs.build.outputs.local_tar }}
+      artifact_name:
+        description: Name of the GHA artifact holding the built image tar (pass to promote-core as source_artifact)
+        value: ${{ jobs.build.outputs.artifact_name }}
+      built:
+        description: "true when the image build succeeded"
+        value: ${{ jobs.build.outputs.built }}
+
+permissions: {}
+
+jobs:
+  build:
+    name: Validate bases and build (no push)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    outputs:
+      local_tar: ${{ steps.build.outputs.local_tar }}
+      artifact_name: ${{ steps.build.outputs.artifact_name }}
+      built: ${{ steps.build.outputs.built }}
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+
+      # Gate 1: every FROM base must be digest-pinned AND present in the approved
+      # lock file. A mutable tag (or any base not on the approved list) breaks the
+      # "verified bases" half of the trust root, so we fail closed.
+      # #VERIFY the canonical home for this logic is a shared
+      #   scripts/validate_dockerfile_bases.py; this inline shell is a stopgap
+      #   that must track that script's semantics until the caller switches over.
+      - name: Validate Dockerfile bases
+        env:
+          DOCKERFILE_PATH: ${{ inputs.dockerfile_path }}
+          LOCK_FILE: ${{ inputs.lock_file }}
+        run: |
+          set -euo pipefail
+
+          if [ ! -f "${DOCKERFILE_PATH}" ]; then
+            echo "::error::Dockerfile not found at ${DOCKERFILE_PATH}"
+            exit 1
+          fi
+          if [ ! -f "${LOCK_FILE}" ]; then
+            echo "::error::Approved-lock file not found at ${LOCK_FILE}"
+            exit 1
+          fi
+
+          # Collect the set of named build stages so that a later
+          # `FROM <stage> AS ...` (a re-reference to a prior stage) is not
+          # mistaken for an external base image.
+          stages=""
+          fail=0
+
+          while IFS= read -r raw; do
+            # Strip a leading "FROM" (case-insensitive) and surrounding space.
+            ref=$(printf '%s' "${raw}" | sed -E 's/^[[:space:]]*[Ff][Rr][Oo][Mm][[:space:]]+//')
+            # Drop any platform flag (e.g. --platform=linux/amd64).
+            ref=$(printf '%s' "${ref}" | sed -E 's/^--[^[:space:]]+[[:space:]]+//g')
+
+            base=$(printf '%s' "${ref}" | awk '{print $1}')
+
+            # Record a named stage: `... AS <name>` (case-insensitive AS).
+            stage_name=$(printf '%s' "${ref}" | sed -nE 's/.*[[:space:]][Aa][Ss][[:space:]]+([A-Za-z0-9._-]+).*/\1/p')
+
+            # Ignore the scratch pseudo-image: it has no digest by definition.
+            if [ "${base}" = "scratch" ]; then
+              [ -n "${stage_name}" ] && stages="${stages} ${stage_name}"
+              continue
+            fi
+
+            # Ignore a FROM that re-references an earlier named build stage.
+            skip_stage=0
+            for s in ${stages}; do
+              if [ "${base}" = "${s}" ]; then
+                skip_stage=1
+                break
+              fi
+            done
+            if [ "${skip_stage}" = "1" ]; then
+              [ -n "${stage_name}" ] && stages="${stages} ${stage_name}"
+              continue
+            fi
+
+            # Assert the base is digest-pinned: name@sha256:<64 hex>.
+            digest=$(printf '%s' "${base}" | sed -nE 's/.*@(sha256:[0-9a-f]{64})$/\1/p')
+            if [ -z "${digest}" ]; then
+              echo "::error::Base image is not digest-pinned: ${base}"
+              fail=1
+            else
+              # Assert the exact digest string appears in the approved lock.
+              if ! grep -qF "${digest}" "${LOCK_FILE}"; then
+                echo "::error::Base digest not in approved lock (${LOCK_FILE}): ${base}"
+                fail=1
+              else
+                echo "OK: ${base}"
+              fi
+            fi
+
+            [ -n "${stage_name}" ] && stages="${stages} ${stage_name}"
+          done < <(grep -iE '^[[:space:]]*FROM[[:space:]]' "${DOCKERFILE_PATH}")
+
+          if [ "${fail}" != "0" ]; then
+            echo "::error::One or more FROM bases are unpinned or not in the approved lock."
+            exit 1
+          fi
+          echo "All FROM bases are digest-pinned and approved."
+
+      # Gate 2: uv.lock must be current so the build cannot drift from reviewed
+      # dependency state. Skipped entirely when the caller opts out.
+      # #VERIFY uv is installed via Astral's official pinned installer; pin the
+      #   UV_VERSION below to a reviewed release and keep it in sync with the
+      #   org-wide uv pin. `pipx install uv` is an acceptable fallback.
+      - name: uv.lock gate
+        if: ${{ inputs.require_uv_lock }}
+        env:
+          BUILD_CONTEXT: ${{ inputs.build_context }}
+          UV_VERSION: "0.9.7"
+          # #CRITICAL: set UV_INSTALLER_SHA256 to the sha256 of the installer
+          # for this UV_VERSION before wiring callers. Obtain it with:
+          #   curl -fsSL "https://astral.sh/uv/${UV_VERSION}/install.sh" | sha256sum
+          # #VERIFY regenerate when bumping UV_VERSION.
+          UV_INSTALLER_SHA256: ""
+        run: |
+          set -euo pipefail
+          if [ -z "${UV_INSTALLER_SHA256}" ]; then
+            echo "::error::UV_INSTALLER_SHA256 must be set before this workflow is wired."
+            echo "::error::Run: curl -fsSL \"https://astral.sh/uv/${UV_VERSION}/install.sh\" | sha256sum"
+            exit 1
+          fi
+          curl --fail --show-error --silent --location --proto '=https' \
+            "https://astral.sh/uv/${UV_VERSION}/install.sh" -o uv_install.sh
+          echo "${UV_INSTALLER_SHA256}  uv_install.sh" | sha256sum --check
+          sh uv_install.sh
+          rm uv_install.sh
+          export PATH="${HOME}/.local/bin:${PATH}"
+          uv --version
+          cd "${BUILD_CONTEXT}"
+          if [ ! -f uv.lock ]; then
+            echo "::error::require_uv_lock=true but no uv.lock found in ${BUILD_CONTEXT}"
+            exit 1
+          fi
+          uv lock --check
+
+      # Gate 3: a build-time secret baked into the image (ARG/ENV) leaks into
+      # image history. Refuse secret-shaped names or default values; the author
+      # must use BuildKit `--mount=type=secret` instead.
+      - name: Build-secret policy
+        env:
+          DOCKERFILE_PATH: ${{ inputs.dockerfile_path }}
+        run: |
+          set -euo pipefail
+          if grep -inE '^[[:space:]]*(ARG|ENV)[[:space:]].*(PASSWORD|SECRET|TOKEN|APIKEY|API_KEY|AWS_SECRET|PRIVATE_KEY)' \
+              "${DOCKERFILE_PATH}"; then
+            echo "::error::Secret-shaped ARG/ENV found in ${DOCKERFILE_PATH}."
+            echo "::error::Do not bake secrets into image layers. Use BuildKit --mount=type=secret instead."
+            exit 1
+          fi
+          echo "No secret-shaped ARG/ENV found."
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
+
+      # Gate 4: build to a local tar only. No push, no sign: that is the job of
+      # supply-chain-promote-core after the scan-before-publish step.
+      - name: Build image (no push)
+        id: build
+        env:
+          DOCKERFILE_PATH: ${{ inputs.dockerfile_path }}
+          BUILD_CONTEXT: ${{ inputs.build_context }}
+          PLATFORM: ${{ inputs.platform }}
+          IMAGE_ID: ${{ inputs.image_id }}
+          BUILD_ARGS: ${{ inputs.build_args }}
+        run: |
+          set -euo pipefail
+
+          OUT_TAR="image.tar"
+
+          # Translate newline-separated KEY=VALUE build args into repeated
+          # --build-arg flags, ignoring blank lines.
+          declare -a BUILD_ARG_FLAGS=()
+          while IFS= read -r line; do
+            [ -z "${line}" ] && continue
+            BUILD_ARG_FLAGS+=(--build-arg "${line}")
+          done <<< "${BUILD_ARGS}"
+
+          docker buildx build \
+            --file "${DOCKERFILE_PATH}" \
+            --platform "${PLATFORM}" \
+            --tag "${IMAGE_ID}:build" \
+            "${BUILD_ARG_FLAGS[@]}" \
+            --output "type=docker,dest=${OUT_TAR}" \
+            "${BUILD_CONTEXT}"
+
+          if [ ! -s "${OUT_TAR}" ]; then
+            echo "::error::Build produced no image tar at ${OUT_TAR}"
+            exit 1
+          fi
+
+          {
+            echo "local_tar=${OUT_TAR}"
+            echo "artifact_name=build-${IMAGE_ID}-tar"
+            echo "built=true"
+          } >> "${GITHUB_OUTPUT}"
+          echo "Built ${IMAGE_ID}:build -> ${OUT_TAR}"
+
+      - name: Upload built image tar (passes to promote-core)
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: build-${{ inputs.image_id }}-tar
+          path: image.tar
+          retention-days: 1

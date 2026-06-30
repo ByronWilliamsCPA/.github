@@ -1,0 +1,427 @@
+# ============================================================================
+# Supply Chain: Promote Core (Reusable)
+# ============================================================================
+# Shared trust core for BOTH upstream paths (mirror and build) and BOTH
+# destinations (public container-images, private homelab-infra). Given a
+# verified source (an upstream digest from supply-chain-mirror-verify, or a
+# locally-built OCI tar from supply-chain-build-verify), it:
+#
+#   scan job     pull/load to a local tar, Snyk + Trivy BEFORE any public push
+#                (red-team RT-4: nothing unscanned reaches public GHCR)
+#   publish job  on scan pass, crane push to GHCR, generate SBOMs with syft in
+#                archive mode (NO docker.sock mount, red-team RT-8), then
+#                cosign sign + attest + GitHub build provenance
+#   update-lock  on publish, append the promotion entry to the approved-lock
+#                WITHOUT [skip ci] so the lock validator still runs (red-team
+#                RT-10); canonical lock for public, private overlay for private
+#
+# The two upstream front-halves (mirror-verify / build-verify) feed this; this
+# is the single chokepoint where the RT-1/4/8/10 fixes live once for everyone.
+#
+# Usage from a caller repo:
+#   jobs:
+#     verify:
+#       uses: ByronWilliamsCPA/.github/.github/workflows/supply-chain-mirror-verify.yml@v1
+#       with: { upstream_registry: dhi.io, upstream_name: postgres, upstream_tag: "17" }
+#     promote:
+#       needs: verify
+#       uses: ByronWilliamsCPA/.github/.github/workflows/supply-chain-promote-core.yml@v1
+#       with:
+#         image_id: dhi-postgres-17
+#         source_kind: registry
+#         source_ref: ${{ needs.verify.outputs.source_ref }}
+#         ghcr_name: dhi-postgres
+#         ghcr_tag: "17"
+#         write_lock: true
+#       secrets:
+#         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+# ============================================================================
+
+name: Supply Chain Promote Core (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      image_id:
+        description: Unique catalog slug for this image family version
+        type: string
+        required: true
+      source_kind:
+        description: '"registry" (pull source_ref) or "oci-tar" (download source_artifact)'
+        type: string
+        required: false
+        default: registry
+      source_ref:
+        description: For source_kind=registry, the verified upstream ref with digest
+        type: string
+        required: false
+        default: ""
+      source_artifact:
+        description: For source_kind=oci-tar, the uploaded artifact name holding image.tar
+        type: string
+        required: false
+        default: ""
+      ghcr_name:
+        description: Image name under ghcr.io/<owner>/ (single path segment)
+        type: string
+        required: true
+      ghcr_tag:
+        description: Tag to publish to GHCR
+        type: string
+        required: true
+      platform:
+        description: Target platform
+        type: string
+        required: false
+        default: linux/amd64
+      lock_file:
+        description: Approved-lock path to update (canonical or private overlay)
+        type: string
+        required: false
+        default: catalog/approved-lock.yaml
+      write_lock:
+        description: When true and on main, append the promotion entry to lock_file
+        type: boolean
+        required: false
+        default: false
+      snyk_threshold:
+        description: Snyk severity threshold that blocks promotion
+        type: string
+        required: false
+        default: high
+      trivy_severities:
+        description: Trivy severities that block promotion
+        type: string
+        required: false
+        default: CRITICAL,HIGH
+      sign:
+        description: When true and on main, cosign sign + attest the published digest
+        type: boolean
+        required: false
+        default: true
+    secrets:
+      SNYK_TOKEN:
+        required: false
+    outputs:
+      promoted:
+        value: ${{ jobs.publish.outputs.promoted }}
+      target_ref:
+        value: ${{ jobs.publish.outputs.target_ref }}
+      target_digest:
+        value: ${{ jobs.publish.outputs.target_digest }}
+
+env:
+  CRANE_VERSION: "0.20.2"
+  CRANE_SHA256: "c14340087103ba9dadf61d45acd20675490fd0ccbd56ac7901fc1b502137f44b"  # pragma: allowlist secret
+  # syft pinned by digest so a re-tagged scanner image cannot run unexpected code.
+  SYFT_IMAGE: "anchore/syft:v1.44.0@sha256:86fde6445b483d902fe011dd9f68c4987dd94e07da1e9edc004e3c2422650de6"  # pragma: allowlist secret
+  IMAGE_TAR: image.tar
+
+permissions: {}
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # scan: pull/load the candidate to a local tar and scan it BEFORE any public
+  # push. No packages:write, no id-token: this job cannot publish or sign, so a
+  # scanner-stage compromise cannot mint trust or leak the publish token (RT-4/8).
+  # ---------------------------------------------------------------------------
+  scan:
+    name: Scan candidate (pre-publish)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Install crane (verify checksum before extraction)
+        run: |
+          CRANE_BASE="https://github.com/google/go-containerregistry/releases/download"
+          CRANE_ASSET="go-containerregistry_Linux_x86_64.tar.gz"
+          curl --fail --show-error --silent --location --proto '=https' \
+            "${CRANE_BASE}/v${CRANE_VERSION}/${CRANE_ASSET}" -o crane.tar.gz
+          echo "${CRANE_SHA256}  crane.tar.gz" | sha256sum --check
+          tar xz -C /usr/local/bin crane < crane.tar.gz
+          rm crane.tar.gz
+
+      - name: Materialize candidate to local tar
+        env:
+          SOURCE_KIND: ${{ inputs.source_kind }}
+          SOURCE_REF: ${{ inputs.source_ref }}
+          PLATFORM: ${{ inputs.platform }}
+        run: |
+          if [ "${SOURCE_KIND}" = "registry" ]; then
+            if [ -z "${SOURCE_REF}" ]; then
+              echo "::error::source_kind=registry requires source_ref"; exit 1
+            fi
+            # #CRITICAL: require a digest-pinned ref; a mutable tag bypasses the
+            # verified-digest trust model entirely (red-team RT-11).
+            if ! printf '%s' "${SOURCE_REF}" | grep -Eq '@sha256:[0-9a-f]{64}$'; then
+              echo "::error::source_ref must include @sha256:<64hex>; got '${SOURCE_REF}'"
+              echo "::error::Pass the output of mirror-verify (source_ref includes digest)."
+              exit 1
+            fi
+            crane pull --platform "${PLATFORM}" "${SOURCE_REF}" "${IMAGE_TAR}"
+          elif [ "${SOURCE_KIND}" = "oci-tar" ]; then
+            echo "Using downloaded artifact tar (see download step)."
+          else
+            echo "::error::unknown source_kind: ${SOURCE_KIND}"; exit 1
+          fi
+
+      - name: Download built image tar (oci-tar source)
+        if: inputs.source_kind == 'oci-tar'
+        uses: actions/download-artifact@448e3f862ab3ef47aa50ff917776823c9946035b # v5.0.0
+        with:
+          name: ${{ inputs.source_artifact }}
+
+      # #CRITICAL: Trivy was removed in PR #229 (64ad9cf) because Trivy's release
+      # infrastructure was compromised in March 2026. This re-introduction must be
+      # accompanied by a documented re-vetting decision and ADR-012 before merge.
+      # #VERIFY: either replace with Grype (consistent with PR #229) or document
+      # that Trivy's supply chain has been audited and cleared since the compromise.
+      - name: Trivy gate (blocks on configured severities, pre-publish)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          input: ${{ env.IMAGE_TAR }}
+          severity: ${{ inputs.trivy_severities }}
+          exit-code: "1"
+          format: sarif
+          output: trivy-results.sarif
+
+      - name: Upload Trivy SARIF
+        if: always() && hashFiles('trivy-results.sarif') != ''
+        uses: github/codeql-action/upload-sarif@4e828ff8d448a8a6e532957b1811f387a63867e8 # v4.30.4
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy-${{ inputs.image_id }}
+
+      - name: Check Snyk token available
+        id: check-snyk-token
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: |
+          if [ -n "${SNYK_TOKEN}" ]; then
+            echo "has-token=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "has-token=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Snyk gate (blocks on threshold, pre-publish)
+        if: steps.check-snyk-token.outputs.has-token == 'true'
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          THRESHOLD: ${{ inputs.snyk_threshold }}
+          # #CRITICAL: pin to a reviewed SNYK_CLI_VERSION; unpinned installs can
+          # silently pull a broken or vulnerable CLI release.
+          # #VERIFY update on each Snyk security release cycle.
+          SNYK_CLI_VERSION: "1.1293.1"
+        run: |
+          # #VERIFY snyk supports the docker-archive: scheme for the installed CLI.
+          npm install -g --ignore-scripts "snyk@${SNYK_CLI_VERSION}"
+          snyk container test "docker-archive:${IMAGE_TAR}" \
+            --severity-threshold="${THRESHOLD}"
+
+      - name: Hand the scanned tar to publish
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: promote-${{ inputs.image_id }}-tar
+          path: ${{ env.IMAGE_TAR }}
+          retention-days: 1
+
+  # ---------------------------------------------------------------------------
+  # publish: only reached if scan passed. Pushes to GHCR, generates SBOMs with
+  # syft in archive mode (no docker.sock), then signs + attests.
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Publish and sign
+    needs: scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    outputs:
+      promoted: ${{ steps.outputs.outputs.promoted }}
+      target_ref: ${{ steps.push.outputs.target_ref }}
+      target_digest: ${{ steps.push.outputs.target_digest }}
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Install crane (verify checksum before extraction)
+        run: |
+          CRANE_BASE="https://github.com/google/go-containerregistry/releases/download"
+          CRANE_ASSET="go-containerregistry_Linux_x86_64.tar.gz"
+          curl --fail --show-error --silent --location --proto '=https' \
+            "${CRANE_BASE}/v${CRANE_VERSION}/${CRANE_ASSET}" -o crane.tar.gz
+          echo "${CRANE_SHA256}  crane.tar.gz" | sha256sum --check
+          tar xz -C /usr/local/bin crane < crane.tar.gz
+          rm crane.tar.gz
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Download scanned tar
+        uses: actions/download-artifact@448e3f862ab3ef47aa50ff917776823c9946035b # v5.0.0
+        with:
+          name: promote-${{ inputs.image_id }}-tar
+
+      - name: Authenticate crane to GHCR
+        env:
+          GHCR_USER: ${{ github.actor }}
+          GHCR_PASS: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "::add-mask::${GHCR_PASS}"
+          printf '%s' "${GHCR_PASS}" | \
+            crane auth login ghcr.io --username "${GHCR_USER}" --password-stdin
+
+      - name: Push to GHCR and assert digest
+        id: push
+        env:
+          GHCR_NAME: ${{ inputs.ghcr_name }}
+          GHCR_TAG: ${{ inputs.ghcr_tag }}
+          PLATFORM: ${{ inputs.platform }}
+          GHCR_OWNER: ${{ github.repository_owner }}
+        run: |
+          GHCR_OWNER=$(echo "${GHCR_OWNER}" | tr '[:upper:]' '[:lower:]')
+          TARGET="ghcr.io/${GHCR_OWNER}/${GHCR_NAME}:${GHCR_TAG}"
+          crane push "${IMAGE_TAR}" "${TARGET}"
+
+          TARGET_DIGEST=$(crane digest "${TARGET}" --platform "${PLATFORM}")
+          if ! printf '%s' "${TARGET_DIGEST}" | grep -Eq '^sha256:[0-9a-f]{64}$'; then
+            echo "::error::GHCR digest has unexpected shape: ${TARGET_DIGEST}"; exit 1
+          fi
+          echo "target_ref=${TARGET}" >> "${GITHUB_OUTPUT}"
+          echo "target_digest=${TARGET_DIGEST}" >> "${GITHUB_OUTPUT}"
+          echo "Published ${TARGET}@${TARGET_DIGEST}"
+
+      - name: Generate SBOMs (syft archive mode, no docker.sock)
+        env:
+          IMAGE_ID: ${{ inputs.image_id }}
+        run: |
+          # Scan the tar directly. No -v /var/run/docker.sock mount (RT-8): syft
+          # reads the archive, so a compromised scan step has no Docker socket.
+          docker run --rm -v "${PWD}:/work" -w /work "${SYFT_IMAGE}" \
+            "docker-archive:${IMAGE_TAR}" -o cyclonedx-json > "sbom-${IMAGE_ID}-cyclonedx.json"
+          docker run --rm -v "${PWD}:/work" -w /work "${SYFT_IMAGE}" \
+            "docker-archive:${IMAGE_TAR}" -o spdx-json > "sbom-${IMAGE_ID}-spdx.json"
+
+      - name: Upload SBOM artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sbom-${{ inputs.image_id }}
+          path: |
+            sbom-${{ inputs.image_id }}-cyclonedx.json
+            sbom-${{ inputs.image_id }}-spdx.json
+          retention-days: 90
+
+      - name: Sign image with Cosign
+        if: inputs.sign && github.ref == 'refs/heads/main'
+        env:
+          TARGET_WITH_DIGEST: ${{ steps.push.outputs.target_ref }}@${{ steps.push.outputs.target_digest }}
+        run: cosign sign --yes "${TARGET_WITH_DIGEST}"
+
+      - name: Attest CycloneDX SBOM
+        if: inputs.sign && github.ref == 'refs/heads/main'
+        env:
+          TARGET_WITH_DIGEST: ${{ steps.push.outputs.target_ref }}@${{ steps.push.outputs.target_digest }}
+          SBOM_FILE: sbom-${{ inputs.image_id }}-cyclonedx.json
+        run: |
+          cosign attest --yes --predicate "${SBOM_FILE}" --type cyclonedx "${TARGET_WITH_DIGEST}"
+
+      - name: GitHub build provenance attestation
+        if: inputs.sign && github.ref == 'refs/heads/main'
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-name: ghcr.io/${{ github.repository_owner }}/${{ inputs.ghcr_name }}
+          subject-digest: ${{ steps.push.outputs.target_digest }}
+          push-to-registry: true
+
+      - name: Set outputs
+        id: outputs
+        run: echo "promoted=true" >> "${GITHUB_OUTPUT}"
+
+  # ---------------------------------------------------------------------------
+  # update-lock: append the promotion entry. Unlike the prior pipeline this does
+  # NOT use [skip ci], so the lock validator runs on the resulting commit
+  # (red-team RT-10). GPG-signing the bot commit and routing through a PR are
+  # tracked follow-ups.
+  # ---------------------------------------------------------------------------
+  update-lock:
+    name: Update approved-lock
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    if: inputs.write_lock && needs.publish.outputs.promoted == 'true' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Append promotion entry and push (no skip-ci)
+        env:
+          IMAGE_ID: ${{ inputs.image_id }}
+          LOCK_FILE: ${{ inputs.lock_file }}
+          GHCR_REF: ${{ needs.publish.outputs.target_ref }}
+          TARGET_DIGEST: ${{ needs.publish.outputs.target_digest }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # #CRITICAL: guard against path traversal in LOCK_FILE (caller-controlled).
+          # Allows only repo-relative YAML paths; rejects leading slash, .., spaces.
+          # #VERIFY update the pattern if new lock-file naming conventions are added.
+          if ! printf '%s' "${LOCK_FILE}" | grep -Eq '^[a-zA-Z0-9][a-zA-Z0-9._/-]*\.ya?ml$'; then
+            echo "::error::lock_file has unexpected path shape: ${LOCK_FILE}"
+            exit 1
+          fi
+
+          # #VERIFY the caller repo provides scripts/update_approved_lock.py (the
+          #   canonical updater). container-images already does; the homelab-infra
+          #   private overlay must ship the same script + schema before wiring.
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          echo "::add-mask::${GH_TOKEN}"
+          AUTH_B64="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 -w0)"
+          # Mask the base64 derivative: the log scrubber masks exact strings only,
+          # so base64-encoded forms of a masked secret are NOT automatically redacted.
+          echo "::add-mask::${AUTH_B64}"
+          AUTH_HEADER="AUTHORIZATION: basic ${AUTH_B64}"
+          echo "::add-mask::${AUTH_HEADER}"
+          PROMOTED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          for ATTEMPT in 1 2 3 4 5; do
+            git checkout -- "${LOCK_FILE}" 2>/dev/null || true
+            if ! git -c http.extraheader="${AUTH_HEADER}" pull --rebase origin main; then
+              git rebase --abort 2>/dev/null || true
+              sleep $((ATTEMPT * 2)); continue
+            fi
+            python3 scripts/update_approved_lock.py \
+              --lock-file "${LOCK_FILE}" --image-id "${IMAGE_ID}" \
+              --ghcr-ref "${GHCR_REF}" --target-digest "${TARGET_DIGEST}" \
+              --promoted-at "${PROMOTED_AT}" --promoted-by "${RUN_URL}" || { echo "::error::lock updater failed"; exit 1; }
+            git add "${LOCK_FILE}"
+            if git diff --cached --quiet; then echo "Entry already present."; exit 0; fi
+            # No [skip ci]: the lock validator MUST run on this commit (RT-10).
+            git commit -m "chore(lock): promote ${IMAGE_ID} to approved-lock"
+            if git -c http.extraheader="${AUTH_HEADER}" push origin HEAD:main; then exit 0; fi
+            COMMIT_SHA="$(git rev-parse HEAD)"; git reset --hard "${COMMIT_SHA}~1"; sleep $((ATTEMPT * 2))
+          done
+          echo "::error::Failed to push approved-lock update after retries."; exit 1
