@@ -220,7 +220,7 @@ jobs:
             echo "::error::Run: curl -fsSL \"https://astral.sh/uv/${UV_VERSION}/install.sh\" | sha256sum"
             exit 1
           fi
-          curl --fail --show-error --silent --location \
+          curl --fail --show-error --silent --location --proto '=https' \
             "https://astral.sh/uv/${UV_VERSION}/install.sh" -o uv_install.sh
           echo "${UV_INSTALLER_SHA256}  uv_install.sh" | sha256sum --check
           sh uv_install.sh

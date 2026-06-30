@@ -113,7 +113,7 @@ jobs:
         run: |
           CRANE_BASE="https://github.com/google/go-containerregistry/releases/download"
           CRANE_ASSET="go-containerregistry_Linux_x86_64.tar.gz"
-          curl --fail --show-error --silent --location \
+          curl --fail --show-error --silent --location --proto '=https' \
             "${CRANE_BASE}/v${CRANE_VERSION}/${CRANE_ASSET}" -o crane.tar.gz
           echo "${CRANE_SHA256}  crane.tar.gz" | sha256sum --check
           tar xz -C /usr/local/bin crane < crane.tar.gz

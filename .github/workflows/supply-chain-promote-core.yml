@@ -142,7 +142,7 @@ jobs:
         run: |
           CRANE_BASE="https://github.com/google/go-containerregistry/releases/download"
           CRANE_ASSET="go-containerregistry_Linux_x86_64.tar.gz"
-          curl --fail --show-error --silent --location \
+          curl --fail --show-error --silent --location --proto '=https' \
             "${CRANE_BASE}/v${CRANE_VERSION}/${CRANE_ASSET}" -o crane.tar.gz
           echo "${CRANE_SHA256}  crane.tar.gz" | sha256sum --check
           tar xz -C /usr/local/bin crane < crane.tar.gz
@@ -222,7 +222,7 @@ jobs:
           SNYK_CLI_VERSION: "1.1293.1"
         run: |
           # #VERIFY snyk supports the docker-archive: scheme for the installed CLI.
-          npm install -g "snyk@${SNYK_CLI_VERSION}"
+          npm install -g --ignore-scripts "snyk@${SNYK_CLI_VERSION}"
           snyk container test "docker-archive:${IMAGE_TAR}" \
             --severity-threshold="${THRESHOLD}"
 
@@ -261,7 +261,7 @@ jobs:
         run: |
           CRANE_BASE="https://github.com/google/go-containerregistry/releases/download"
           CRANE_ASSET="go-containerregistry_Linux_x86_64.tar.gz"
-          curl --fail --show-error --silent --location \
+          curl --fail --show-error --silent --location --proto '=https' \
             "${CRANE_BASE}/v${CRANE_VERSION}/${CRANE_ASSET}" -o crane.tar.gz
           echo "${CRANE_SHA256}  crane.tar.gz" | sha256sum --check
           tar xz -C /usr/local/bin crane < crane.tar.gz
