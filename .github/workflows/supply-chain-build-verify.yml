@@ -289,9 +289,11 @@ jobs:
             exit 1
           fi
 
-          echo "local_tar=${OUT_TAR}" >> "${GITHUB_OUTPUT}"
-          echo "artifact_name=build-${IMAGE_ID}-tar" >> "${GITHUB_OUTPUT}"
-          echo "built=true" >> "${GITHUB_OUTPUT}"
+          {
+            echo "local_tar=${OUT_TAR}"
+            echo "artifact_name=build-${IMAGE_ID}-tar"
+            echo "built=true"
+          } >> "${GITHUB_OUTPUT}"
           echo "Built ${IMAGE_ID}:build -> ${OUT_TAR}"
 
       - name: Upload built image tar (passes to promote-core)

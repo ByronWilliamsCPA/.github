@@ -225,8 +225,10 @@ jobs:
           VERIFIED: ${{ steps.verify.outputs.verified }}
           ENFORCE: ${{ inputs.enforce }}
         run: |
-          echo "## Supply Chain Consume Verify" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Image:** \`$IMAGE_REF\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Verified:** $VERIFIED" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Mode:** $([ "$ENFORCE" = "true" ] && echo enforce || echo warn)" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## Supply Chain Consume Verify"
+            echo ""
+            echo "**Image:** \`$IMAGE_REF\`"
+            echo "**Verified:** $VERIFIED"
+            echo "**Mode:** $([ "$ENFORCE" = "true" ] && echo enforce || echo warn)"
+          } >> "$GITHUB_STEP_SUMMARY"
