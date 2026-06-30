@@ -382,6 +382,8 @@ jobs:
           LOCK_FILE: ${{ inputs.lock_file }}
           GHCR_REF: ${{ needs.publish.outputs.target_ref }}
           TARGET_DIGEST: ${{ needs.publish.outputs.target_digest }}
+          SOURCE_KIND: ${{ inputs.source_kind }}
+          SOURCE_REF: ${{ inputs.source_ref }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -407,6 +409,21 @@ jobs:
           echo "::add-mask::${AUTH_HEADER}"
           PROMOTED_AT=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
+          # Derive the source digest the lock requires. For a mirror, it is the
+          # upstream digest embedded in source_ref (registry/name@sha256:...);
+          # crane copy-by-digest preserves it, so source_digest == target_digest
+          # and the lock can assert that invariant. For a build there is no
+          # separate upstream, so source_digest collapses to the target digest.
+          if [ "${SOURCE_KIND}" = "registry" ]; then
+            SOURCE_DIGEST="${SOURCE_REF##*@}"
+          else
+            SOURCE_DIGEST="${TARGET_DIGEST}"
+          fi
+          if ! printf '%s' "${SOURCE_DIGEST}" | grep -Eq '^sha256:[0-9a-f]{64}$'; then
+            echo "::error::derived source_digest has unexpected shape: ${SOURCE_DIGEST}"
+            exit 1
+          fi
+
           for ATTEMPT in 1 2 3 4 5; do
             git checkout -- "${LOCK_FILE}" 2>/dev/null || true
             if ! git -c http.extraheader="${AUTH_HEADER}" pull --rebase origin main; then
@@ -415,7 +432,8 @@ jobs:
             fi
             python3 scripts/update_approved_lock.py \
               --lock-file "${LOCK_FILE}" --image-id "${IMAGE_ID}" \
-              --ghcr-ref "${GHCR_REF}" --target-digest "${TARGET_DIGEST}" \
+              --ghcr-ref "${GHCR_REF}" \
+              --source-digest "${SOURCE_DIGEST}" --target-digest "${TARGET_DIGEST}" \
               --promoted-at "${PROMOTED_AT}" --promoted-by "${RUN_URL}" || { echo "::error::lock updater failed"; exit 1; }
             git add "${LOCK_FILE}"
             if git diff --cached --quiet; then echo "Entry already present."; exit 0; fi
