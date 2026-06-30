@@ -389,10 +389,12 @@ jobs:
         run: echo "promoted=true" >> "${GITHUB_OUTPUT}"
 
   # ---------------------------------------------------------------------------
-  # update-lock: append the promotion entry. Unlike the prior pipeline this does
-  # NOT use [skip ci], so the lock validator runs on the resulting commit
-  # (red-team RT-10). GPG-signing the bot commit and routing through a PR are
-  # tracked follow-ups.
+  # update-lock: append the promotion entry through a PULL REQUEST, not a direct
+  # push to main. A protected main (PR + merge-queue + required "Validate catalog
+  # schema" check + verified-signatures rules) rejects a bot push, so this job
+  # commits to a per-run branch, opens a PR, and enables squash auto-merge. The
+  # merge queue lands it web-flow-signed AFTER the lock validator runs on the PR
+  # (red-team RT-10 preserved: no [skip ci], the validator gates the merge).
   # ---------------------------------------------------------------------------
   update-lock:
     name: Update approved-lock
@@ -402,6 +404,7 @@ jobs:
     if: inputs.write_lock && needs.publish.outputs.promoted == 'true' && github.ref == 'refs/heads/main'
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
@@ -414,7 +417,7 @@ jobs:
           persist-credentials: false
           fetch-depth: 0
 
-      - name: Append promotion entry and push (no skip-ci)
+      - name: Append promotion entry and open auto-merge lock PR
         env:
           IMAGE_ID: ${{ inputs.image_id }}
           LOCK_FILE: ${{ inputs.lock_file }}
@@ -423,6 +426,9 @@ jobs:
           SOURCE_KIND: ${{ inputs.source_kind }}
           SOURCE_REF: ${{ inputs.source_ref }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          # Unique per run AND per re-run attempt, so a re-run never collides with
+          # a branch/PR a prior attempt already opened.
+          LOCK_BRANCH: lock-update/${{ inputs.image_id }}-${{ github.run_id }}-${{ github.run_attempt }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # #CRITICAL: guard against path traversal in LOCK_FILE (caller-controlled).
@@ -430,6 +436,12 @@ jobs:
           # #VERIFY update the pattern if new lock-file naming conventions are added.
           if ! printf '%s' "${LOCK_FILE}" | grep -Eq '^[a-zA-Z0-9][a-zA-Z0-9._/-]*\.ya?ml$'; then
             echo "::error::lock_file has unexpected path shape: ${LOCK_FILE}"
+            exit 1
+          fi
+          # #CRITICAL: image_id is caller-controlled and reaches a git ref name and
+          # commit message; constrain it to a safe slug before any git use.
+          if ! printf '%s' "${IMAGE_ID}" | grep -Eq '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'; then
+            echo "::error::image_id has unexpected shape: ${IMAGE_ID}"
             exit 1
           fi
 
@@ -462,22 +474,50 @@ jobs:
             exit 1
           fi
 
-          for ATTEMPT in 1 2 3 4 5; do
-            git checkout -- "${LOCK_FILE}" 2>/dev/null || true
-            if ! git -c http.extraheader="${AUTH_HEADER}" pull --rebase origin main; then
-              git rebase --abort 2>/dev/null || true
-              sleep $((ATTEMPT * 2)); continue
-            fi
-            python3 scripts/update_approved_lock.py \
-              --lock-file "${LOCK_FILE}" --image-id "${IMAGE_ID}" \
-              --ghcr-ref "${GHCR_REF}" \
-              --source-digest "${SOURCE_DIGEST}" --target-digest "${TARGET_DIGEST}" \
-              --promoted-at "${PROMOTED_AT}" --promoted-by "${RUN_URL}" || { echo "::error::lock updater failed"; exit 1; }
-            git add "${LOCK_FILE}"
-            if git diff --cached --quiet; then echo "Entry already present."; exit 0; fi
-            # No [skip ci]: the lock validator MUST run on this commit (RT-10).
-            git commit -m "chore(lock): promote ${IMAGE_ID} to approved-lock"
-            if git -c http.extraheader="${AUTH_HEADER}" push origin HEAD:main; then exit 0; fi
-            COMMIT_SHA="$(git rev-parse HEAD)"; git reset --hard "${COMMIT_SHA}~1"; sleep $((ATTEMPT * 2))
-          done
-          echo "::error::Failed to push approved-lock update after retries."; exit 1
+          # Branch from the checked-out main HEAD and apply the lock entry there.
+          # We open a PR rather than pushing to main, so there is no push-to-main
+          # race to retry: the merge queue serializes and re-validates against
+          # then-current main, and a genuine approved-lock conflict surfaces on the
+          # PR for resolution instead of being silently clobbered.
+          git switch -c "${LOCK_BRANCH}"
+          python3 scripts/update_approved_lock.py \
+            --lock-file "${LOCK_FILE}" --image-id "${IMAGE_ID}" \
+            --ghcr-ref "${GHCR_REF}" \
+            --source-digest "${SOURCE_DIGEST}" --target-digest "${TARGET_DIGEST}" \
+            --promoted-at "${PROMOTED_AT}" --promoted-by "${RUN_URL}" || { echo "::error::lock updater failed"; exit 1; }
+          git add "${LOCK_FILE}"
+          if git diff --cached --quiet; then
+            echo "Entry already present; nothing to promote."
+            exit 0
+          fi
+          # No [skip ci]: the lock validator MUST run on the PR (RT-10). The bot
+          # commit is unsigned, which is fine on an unprotected feature branch; the
+          # squash merge is web-flow-signed and satisfies main's signature rule.
+          git commit -m "chore(lock): promote ${IMAGE_ID} to approved-lock"
+          git -c http.extraheader="${AUTH_HEADER}" push --force origin "HEAD:refs/heads/${LOCK_BRANCH}"
+
+          PR_BODY="Automated approved-lock promotion for \`${IMAGE_ID}\`.
+
+          - GHCR ref: \`${GHCR_REF}\`
+          - target digest: \`${TARGET_DIGEST}\`
+          - source digest: \`${SOURCE_DIGEST}\`
+          - promotion run: ${RUN_URL}
+
+          Opened by supply-chain-promote-core; squash auto-merge enabled so the
+          merge queue lands it after the catalog-schema check."
+          PR_URL="$(gh pr create --base main --head "${LOCK_BRANCH}" \
+            --title "chore(lock): promote ${IMAGE_ID} to approved-lock" \
+            --body "${PR_BODY}" 2>/dev/null || true)"
+          if [ -z "${PR_URL}" ]; then
+            PR_URL="$(gh pr view "${LOCK_BRANCH}" --json url -q .url 2>/dev/null || true)"
+          fi
+          if [ -z "${PR_URL}" ]; then
+            echo "::error::failed to create or locate the lock PR for ${LOCK_BRANCH}"
+            exit 1
+          fi
+          echo "Lock PR: ${PR_URL}"
+          # Best-effort: if auto-merge cannot be enabled (e.g. repo setting off),
+          # leave the PR open for manual merge rather than failing the promotion.
+          if ! gh pr merge --auto --squash "${LOCK_BRANCH}"; then
+            echo "::warning::could not enable auto-merge; ${PR_URL} left for manual merge"
+          fi
