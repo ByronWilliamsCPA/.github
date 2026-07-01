@@ -322,17 +322,43 @@ jobs:
           printf '%s' "${GHCR_PASS}" | \
             crane auth login ghcr.io --username "${GHCR_USER}" --password-stdin
 
-      - name: Push to GHCR and assert digest
+      - name: Publish to GHCR and assert digest
         id: push
         env:
           GHCR_NAME: ${{ inputs.ghcr_name }}
           GHCR_TAG: ${{ inputs.ghcr_tag }}
           PLATFORM: ${{ inputs.platform }}
           GHCR_OWNER: ${{ github.repository_owner }}
+          SOURCE_KIND: ${{ inputs.source_kind }}
+          SOURCE_REF: ${{ inputs.source_ref }}
+          UPSTREAM_USER: ${{ secrets.UPSTREAM_REGISTRY_USERNAME }}
+          UPSTREAM_PASS: ${{ secrets.UPSTREAM_REGISTRY_TOKEN }}
         run: |
           GHCR_OWNER=$(echo "${GHCR_OWNER}" | tr '[:upper:]' '[:lower:]')
           TARGET="ghcr.io/${GHCR_OWNER}/${GHCR_NAME}:${GHCR_TAG}"
-          crane push "${IMAGE_TAR}" "${TARGET}"
+
+          # #CRITICAL: a mirror MUST publish the EXACT verified upstream digest so
+          # the approved-lock invariant source_digest == target_digest holds
+          # (red-team RT-11). The scan job materialized the candidate to a local
+          # tar to scan it before any push (RT-4), but `crane push <tar>`
+          # re-serializes the image and mints a DIFFERENT manifest digest than the
+          # upstream, breaking that invariant. So for a registry source we publish
+          # with a digest-preserving `crane copy` of the same @digest we scanned
+          # (identical bytes, so the scan verdict still applies and RT-4 holds).
+          # An oci-tar source (build path) has no upstream registry, so the tar
+          # push is the only option there and source_digest collapses to the
+          # target digest anyway (see update-lock).
+          if [ "${SOURCE_KIND}" = "registry" ]; then
+            if [ -n "${UPSTREAM_USER}" ] && [ -n "${UPSTREAM_PASS}" ]; then
+              UPSTREAM_REGISTRY="${SOURCE_REF%%/*}"
+              echo "::add-mask::${UPSTREAM_PASS}"
+              printf '%s' "${UPSTREAM_PASS}" | \
+                crane auth login "${UPSTREAM_REGISTRY}" --username "${UPSTREAM_USER}" --password-stdin
+            fi
+            crane copy "${SOURCE_REF}" "${TARGET}"
+          else
+            crane push "${IMAGE_TAR}" "${TARGET}"
+          fi
 
           TARGET_DIGEST=$(crane digest "${TARGET}" --platform "${PLATFORM}")
           if ! printf '%s' "${TARGET_DIGEST}" | grep -Eq '^sha256:[0-9a-f]{64}$'; then
