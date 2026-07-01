@@ -395,6 +395,19 @@ jobs:
   # commits to a per-run branch, opens a PR, and enables squash auto-merge. The
   # merge queue lands it web-flow-signed AFTER the lock validator runs on the PR
   # (red-team RT-10 preserved: no [skip ci], the validator gates the merge).
+  #
+  # #ASSUME the lock PR's required checks (e.g. "Validate catalog schema" in the
+  # caller repo) fire automatically even though the PR is opened by the bot-
+  # identity GITHUB_TOKEN below. GitHub documents that a pull_request
+  # (opened/synchronize/reopened) run triggered by GITHUB_TOKEN, as opposed to a
+  # PAT or GitHub App token, is created in an "approval-required" state rather
+  # than run immediately. If the caller repo's validator is pull_request-
+  # triggered, every lock PR could sit pending manual approval instead of
+  # auto-merging, silently defeating this job's purpose.
+  # #VERIFY empirically, on a real promotion run against a real caller repo, that
+  # the lock PR's required check appears and runs without a manual "Approve and
+  # run" click. If it does not, swap GH_TOKEN below for a GitHub App installation
+  # token or PAT.
   # ---------------------------------------------------------------------------
   update-lock:
     name: Update approved-lock
@@ -439,9 +452,19 @@ jobs:
             exit 1
           fi
           # #CRITICAL: image_id is caller-controlled and reaches a git ref name and
-          # commit message; constrain it to a safe slug before any git use.
-          if ! printf '%s' "${IMAGE_ID}" | grep -Eq '^[a-zA-Z0-9][a-zA-Z0-9._-]*$'; then
+          # commit message; constrain it to a safe, length-bounded slug before any
+          # git use. Length cap avoids a degenerate commit subject / PR title.
+          if ! printf '%s' "${IMAGE_ID}" | grep -Eq '^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$'; then
             echo "::error::image_id has unexpected shape: ${IMAGE_ID}"
+            exit 1
+          fi
+          # #CRITICAL: ghcr_name/ghcr_tag (caller-controlled workflow_call inputs)
+          # are not validated where declared; GHCR_REF (built from them in the
+          # publish job) now reaches the PR_BODY markdown below via this job, so
+          # constrain its shape here before it is used in any git/gh command.
+          # #VERIFY update the pattern if new registry naming conventions are added.
+          if ! printf '%s' "${GHCR_REF}" | grep -Eq '^ghcr\.io/[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+:[a-zA-Z0-9._-]+$'; then
+            echo "::error::ghcr_ref has unexpected shape: ${GHCR_REF}"
             exit 1
           fi
 
@@ -479,6 +502,10 @@ jobs:
           # race to retry: the merge queue serializes and re-validates against
           # then-current main, and a genuine approved-lock conflict surfaces on the
           # PR for resolution instead of being silently clobbered.
+          # #ASSUME the caller repo (e.g. container-images) has a GitHub merge
+          # queue configured on its default branch; this reusable workflow cannot
+          # see or enforce that configuration.
+          # #VERIFY the caller repo's branch ruleset before onboarding a new caller.
           git switch -c "${LOCK_BRANCH}"
           python3 scripts/update_approved_lock.py \
             --lock-file "${LOCK_FILE}" --image-id "${IMAGE_ID}" \
@@ -486,6 +513,11 @@ jobs:
             --source-digest "${SOURCE_DIGEST}" --target-digest "${TARGET_DIGEST}" \
             --promoted-at "${PROMOTED_AT}" --promoted-by "${RUN_URL}" || { echo "::error::lock updater failed"; exit 1; }
           git add "${LOCK_FILE}"
+          # #ASSUME scripts/update_approved_lock.py is idempotent (a re-run against
+          # an already-promoted image_id produces a byte-identical LOCK_FILE) and
+          # touches only LOCK_FILE, so an empty `git diff --cached` here reliably
+          # means "nothing new to promote," not "the script silently no-op'd."
+          # #VERIFY this assumption in the updater script if it ever changes.
           if git diff --cached --quiet; then
             echo "Entry already present; nothing to promote."
             exit 0
@@ -493,24 +525,38 @@ jobs:
           # No [skip ci]: the lock validator MUST run on the PR (RT-10). The bot
           # commit is unsigned, which is fine on an unprotected feature branch; the
           # squash merge is web-flow-signed and satisfies main's signature rule.
+          # Tracked follow-up to sign the bot commit itself: #239.
           git commit -m "chore(lock): promote ${IMAGE_ID} to approved-lock"
-          git -c http.extraheader="${AUTH_HEADER}" push --force origin "HEAD:refs/heads/${LOCK_BRANCH}"
+          # #ASSUME LOCK_BRANCH is unique per run + run_attempt (see the LOCK_BRANCH
+          # env above), so nothing should ever already exist at this ref; a plain
+          # push (not --force) is used deliberately so an unexpected collision
+          # fails loudly instead of silently overwriting another branch/PR.
+          # #VERIFY if this push ever fails with "not a fast-forward" or similar,
+          # the run_id/run_attempt uniqueness assumption has been violated; do not
+          # reach for --force without investigating why the branch already existed.
+          git -c http.extraheader="${AUTH_HEADER}" push origin "HEAD:refs/heads/${LOCK_BRANCH}"
 
-          PR_BODY="Automated approved-lock promotion for \`${IMAGE_ID}\`.
-
-          - GHCR ref: \`${GHCR_REF}\`
-          - target digest: \`${TARGET_DIGEST}\`
-          - source digest: \`${SOURCE_DIGEST}\`
-          - promotion run: ${RUN_URL}
-
-          Opened by supply-chain-promote-core; squash auto-merge enabled so the
-          merge queue lands it after the catalog-schema check."
+          # Built with printf (not a multi-line double-quoted string) so the
+          # YAML step's own indentation is never captured as literal content:
+          # a naive multi-line assignment here previously baked ~10 leading
+          # spaces into every continuation line, breaking the rendered markdown.
+          PR_BODY="$(printf 'Automated approved-lock promotion for `%s`.\n\n'\
+          '- GHCR ref: `%s`\n- target digest: `%s`\n- source digest: `%s`\n'\
+          '- promotion run: %s\n\nOpened by supply-chain-promote-core; squash '\
+          'auto-merge enabled so the merge queue lands it after the catalog-schema check.' \
+            "${IMAGE_ID}" "${GHCR_REF}" "${TARGET_DIGEST}" "${SOURCE_DIGEST}" "${RUN_URL}")"
+          CREATE_ERR="$(mktemp)"
           PR_URL="$(gh pr create --base main --head "${LOCK_BRANCH}" \
             --title "chore(lock): promote ${IMAGE_ID} to approved-lock" \
-            --body "${PR_BODY}" 2>/dev/null || true)"
+            --body "${PR_BODY}" 2>"${CREATE_ERR}" || true)"
           if [ -z "${PR_URL}" ]; then
+            # gh pr create's stderr is preserved here rather than discarded, so an
+            # auth/rate-limit/validation failure is distinguishable in the logs
+            # from the expected "PR already exists" fallback below.
+            echo "::warning::gh pr create returned no URL; stderr: $(cat "${CREATE_ERR}")"
             PR_URL="$(gh pr view "${LOCK_BRANCH}" --json url -q .url 2>/dev/null || true)"
           fi
+          rm -f "${CREATE_ERR}"
           if [ -z "${PR_URL}" ]; then
             echo "::error::failed to create or locate the lock PR for ${LOCK_BRANCH}"
             exit 1
