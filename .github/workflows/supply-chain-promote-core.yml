@@ -445,10 +445,17 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # #CRITICAL: guard against path traversal in LOCK_FILE (caller-controlled).
-          # Allows only repo-relative YAML paths; rejects leading slash, .., spaces.
+          # Allows only repo-relative YAML paths; rejects leading slash, spaces.
+          # The shape regex alone does NOT reject ".." (a value like
+          # "catalog/../.github/workflows/ci.yml" matches it), so ".." is
+          # rejected explicitly below; do not rely on the regex for that.
           # #VERIFY update the pattern if new lock-file naming conventions are added.
           if ! printf '%s' "${LOCK_FILE}" | grep -Eq '^[a-zA-Z0-9][a-zA-Z0-9._/-]*\.ya?ml$'; then
             echo "::error::lock_file has unexpected path shape: ${LOCK_FILE}"
+            exit 1
+          fi
+          if printf '%s' "${LOCK_FILE}" | grep -q '\.\.'; then
+            echo "::error::lock_file must not contain '..' path segments: ${LOCK_FILE}"
             exit 1
           fi
           # #CRITICAL: image_id is caller-controlled and reaches a git ref name and
