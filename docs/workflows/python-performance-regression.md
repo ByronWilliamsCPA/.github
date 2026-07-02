@@ -38,7 +38,7 @@ numeric metric key matching the `primary-metric` input. Example:
 ```yaml
 jobs:
   perf:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-performance-regression.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-performance-regression.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       benchmark-script: scripts/benchmark.py
       regression-threshold: 15

@@ -12,7 +12,7 @@ Replace a `python-pr-validation.yml` caller with `python-ci.yml`:
 ```yaml
 jobs:
   ci:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     secrets: inherit
 ```
 

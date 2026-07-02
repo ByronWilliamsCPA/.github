@@ -6,7 +6,7 @@
 # Usage from downstream repos:
 #   jobs:
 #     sonarcloud:
-#       uses: ByronWilliamsCPA/.github/.github/workflows/python-sonarcloud.yml@v1
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-sonarcloud.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
 #       permissions:
 #         contents: read
 #         pull-requests: write   # REQUIRED for PR decoration -- see Known Limitations

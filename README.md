@@ -117,7 +117,7 @@ on: [push, pull_request]
 
 jobs:
   ci:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       python-versions: '["3.11", "3.12"]'
     secrets:
@@ -151,7 +151,7 @@ overridden by a repo-specific copy).
 **To use the reusable workflows in your Python project**, reference them directly by name -- no fork or clone needed:
 
 ```yaml
-uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
+uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
 ```
 
 See [USAGE_EXAMPLES.md](USAGE_EXAMPLES.md) for full examples and all available input parameters. See the [Prerequisites](#prerequisites) section above for what your repo must provide.

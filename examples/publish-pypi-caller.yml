@@ -30,7 +30,7 @@ on:
 
 jobs:
   publish:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-publish-pypi.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-publish-pypi.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       # REQUIRED: Your PyPI package name (used in summary display)
       package-name: 'image-preprocessing-detector'  # ← UPDATE THIS

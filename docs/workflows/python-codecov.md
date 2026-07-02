@@ -28,7 +28,7 @@ as a separate job after the main CI job uploads a coverage artifact.
 ```yaml
 jobs:
   upload-coverage:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-codecov.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-codecov.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 ```

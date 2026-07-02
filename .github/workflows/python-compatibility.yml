@@ -6,7 +6,7 @@
 # Usage from downstream repos:
 #   jobs:
 #     compatibility:
-#       uses: ByronWilliamsCPA/.github/.github/workflows/python-compatibility.yml@v1
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-compatibility.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
 #       with:
 #         python-versions: '["3.10", "3.11", "3.12", "3.13"]'
 #         operating-systems: '["ubuntu-latest", "macos-latest", "windows-latest"]'
@@ -28,7 +28,7 @@
 # System Dependencies Example (for packages like python-magic):
 #   jobs:
 #     compatibility:
-#       uses: ByronWilliamsCPA/.github/.github/workflows/python-compatibility.yml@v1
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-compatibility.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
 #       with:
 #         system-deps-macos: 'libmagic'
 #         system-deps-ubuntu: 'libmagic-dev'

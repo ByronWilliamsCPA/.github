@@ -47,7 +47,7 @@ permissions: read-all
 jobs:
   fuzzing:
     name: ClusterFuzzLite Security Fuzzing
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     permissions:
       contents: read
       security-events: write  # Required for SARIF upload

@@ -47,7 +47,7 @@ locate the code without complaint:
 ```yaml
 jobs:
   ci:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       source-directory: '.'
       test-directory: tests
@@ -66,7 +66,7 @@ on:
 
 jobs:
   ci:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       python-version: "3.12"
       coverage-threshold: 80

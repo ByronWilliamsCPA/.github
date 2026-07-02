@@ -41,7 +41,7 @@ generation, SLSA provenance attestation, and PR comments with build info.
 ```yaml
 jobs:
   build:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-docker.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-docker.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       image-name: my-app
       push: ${{ github.ref == 'refs/heads/main' }}

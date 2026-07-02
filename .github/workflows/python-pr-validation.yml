@@ -31,12 +31,12 @@
 # Before (deprecated):
 #   jobs:
 #     pr-validation:
-#       uses: ByronWilliamsCPA/.github/.github/workflows/python-pr-validation.yml@v1
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-pr-validation.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
 #
 # After (recommended):
 #   jobs:
 #     ci:
-#       uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
 #       with:
 #         python-version: '3.12'
 #         coverage-threshold: 80

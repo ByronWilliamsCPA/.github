@@ -36,7 +36,7 @@ on:
 
 jobs:
   sonarcloud:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-sonarcloud.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-sonarcloud.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     with:
@@ -96,7 +96,7 @@ on:
 
 jobs:
   sonarcloud:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-sonarcloud.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-sonarcloud.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     with:
@@ -109,7 +109,7 @@ jobs:
 ```yaml
 jobs:
   sonarcloud:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-sonarcloud.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-sonarcloud.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     with:
@@ -124,7 +124,7 @@ jobs:
 ```yaml
 jobs:
   sonarcloud:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-sonarcloud.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-sonarcloud.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     with:
@@ -138,7 +138,7 @@ jobs:
 ```yaml
 jobs:
   sonarcloud:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-sonarcloud.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-sonarcloud.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     with:
@@ -152,7 +152,7 @@ jobs:
 ```yaml
 jobs:
   sonarcloud:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-sonarcloud.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-sonarcloud.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     with:
@@ -167,7 +167,7 @@ jobs:
 ```yaml
 jobs:
   sonarcloud:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-sonarcloud.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-sonarcloud.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     with:
@@ -325,11 +325,11 @@ on: [push, pull_request]
 
 jobs:
   ci:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
 
   sonarcloud:
     needs: ci
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-sonarcloud.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-sonarcloud.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     with:
@@ -342,10 +342,10 @@ jobs:
 ```yaml
 jobs:
   security:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-security-analysis.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-security-analysis.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
 
   sonarcloud:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-sonarcloud.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-sonarcloud.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     with:

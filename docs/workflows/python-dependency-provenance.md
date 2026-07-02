@@ -33,7 +33,7 @@ transitive package comes from so the fix targets the right direct dependency.
 ```yaml
 jobs:
   provenance:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-dependency-provenance.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-dependency-provenance.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     permissions:
       contents: read
       issues: write   # only the post-issue job needs this
@@ -54,7 +54,7 @@ on:
 
 jobs:
   provenance:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-dependency-provenance.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-dependency-provenance.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     permissions:
       contents: read
       issues: write

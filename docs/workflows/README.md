@@ -30,7 +30,7 @@ on:
 
 jobs:
   my-job:
-    uses: ByronWilliamsCPA/.github/.github/workflows/WORKFLOW-NAME.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/WORKFLOW-NAME.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       # Workflow-specific inputs
       input-name: 'value'
@@ -50,7 +50,7 @@ on:
 
 jobs:
   publish:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-publish-pypi.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-publish-pypi.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       package-name: 'my-package'
     permissions:
@@ -70,7 +70,7 @@ See [examples/publish-pypi-caller.yml](../../examples/publish-pypi-caller.yml) f
 2. **Consistency** - Same behavior across all projects
 3. **Security** - Built-in security scanning and best practices
 4. **Reduced Boilerplate** - Less code in each repository
-5. **Version Pinning** - Pin to `@v1` (moving major tag, recommended), `@v1.0.0` (immutable), or `@<sha>` (most secure). See `USAGE_EXAMPLES.md` for details. Avoid `@main` for production callers.
+5. **Version Pinning** - Pin to a full commit SHA with a release-tag comment (`@<sha> # vX.Y.Z`, recommended; Renovate advances it) or an immutable point tag (`@vX.Y.Z`). There is no floating major tag. See `USAGE_EXAMPLES.md` for details. Avoid `@main` for production callers.
 
 ## Workflow Development
 
@@ -80,7 +80,7 @@ See [examples/publish-pypi-caller.yml](../../examples/publish-pypi-caller.yml) f
 2. **Define inputs** using `inputs:` section
 3. **Document usage** in this directory
 4. **Create example** in `examples/` directory
-5. **Test thoroughly** before promoting to `@v1` (moving major tag) or cutting a new immutable `@v1.x.x` tag
+5. **Test thoroughly** before merging to `main`; `release-tag.yml` cuts the immutable `vX.Y.Z` point tag automatically on merge
 
 ### Workflow Naming Convention
 

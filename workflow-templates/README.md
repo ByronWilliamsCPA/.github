@@ -160,7 +160,7 @@ Continuous code quality monitoring:
 
 Templates come in two shapes:
 
-- Thin caller: the template's job uses the org reusable workflow at `@v1`, so the implementation lives once in `.github/workflows/python-<name>.yml`. `python-scorecard.yml` is the reference example.
+- Thin caller: the template's job uses the org reusable workflow at a full-SHA pin with a release-tag comment (`@<sha> # vX.Y.Z`), so the implementation lives once in `.github/workflows/python-<name>.yml`. `python-scorecard.yml` is the reference example.
 - Inline: the template implements the steps directly.
 
 Convention: prefer the thin-caller shape so logic is not duplicated between the gallery template and its reusable namesake. These templates are still inline and are tracked for conversion: `python-ci`, `python-security-analysis`, `python-docs`, `python-publish-pypi`, `python-release`, `python-sonarcloud`.

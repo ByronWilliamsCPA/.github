@@ -4,12 +4,30 @@ All notable changes to this project's shared workflow templates are documented h
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-This project uses date-based version headers (e.g. `[2025-01-07]`) rather than
-semver because it is a shared workflow library with continuous deployment; there
-are no numbered point releases. Consumers pin the moving `v1` tag, which tracks
-the latest reviewed commit on `main` and is re-pointed as changes land.
+This changelog uses date-based section headers (e.g. `[2025-01-07]`) because
+the library ships continuously; every push to `main` also cuts an immutable
+semver point tag (`vX.Y.Z`) via `release-tag.yml`. There is no floating major
+tag: the org tag-protection ruleset forbids re-pointing any `v*` tag. Consumers
+pin a full 40-character commit SHA (Renovate advances it release by release) or
+an immutable point tag; see `USAGE_EXAMPLES.md` for the pinning guidance.
 
 ## [Unreleased]
+
+### Fixed
+
+- Retired the frozen `v1` floating-tag scheme. The `v1` tag was created before
+  the org tag-protection ruleset made all `v*` tags immutable and had been
+  frozen at the `v1.1.0` commit ever since, while docs and `renovate.json`
+  still told consumers it moved; any `@v1` caller was silently stuck with
+  v1.1.0-era workflow code (including the Trivy scanner that PR #229 replaced
+  with Grype after Trivy's release infrastructure was compromised). Removed
+  `followTag: "v1"` from `renovate.json` so Renovate can advance SHA pins to
+  the latest release tag, rewrote the version-pinning guidance in
+  `USAGE_EXAMPLES.md`, swept `@v1` out of every workflow header, doc, and
+  example in favor of SHA pins with a release-tag comment, and added a
+  pre-commit guard (`check-no-floating-v1.sh`) that blocks reintroduction.
+  The stale `v1` tag itself is deleted separately by an org admin (tag
+  deletion requires a ruleset bypass).
 
 ### Added
 

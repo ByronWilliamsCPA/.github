@@ -67,7 +67,7 @@ on:
 
 jobs:
   fuzzing:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       fuzz-seconds: 1200  # 20 minutes
       sanitizer: 'address'
@@ -146,7 +146,7 @@ on:
 
 jobs:
   fuzzing:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       fuzz-seconds: 1200  # Extended 20-minute run
       sanitizer: 'address'
@@ -166,7 +166,7 @@ on:
 
 jobs:
   fuzzing:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       fuzz-seconds: 600  # Shorter 10-minute run
       sanitizer: 'address'
@@ -184,13 +184,13 @@ on:
 
 jobs:
   address-sanitizer:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       fuzz-seconds: 900
       sanitizer: 'address'
 
   undefined-sanitizer:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       fuzz-seconds: 900
       sanitizer: 'undefined'
@@ -201,7 +201,7 @@ jobs:
 ```yaml
 jobs:
   fuzzing:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       fuzz-target-directory: 'tests/security/fuzz'
       fuzz-seconds: 1200
@@ -212,7 +212,7 @@ jobs:
 ```yaml
 jobs:
   fuzzing-build-test:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       dry-run: true  # Only build, don't execute
 ```
@@ -487,12 +487,12 @@ Test across Python versions:
 ```yaml
 jobs:
   fuzzing-py311:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       python-version: '3.11'
 
   fuzzing-py312:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       python-version: '3.12'
 ```
