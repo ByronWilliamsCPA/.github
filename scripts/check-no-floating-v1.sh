@@ -46,12 +46,14 @@ for file in "${staged_files[@]}"; do
   case "$(basename "${file}")" in
     renovate.json|renovate.json5|.renovaterc|.renovaterc.json|.renovaterc.json5)
       # Unquoted-key tolerant: JSON5 configs may write followTag: without
-      # surrounding double quotes. Line-anchored so prose inside a rule
-      # description (e.g. "No followTag: the org ruleset...") does not
-      # trip the guard; a real key always starts its own line in
-      # formatted config.
+      # surrounding double quotes. A real key is preceded by an object
+      # opener, a separator, or line start ({, comma, or ^); prose inside
+      # a rule description (e.g. "No followTag: the org ruleset...") is
+      # preceded by a word and space, so it does not trip the guard. This
+      # also catches compact single-line JSON, which line-anchoring alone
+      # misses.
       status=0
-      grep -Eq -- '^[[:space:]]*"?followTag"?[[:space:]]*:' "${file}" || status=$?
+      grep -Eq -- '(^|[{,])[[:space:]]*"?followTag"?[[:space:]]*:' "${file}" || status=$?
       if [[ ${status} -eq 0 ]]; then
         found+=("${file} (followTag)")
       elif [[ ${status} -ge 2 ]]; then
