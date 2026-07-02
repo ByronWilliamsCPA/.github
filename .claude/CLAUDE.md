@@ -12,13 +12,13 @@ for ByronWilliamsCPA. It contains:
 - Operator and maintenance shell scripts (`scripts/*.sh` plus `sync_org_files.sh`)
 - Org-level profile (`profile/README.md`)
 
-There is no Python package and no build system in this repo. There are nine shell
-scripts (the eight under `scripts/` plus `sync_org_files.sh`). The Bats suites under
-`tests/` cover four of them: `update-pinned-actions.sh`, `fleet-audit-sha-pins.sh`,
-`transfer-repos.sh`, and `sync_org_files.sh`. The remaining five
-(`calculate-image-storage.sh`, `check-no-em-dash.sh`, `check-python-versions.sh`,
-`regenerate-checksums.sh`, `sync-secrets.sh`) are not yet covered. All `tests/*.bats`
-files run via `.github/workflows/shell-tests.yml`.
+There is no Python package and no build system in this repo. There are ten shell
+scripts (the nine under `scripts/` plus `sync_org_files.sh`). The Bats suites under
+`tests/` cover six of them: `update-pinned-actions.sh`, `fleet-audit-sha-pins.sh`,
+`transfer-repos.sh`, `sync_org_files.sh`, `sync-secrets.sh`, and
+`check-no-floating-v1.sh`. The remaining four (`calculate-image-storage.sh`,
+`check-no-em-dash.sh`, `check-python-versions.sh`, `regenerate-checksums.sh`) are
+not yet covered. All `tests/*.bats` files run via `.github/workflows/shell-tests.yml`.
 
 ## Model Selection
 

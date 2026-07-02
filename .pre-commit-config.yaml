@@ -93,8 +93,9 @@ repos:
       - id: no-floating-v1
         name: No floating v1 tag
         description: >-
-          Block org reusable-workflow references pinned to the retired
-          floating v1 tag and followTag reintroduction in renovate.json.
+          Block org reusable-workflow references pinned to a bare floating
+          major tag (the retired v1, or any @vN) and followTag
+          reintroduction in Renovate configs.
         entry: scripts/check-no-floating-v1.sh
         language: script
         pass_filenames: false

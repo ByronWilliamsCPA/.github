@@ -71,9 +71,9 @@
       "matchManagers": [
         "github-actions"
       ],
-      "matchPackagePatterns": [
-        "ByronWilliamsCPA/.github",
-        "williaby/.github"
+      "matchPackageNames": [
+        "/^ByronWilliamsCPA\\/\\.github/",
+        "/^williaby\\/\\.github/"
       ],
       "versioning": "semver"
     }

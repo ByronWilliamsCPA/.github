@@ -446,7 +446,7 @@ Workflow runs appear in **your repo's Actions tab**, not the `.github` repo.
 ### Common Issues
 
 **Issue**: "Workflow not found"
-**Fix**: Check path is exactly: `ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1`
+**Fix**: Check the `uses:` path is exactly `ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@d5cf99101d4150ae5832d154cb42993705a09e31`; the trailing `# vX.Y.Z` release comment is not part of the path
 
 **Issue**: "permissions denied"
 **Fix**: Add `permissions:` block in calling workflow if needed
