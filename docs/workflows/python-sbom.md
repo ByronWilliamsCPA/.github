@@ -8,7 +8,7 @@ license scanning over it.
 ```yaml
 jobs:
   sbom:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-sbom.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-sbom.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     secrets: inherit
 ```
 

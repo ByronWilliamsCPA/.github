@@ -28,10 +28,10 @@ This document summarizes the four new reusable workflows added to the organizati
 ```yaml
 jobs:
   security-static:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-security-analysis.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-security-analysis.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
 
   security-fuzzing:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       fuzz-seconds: 600
 ```
@@ -53,18 +53,18 @@ jobs:
 # Option 1: Comprehensive (SonarCloud)
 jobs:
   sonarcloud:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-sonarcloud.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-sonarcloud.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
 # Option 2: Lightweight (Qlty)
 jobs:
   ci:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
 
   qlty:
     needs: ci
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-qlty-coverage.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-qlty-coverage.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     secrets:
       QLTY_COVERAGE_TOKEN: ${{ secrets.QLTY_COVERAGE_TOKEN }}
 ```
@@ -81,18 +81,18 @@ on: [push, pull_request]
 jobs:
   # Static analysis
   security-scan:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-security-analysis.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-security-analysis.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
 
   # Dynamic fuzzing (weekly)
   fuzzing:
     if: github.event_name == 'schedule'
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       fuzz-seconds: 1200
 
   # Code quality
   sonarcloud:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-sonarcloud.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-sonarcloud.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 ```
@@ -110,7 +110,7 @@ on:
 
 jobs:
   performance:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-performance-regression.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-performance-regression.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       benchmark-script: 'scripts/benchmark.py'
       regression-threshold: 5.0  # Strict 5% threshold
@@ -126,11 +126,11 @@ on: [push, pull_request]
 
 jobs:
   ci:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
 
   sonarcloud:
     needs: ci
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-sonarcloud.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-sonarcloud.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     with:
@@ -138,7 +138,7 @@ jobs:
 
   performance:
     needs: ci
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-performance-regression.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-performance-regression.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       benchmark-script: 'scripts/benchmark.py'
       fail-on-regression: true

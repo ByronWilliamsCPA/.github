@@ -93,7 +93,7 @@ permissions: read-all
 
 jobs:
   fuzzing:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     permissions:
       contents: read
       security-events: write
@@ -163,7 +163,7 @@ permissions: read-all
 
 jobs:
   fuzzing:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     permissions:
       contents: read
       security-events: write
@@ -180,7 +180,7 @@ Use dry-run to validate setup:
 ```yaml
 jobs:
   fuzzing-test:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       dry-run: true  # Build only, no execution
 ```
@@ -251,12 +251,12 @@ with:
 ```yaml
 jobs:
   address-sanitizer:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       sanitizer: 'address'
 
   undefined-sanitizer:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-fuzzing.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       sanitizer: 'undefined'
 ```

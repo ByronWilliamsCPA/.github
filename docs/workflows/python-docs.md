@@ -18,7 +18,7 @@ Also checks docstring coverage using interrogate.
 ```yaml
 jobs:
   docs:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-docs.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-docs.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       deploy-to-pages: ${{ github.ref == 'refs/heads/main' }}
 ```

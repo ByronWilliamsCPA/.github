@@ -15,7 +15,7 @@ on:
 
 jobs:
   reuse:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-reuse.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-reuse.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
 ```
 
 ## Secrets

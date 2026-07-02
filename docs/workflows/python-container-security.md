@@ -34,7 +34,7 @@ for Dockerfile linting and optionally generates a container SBOM.
 ```yaml
 jobs:
   container-scan:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-container-security.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-container-security.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       severity-threshold: CRITICAL,HIGH
 ```

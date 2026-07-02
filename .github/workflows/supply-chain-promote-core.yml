@@ -21,11 +21,11 @@
 # Usage from a caller repo:
 #   jobs:
 #     verify:
-#       uses: ByronWilliamsCPA/.github/.github/workflows/supply-chain-mirror-verify.yml@v1
+#       uses: ByronWilliamsCPA/.github/.github/workflows/supply-chain-mirror-verify.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
 #       with: { upstream_registry: dhi.io, upstream_name: postgres, upstream_tag: "17" }
 #     promote:
 #       needs: verify
-#       uses: ByronWilliamsCPA/.github/.github/workflows/supply-chain-promote-core.yml@v1
+#       uses: ByronWilliamsCPA/.github/.github/workflows/supply-chain-promote-core.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
 #       with:
 #         image_id: dhi-postgres-17
 #         source_kind: registry

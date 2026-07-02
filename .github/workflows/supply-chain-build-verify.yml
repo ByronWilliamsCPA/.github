@@ -21,7 +21,7 @@
 # Usage from a caller repo:
 #   jobs:
 #     build:
-#       uses: ByronWilliamsCPA/.github/.github/workflows/supply-chain-build-verify.yml@v1
+#       uses: ByronWilliamsCPA/.github/.github/workflows/supply-chain-build-verify.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
 #       with:
 #         image_id: my-service
 #         dockerfile_path: ./Dockerfile
@@ -34,7 +34,7 @@
 #           COMMIT_SHA=${{ github.sha }}
 #     promote:
 #       needs: build
-#       uses: ByronWilliamsCPA/.github/.github/workflows/supply-chain-promote-core.yml@v1
+#       uses: ByronWilliamsCPA/.github/.github/workflows/supply-chain-promote-core.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
 #       with:
 #         source_kind: oci-tar
 #         source_artifact: ${{ needs.build.outputs.artifact_name }}

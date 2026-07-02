@@ -43,7 +43,7 @@ Implement tiered testing strategy:
 ```yaml
 jobs:
   ci:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       python-version: '3.12'  # Primary version for quality checks
 ```
@@ -53,7 +53,7 @@ jobs:
 ```yaml
 jobs:
   ci:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       python-version: '3.12'
       enable-matrix-testing: true
@@ -66,7 +66,7 @@ jobs:
 ```yaml
 jobs:
   ci:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       python-version: '3.13'
       enable-matrix-testing: true
@@ -124,7 +124,7 @@ Skip matrix testing on draft PRs by default:
 ```yaml
 jobs:
   compatibility:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-compatibility.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-compatibility.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       python-versions: '["3.11", "3.12", "3.13"]'
       operating-systems: '["ubuntu-latest", "macos-latest", "windows-latest"]'
@@ -136,7 +136,7 @@ jobs:
 ```yaml
 jobs:
   compatibility:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-compatibility.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-compatibility.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       python-versions: '["3.11", "3.12", "3.13"]'
       skip-on-draft: false  # Always run matrix, even on drafts
@@ -215,7 +215,7 @@ on:
 
 jobs:
   mutation:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-mutation.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-mutation.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       source-directory: 'src'
       mutation-threshold: 80
@@ -234,7 +234,7 @@ on:
 
 jobs:
   mutation:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-mutation.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-mutation.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       mutation-threshold: 85
       fail-under-threshold: true  # Block release on low scores
@@ -249,7 +249,7 @@ on:
 
 jobs:
   mutation:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-mutation.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-mutation.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     # This will display performance warning in workflow summary
 ```
 
@@ -292,7 +292,7 @@ Recommendation: Run mutation testing on schedule (weekly/monthly) instead.
 ```yaml
 jobs:
   ci:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       python-version: '3.12'
 ```
@@ -302,7 +302,7 @@ jobs:
 ```yaml
 jobs:
   ci:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-ci.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       python-version: '3.12'
       enable-matrix-testing: true  # Enable tiered testing
@@ -315,7 +315,7 @@ jobs:
 ```yaml
 jobs:
   compatibility:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-compatibility.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-compatibility.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
 ```
 
 **After:**
@@ -323,7 +323,7 @@ jobs:
 ```yaml
 jobs:
   compatibility:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-compatibility.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-compatibility.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       skip-on-draft: true  # Add this to save costs
 ```
@@ -337,7 +337,7 @@ on: [pull_request, push]
 
 jobs:
   mutation:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-mutation.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-mutation.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
 ```
 
 **After:**
@@ -349,7 +349,7 @@ on:
 
 jobs:
   mutation:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-mutation.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-mutation.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
 ```
 
 ---

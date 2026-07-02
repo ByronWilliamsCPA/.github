@@ -12,7 +12,7 @@ on:
 
 jobs:
   release:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-release.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-release.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     permissions:
       contents: write      # create the GitHub release
       id-token: write      # Sigstore keyless signing

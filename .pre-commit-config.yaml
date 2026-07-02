@@ -90,3 +90,13 @@ repos:
         pass_filenames: false
         types: [text]
         stages: [pre-commit]
+      - id: no-floating-v1
+        name: No floating v1 tag
+        description: >-
+          Block org reusable-workflow references pinned to the retired
+          floating v1 tag and followTag reintroduction in renovate.json.
+        entry: scripts/check-no-floating-v1.sh
+        language: script
+        pass_filenames: false
+        types: [text]
+        stages: [pre-commit]

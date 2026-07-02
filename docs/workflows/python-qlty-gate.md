@@ -17,7 +17,7 @@ scheduled debt tracker (full scan mode).
 jobs:
   qlty-gate:
     if: github.event_name == 'pull_request'
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-qlty-gate.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-qlty-gate.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       fail-level: medium
       upstream: origin/${{ github.base_ref }}
@@ -31,7 +31,7 @@ jobs:
 jobs:
   qlty-gate:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-qlty-gate.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-qlty-gate.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     with:
       fail-level: high
       check-all: true

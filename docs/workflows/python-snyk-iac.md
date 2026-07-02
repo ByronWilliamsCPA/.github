@@ -24,7 +24,7 @@ is absent, all scan jobs no-op cleanly.
 ```yaml
 jobs:
   snyk-iac:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-snyk-iac.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-snyk-iac.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     permissions:
       contents: read
       security-events: write   # required for SARIF upload
@@ -116,7 +116,7 @@ and Docker Compose files in the repo root:
 ```yaml
 jobs:
   snyk-iac:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-snyk-iac.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-snyk-iac.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     permissions:
       contents: read
       security-events: write

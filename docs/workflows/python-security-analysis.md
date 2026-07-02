@@ -15,7 +15,7 @@ on:
 
 jobs:
   security:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-security-analysis.yml@v1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-security-analysis.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     permissions:
       security-events: write  # upload SARIF
       contents: read
