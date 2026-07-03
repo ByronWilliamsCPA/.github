@@ -233,7 +233,7 @@ jobs:
 
       - name: Upload Grype SARIF
         if: always() && hashFiles('grype-results.sarif') != ''
-        uses: github/codeql-action/upload-sarif@4e828ff8d448a8a6e532957b1811f387a63867e8 # v4.30.4
+        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
         with:
           sarif_file: grype-results.sarif
           category: grype-${{ inputs.image_id }}
@@ -404,7 +404,7 @@ jobs:
 
       - name: GitHub build provenance attestation
         if: inputs.sign && github.ref == 'refs/heads/main'
-        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
           subject-name: ghcr.io/${{ github.repository_owner }}/${{ inputs.ghcr_name }}
           subject-digest: ${{ steps.push.outputs.target_digest }}
