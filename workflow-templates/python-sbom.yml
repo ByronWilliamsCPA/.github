@@ -35,7 +35,7 @@ permissions:
 jobs:
   sbom:
     name: SBOM Generation & Scan
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-sbom.yml@f9625c5513a031a3d3a127681ee9d238e38c313e # v7.0.3
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-sbom.yml@82b60068fda71ad6d52bf3635a3c352d095f170b # v7.0.6
     with:
       python-version: '3.12'
       fail-on-vulnerabilities: true
