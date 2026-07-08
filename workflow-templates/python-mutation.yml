@@ -36,7 +36,7 @@ permissions:
 jobs:
   mutation:
     name: Mutation Testing
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-mutation.yml@f9625c5513a031a3d3a127681ee9d238e38c313e # v7.0.3
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-mutation.yml@82b60068fda71ad6d52bf3635a3c352d095f170b # v7.0.6
     with:
       source-directory: 'src'
       test-directory: 'tests'
