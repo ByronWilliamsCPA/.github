@@ -25,4 +25,4 @@ jobs:
       security-events: write
       contents: read
       actions: read
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-scorecard.yml@f9564243f7931334fa0a4adcb5d5fd877f66fcc8 # v7.0.10
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-scorecard.yml@ad0c67e7338645f10fb1788e362197f4cc709f86 # v7.0.11
