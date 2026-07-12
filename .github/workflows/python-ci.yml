@@ -474,6 +474,12 @@ jobs:
     env:
       NO_BUILD_FLAG: ${{ inputs.no-build && '--no-build' || '' }}
       COVERAGE_FILE: .coverage.unit
+    outputs:
+      # Exposed so coverage-combine can tell a genuine 'skip' (no pyproject.toml
+      # / poetry-not-supported: no artifact was ever uploaded) apart from a
+      # normal success, instead of unconditionally trying to download an
+      # artifact that was never produced.
+      repo-state: ${{ steps.detect.outputs.state }}
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
@@ -498,26 +504,32 @@ jobs:
         id: detect
         run: |
           if [ ! -f pyproject.toml ]; then
-            echo "state=skip" >> $GITHUB_OUTPUT
+            echo "state=skip" >> "$GITHUB_OUTPUT"
           elif [ -f poetry.lock ] || grep -qE '^\[tool\.poetry(\.|])' pyproject.toml; then
-            echo "state=poetry-not-supported" >> $GITHUB_OUTPUT
+            echo "state=poetry-not-supported" >> "$GITHUB_OUTPUT"
             echo "::error::This repo uses Poetry. The python-ci.yml reusable workflow is uv-only by org policy."
             exit 1
           elif [ -f uv.lock ]; then
-            echo "state=uv-locked" >> $GITHUB_OUTPUT
+            echo "state=uv-locked" >> "$GITHUB_OUTPUT"
           else
-            echo "state=uv-no-lock" >> $GITHUB_OUTPUT
+            echo "state=uv-no-lock" >> "$GITHUB_OUTPUT"
           fi
         shell: bash
 
       - name: Install dependencies (uv with lockfile)
         if: steps.detect.outputs.state == 'uv-locked'
-        run: uv sync --all-extras --frozen $NO_BUILD_FLAG
+        run: |
+          # shellcheck disable=SC2086
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          uv sync --all-extras --frozen $NO_BUILD_FLAG
         shell: bash
 
       - name: Install dependencies (uv without lockfile)
         if: steps.detect.outputs.state == 'uv-no-lock'
-        run: uv sync --all-extras $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path
+        run: |
+          # shellcheck disable=SC2086
+          # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path
+          uv sync --all-extras $NO_BUILD_FLAG
         shell: bash
 
       - name: Run unit tests with coverage
@@ -526,6 +538,7 @@ jobs:
           SRC_DIR: ${{ inputs.source-directory }}
         run: |
           echo "::group::Unit Test Execution"
+          # shellcheck disable=SC2086
           # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
           uv run --frozen $NO_BUILD_FLAG pytest \
             -m "unit or not (integration or security or slow)" \
@@ -583,26 +596,32 @@ jobs:
         id: detect
         run: |
           if [ ! -f pyproject.toml ]; then
-            echo "state=skip" >> $GITHUB_OUTPUT
+            echo "state=skip" >> "$GITHUB_OUTPUT"
           elif [ -f poetry.lock ] || grep -qE '^\[tool\.poetry(\.|])' pyproject.toml; then
-            echo "state=poetry-not-supported" >> $GITHUB_OUTPUT
+            echo "state=poetry-not-supported" >> "$GITHUB_OUTPUT"
             echo "::error::This repo uses Poetry. The python-ci.yml reusable workflow is uv-only by org policy."
             exit 1
           elif [ -f uv.lock ]; then
-            echo "state=uv-locked" >> $GITHUB_OUTPUT
+            echo "state=uv-locked" >> "$GITHUB_OUTPUT"
           else
-            echo "state=uv-no-lock" >> $GITHUB_OUTPUT
+            echo "state=uv-no-lock" >> "$GITHUB_OUTPUT"
           fi
         shell: bash
 
       - name: Install dependencies (uv with lockfile)
         if: steps.detect.outputs.state == 'uv-locked'
-        run: uv sync --all-extras --frozen $NO_BUILD_FLAG
+        run: |
+          # shellcheck disable=SC2086
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          uv sync --all-extras --frozen $NO_BUILD_FLAG
         shell: bash
 
       - name: Install dependencies (uv without lockfile)
         if: steps.detect.outputs.state == 'uv-no-lock'
-        run: uv sync --all-extras $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path
+        run: |
+          # shellcheck disable=SC2086
+          # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path
+          uv sync --all-extras $NO_BUILD_FLAG
         shell: bash
 
       - name: Run integration tests with coverage
@@ -612,6 +631,7 @@ jobs:
         run: |
           echo "::group::Integration Test Execution"
           set +e
+          # shellcheck disable=SC2086
           # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
           uv run --frozen $NO_BUILD_FLAG pytest \
             -m "integration" \
@@ -672,26 +692,32 @@ jobs:
         id: detect
         run: |
           if [ ! -f pyproject.toml ]; then
-            echo "state=skip" >> $GITHUB_OUTPUT
+            echo "state=skip" >> "$GITHUB_OUTPUT"
           elif [ -f poetry.lock ] || grep -qE '^\[tool\.poetry(\.|])' pyproject.toml; then
-            echo "state=poetry-not-supported" >> $GITHUB_OUTPUT
+            echo "state=poetry-not-supported" >> "$GITHUB_OUTPUT"
             echo "::error::This repo uses Poetry. The python-ci.yml reusable workflow is uv-only by org policy."
             exit 1
           elif [ -f uv.lock ]; then
-            echo "state=uv-locked" >> $GITHUB_OUTPUT
+            echo "state=uv-locked" >> "$GITHUB_OUTPUT"
           else
-            echo "state=uv-no-lock" >> $GITHUB_OUTPUT
+            echo "state=uv-no-lock" >> "$GITHUB_OUTPUT"
           fi
         shell: bash
 
       - name: Install dependencies (uv with lockfile)
         if: steps.detect.outputs.state == 'uv-locked'
-        run: uv sync --all-extras --frozen $NO_BUILD_FLAG
+        run: |
+          # shellcheck disable=SC2086
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          uv sync --all-extras --frozen $NO_BUILD_FLAG
         shell: bash
 
       - name: Install dependencies (uv without lockfile)
         if: steps.detect.outputs.state == 'uv-no-lock'
-        run: uv sync --all-extras $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path
+        run: |
+          # shellcheck disable=SC2086
+          # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path
+          uv sync --all-extras $NO_BUILD_FLAG
         shell: bash
 
       - name: Run security tests with coverage
@@ -701,6 +727,7 @@ jobs:
         run: |
           echo "::group::Security Test Execution"
           set +e
+          # shellcheck disable=SC2086
           # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
           uv run --frozen $NO_BUILD_FLAG pytest \
             -m "security" \
@@ -747,9 +774,15 @@ jobs:
     name: Combine Coverage
     runs-on: ubuntu-latest
     needs: [test-unit, test-integration, test-security]
+    # needs.test-unit.outputs.repo-state != 'skip' excludes the case where the
+    # caller has no pyproject.toml: test-unit's own steps all no-op (its
+    # "Detect repo state" sets state=skip), so it reports success with nothing
+    # uploaded, and this job's download-artifact step would otherwise fail on
+    # a coverage-data-unit artifact that was never produced.
     if: |
       always() && inputs.parallel-tests &&
       needs.test-unit.result == 'success' &&
+      needs.test-unit.outputs.repo-state != 'skip' &&
       (needs.test-integration.result == 'success' || needs.test-integration.result == 'skipped') &&
       (needs.test-security.result == 'success' || needs.test-security.result == 'skipped')
     permissions:
@@ -776,8 +809,35 @@ jobs:
           PYTHON_VERSION: ${{ inputs.python-version }}
         run: uv python install "$PYTHON_VERSION"
 
-      - name: Install dependencies
-        run: uv sync --all-extras --frozen $NO_BUILD_FLAG
+      # coverage-combine runs `coverage` itself on its own runner, so it needs
+      # the same lockfile-aware install branch as every other job here (the
+      # job-level `if:` above already confirmed via test-unit's output that
+      # pyproject.toml exists and isn't Poetry, so only the lockfile check
+      # remains).
+      - name: Detect repo state
+        id: detect
+        run: |
+          if [ -f uv.lock ]; then
+            echo "state=uv-locked" >> "$GITHUB_OUTPUT"
+          else
+            echo "state=uv-no-lock" >> "$GITHUB_OUTPUT"
+          fi
+        shell: bash
+
+      - name: Install dependencies (uv with lockfile)
+        if: steps.detect.outputs.state == 'uv-locked'
+        run: |
+          # shellcheck disable=SC2086
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          uv sync --all-extras --frozen $NO_BUILD_FLAG
+        shell: bash
+
+      - name: Install dependencies (uv without lockfile)
+        if: steps.detect.outputs.state == 'uv-no-lock'
+        run: |
+          # shellcheck disable=SC2086
+          # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path
+          uv sync --all-extras $NO_BUILD_FLAG
         shell: bash
 
       - name: Download unit coverage data
@@ -806,12 +866,16 @@ jobs:
         run: |
           echo "::group::Combined Coverage"
           ls -la .coverage.* coverage-*.xml junit-*.xml 2>/dev/null || true
+          # shellcheck disable=SC2086
           # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
           uv run --frozen $NO_BUILD_FLAG coverage combine .coverage.*
+          # shellcheck disable=SC2086
           # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
           uv run --frozen $NO_BUILD_FLAG coverage xml -o coverage.xml
+          # shellcheck disable=SC2086
           # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
           uv run --frozen $NO_BUILD_FLAG coverage html
+          # shellcheck disable=SC2086
           # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
           uv run --frozen $NO_BUILD_FLAG coverage report --fail-under="$COVERAGE_THRESHOLD"
           echo "::endgroup::"
