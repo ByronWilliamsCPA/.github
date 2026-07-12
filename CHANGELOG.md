@@ -31,6 +31,16 @@ an immutable point tag; see `USAGE_EXAMPLES.md` for the pinning guidance.
 
 ### Fixed
 
+- `python-ci.yml`: the `parallel-tests` per-bucket jobs (`test-unit`,
+  `test-integration`, `test-security`) now pass `--cov-fail-under=0`, so a
+  caller's whole-suite coverage threshold set in `pyproject.toml` addopts no
+  longer false-fails a bucket that only exercises its own slice (a security
+  bucket covering ~50% of the tree would fail an 80% gate on its own). The
+  real threshold is unchanged: `coverage-combine` enforces `coverage-threshold`
+  once, after merging all three buckets. The sequential `quality-checks` path
+  is unaffected (it accumulates coverage across steps in one job). Surfaced by
+  the first real caller of the opt-in (`cyo-adventure`).
+
 - Retired the frozen `v1` floating-tag scheme. The `v1` tag was created before
   the org tag-protection ruleset made all `v*` tags immutable and had been
   frozen at the `v1.1.0` commit ever since, while docs and `renovate.json`
