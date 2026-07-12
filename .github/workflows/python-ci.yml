@@ -322,6 +322,7 @@ jobs:
           SRC_DIR: ${{ inputs.source-directory }}
         run: |
           echo "::group::Unit Test Execution"
+          # shellcheck disable=SC2086
           # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
           uv run --frozen $NO_BUILD_FLAG pytest \
             -m "unit or not (integration or security or slow)" \
@@ -341,6 +342,7 @@ jobs:
         run: |
           echo "::group::Integration Test Execution"
           set +e
+          # shellcheck disable=SC2086
           # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
           uv run --frozen $NO_BUILD_FLAG pytest \
             -m "integration" \
@@ -364,6 +366,7 @@ jobs:
         run: |
           echo "::group::Security Test Execution"
           set +e
+          # shellcheck disable=SC2086
           # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
           uv run --frozen $NO_BUILD_FLAG pytest \
             -m "security" \
@@ -464,6 +467,26 @@ jobs:
   # independently in parallel; the ~15-30s of duplicated setup is the trade
   # for taking the multi-minute integration/security suites off the critical
   # path they currently share with unit tests inside quality-checks.
+  #
+  # NOSONAR placement: every `uv sync`/`uv run` line below that carries a
+  # dynamic $NO_BUILD_FLAG builds it into a bash array (NO_BUILD_ARGS) on a
+  # single physical `run:` line, then expands "${NO_BUILD_ARGS[@]}" and adds
+  # a trailing NOSONAR(S8541[,S8544]) comment. This is Pattern A from
+  # docs/sonarcloud-nosonar-patterns.md: SonarCloud's githubactions ruleset
+  # only reliably honors NOSONAR when it is a trailing comment on a genuine
+  # single-line YAML `run:` scalar, not a preceding-line comment inside a
+  # `run: |` block (empirically confirmed broken in PR #166 commit bb31ec1,
+  # and independently reconfirmed while building this feature: an earlier
+  # commit here used preceding-line comments and SonarCloud still flagged all
+  # 12 occurrences). The array (vs. a bare unquoted $NO_BUILD_FLAG) is what
+  # keeps these shellcheck-clean without a `# shellcheck disable=SC2086`
+  # comment, which would itself require its own preceding line and so cannot
+  # coexist with Pattern A's single-line requirement. The multi-line pytest
+  # commands below keep the older preceding-line, single-rule NOSONAR
+  # (Pattern B): that shape is empirically reliable specifically for
+  # multi-line backslash-continued commands with a literal --frozen, per the
+  # same doc, and was not flagged by SonarCloud in either of this feature's
+  # prior review rounds.
   test-unit:
     name: Unit Tests
     runs-on: ubuntu-latest
@@ -488,6 +511,22 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+        with:
+          fetch-depth: 0
+
+      - name: Validate source layout
+        shell: bash
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
+          TEST_DIR: ${{ inputs.test-directory }}
+        run: |
+          missing=()
+          [ -d "$SRC_DIR" ] || missing+=("$SRC_DIR")
+          [ -d "$TEST_DIR" ] || missing+=("$TEST_DIR")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::python-ci.yml requires the following directories to exist: ${missing[*]}"
+            exit 1
+          fi
 
       - name: Install uv
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990  # v8.3.2
@@ -518,16 +557,12 @@ jobs:
 
       - name: Install dependencies (uv with lockfile)
         if: steps.detect.outputs.state == 'uv-locked'
-        run: |
-          # shellcheck disable=SC2086
-          uv sync --all-extras --frozen $NO_BUILD_FLAG  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+        run: NO_BUILD_ARGS=(); [ -n "$NO_BUILD_FLAG" ] && NO_BUILD_ARGS+=("$NO_BUILD_FLAG"); uv sync --all-extras --frozen "${NO_BUILD_ARGS[@]}"  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
         shell: bash
 
       - name: Install dependencies (uv without lockfile)
         if: steps.detect.outputs.state == 'uv-no-lock'
-        run: |
-          # shellcheck disable=SC2086
-          uv sync --all-extras $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path
+        run: NO_BUILD_ARGS=(); [ -n "$NO_BUILD_FLAG" ] && NO_BUILD_ARGS+=("$NO_BUILD_FLAG"); uv sync --all-extras "${NO_BUILD_ARGS[@]}"  # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path
         shell: bash
 
       - name: Run unit tests with coverage
@@ -579,6 +614,22 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+        with:
+          fetch-depth: 0
+
+      - name: Validate source layout
+        shell: bash
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
+          TEST_DIR: ${{ inputs.test-directory }}
+        run: |
+          missing=()
+          [ -d "$SRC_DIR" ] || missing+=("$SRC_DIR")
+          [ -d "$TEST_DIR" ] || missing+=("$TEST_DIR")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::python-ci.yml requires the following directories to exist: ${missing[*]}"
+            exit 1
+          fi
 
       - name: Install uv
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990  # v8.3.2
@@ -608,16 +659,12 @@ jobs:
 
       - name: Install dependencies (uv with lockfile)
         if: steps.detect.outputs.state == 'uv-locked'
-        run: |
-          # shellcheck disable=SC2086
-          uv sync --all-extras --frozen $NO_BUILD_FLAG  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+        run: NO_BUILD_ARGS=(); [ -n "$NO_BUILD_FLAG" ] && NO_BUILD_ARGS+=("$NO_BUILD_FLAG"); uv sync --all-extras --frozen "${NO_BUILD_ARGS[@]}"  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
         shell: bash
 
       - name: Install dependencies (uv without lockfile)
         if: steps.detect.outputs.state == 'uv-no-lock'
-        run: |
-          # shellcheck disable=SC2086
-          uv sync --all-extras $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path
+        run: NO_BUILD_ARGS=(); [ -n "$NO_BUILD_FLAG" ] && NO_BUILD_ARGS+=("$NO_BUILD_FLAG"); uv sync --all-extras "${NO_BUILD_ARGS[@]}"  # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path
         shell: bash
 
       - name: Run integration tests with coverage
@@ -673,6 +720,22 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+        with:
+          fetch-depth: 0
+
+      - name: Validate source layout
+        shell: bash
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
+          TEST_DIR: ${{ inputs.test-directory }}
+        run: |
+          missing=()
+          [ -d "$SRC_DIR" ] || missing+=("$SRC_DIR")
+          [ -d "$TEST_DIR" ] || missing+=("$TEST_DIR")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::python-ci.yml requires the following directories to exist: ${missing[*]}"
+            exit 1
+          fi
 
       - name: Install uv
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990  # v8.3.2
@@ -702,16 +765,12 @@ jobs:
 
       - name: Install dependencies (uv with lockfile)
         if: steps.detect.outputs.state == 'uv-locked'
-        run: |
-          # shellcheck disable=SC2086
-          uv sync --all-extras --frozen $NO_BUILD_FLAG  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+        run: NO_BUILD_ARGS=(); [ -n "$NO_BUILD_FLAG" ] && NO_BUILD_ARGS+=("$NO_BUILD_FLAG"); uv sync --all-extras --frozen "${NO_BUILD_ARGS[@]}"  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
         shell: bash
 
       - name: Install dependencies (uv without lockfile)
         if: steps.detect.outputs.state == 'uv-no-lock'
-        run: |
-          # shellcheck disable=SC2086
-          uv sync --all-extras $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path
+        run: NO_BUILD_ARGS=(); [ -n "$NO_BUILD_FLAG" ] && NO_BUILD_ARGS+=("$NO_BUILD_FLAG"); uv sync --all-extras "${NO_BUILD_ARGS[@]}"  # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path
         shell: bash
 
       - name: Run security tests with coverage
@@ -754,16 +813,15 @@ jobs:
   # so downstream callers (e.g. a repo's own coverage-upload job) need no
   # changes regardless of which path is active.
   #
-  # #ASSUME: data integrity: `coverage combine` correctly merges .coverage.*
-  # SQLite data files produced on three separate runners into one accurate
-  # combined report. This relies on the caller's [tool.coverage.run] setting
-  # `relative_files = true` (coverage.py's documented mechanism for combining
-  # data recorded under different absolute paths/machines); without it, paths
-  # recorded by each runner's absolute $GITHUB_WORKSPACE would not line up and
-  # combine would under-count coverage.
-  # #VERIFY: on the first parallel-tests=true run, compare the coverage
-  # percentage in the combine step's summary against a same-commit run of the
-  # existing sequential path to confirm the merged total matches.
+  # #CRITICAL: data integrity: `coverage combine` correctly merging .coverage.*
+  # SQLite data files produced on three separate runners requires the caller's
+  # [tool.coverage.run] to set `relative_files = true` (coverage.py's
+  # documented mechanism for combining data recorded under different absolute
+  # paths/machines); without it, paths recorded by each runner's absolute
+  # $GITHUB_WORKSPACE would not line up and combine would silently under-count
+  # coverage while still reporting a passing gate.
+  # #VERIFY: enforced below by "Verify relative_files is configured", which
+  # fails the job with an actionable error instead of a silent wrong number.
   coverage-combine:
     name: Combine Coverage
     runs-on: ubuntu-latest
@@ -792,6 +850,23 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+        with:
+          fetch-depth: 0
+
+      # See the job-level #CRITICAL/#VERIFY comment above: a caller that opts
+      # into parallel-tests without this setting gets a green gate over a
+      # wrong coverage percentage, which is worse than an explicit failure.
+      - name: Verify relative_files is configured
+        run: |
+          python3 -c "
+          import sys, tomllib
+          with open('pyproject.toml', 'rb') as f:
+              cfg = tomllib.load(f)
+          if not cfg.get('tool', {}).get('coverage', {}).get('run', {}).get('relative_files'):
+              print('::error::parallel-tests requires [tool.coverage.run] relative_files = true in pyproject.toml so coverage-combine can merge coverage data recorded on three separate runners. See docs/workflows/python-ci.md.')
+              sys.exit(1)
+          "
+        shell: bash
 
       - name: Install uv
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990  # v8.3.2
@@ -820,16 +895,12 @@ jobs:
 
       - name: Install dependencies (uv with lockfile)
         if: steps.detect.outputs.state == 'uv-locked'
-        run: |
-          # shellcheck disable=SC2086
-          uv sync --all-extras --frozen $NO_BUILD_FLAG  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+        run: NO_BUILD_ARGS=(); [ -n "$NO_BUILD_FLAG" ] && NO_BUILD_ARGS+=("$NO_BUILD_FLAG"); uv sync --all-extras --frozen "${NO_BUILD_ARGS[@]}"  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
         shell: bash
 
       - name: Install dependencies (uv without lockfile)
         if: steps.detect.outputs.state == 'uv-no-lock'
-        run: |
-          # shellcheck disable=SC2086
-          uv sync --all-extras $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path
+        run: NO_BUILD_ARGS=(); [ -n "$NO_BUILD_FLAG" ] && NO_BUILD_ARGS+=("$NO_BUILD_FLAG"); uv sync --all-extras "${NO_BUILD_ARGS[@]}"  # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path
         shell: bash
 
       - name: Download unit coverage data
@@ -852,24 +923,34 @@ jobs:
           name: coverage-data-security
           path: .
 
-      - name: Generate combined coverage report
+      - name: List downloaded coverage data
+        run: ls -la .coverage.* coverage-*.xml junit-*.xml 2>/dev/null || true
+        shell: bash
+
+      # --keep and || true mirror quality-checks' own "Generate combined
+      # coverage report" step: --keep preserves the per-bucket .coverage.*
+      # files (useful if this job is re-run), and || true tolerates the
+      # (expected) case where only test-unit's data file is present, e.g.
+      # run-integration-tests/run-security-tests are both false.
+      - name: Combine coverage data
+        run: NO_BUILD_ARGS=(); [ -n "$NO_BUILD_FLAG" ] && NO_BUILD_ARGS+=("$NO_BUILD_FLAG"); uv run --frozen "${NO_BUILD_ARGS[@]}" coverage combine --keep .coverage.* || true  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+        shell: bash
+
+      - name: Generate coverage XML
+        run: NO_BUILD_ARGS=(); [ -n "$NO_BUILD_FLAG" ] && NO_BUILD_ARGS+=("$NO_BUILD_FLAG"); uv run --frozen "${NO_BUILD_ARGS[@]}" coverage xml -o coverage.xml  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+        shell: bash
+
+      - name: Generate coverage HTML
+        run: NO_BUILD_ARGS=(); [ -n "$NO_BUILD_FLAG" ] && NO_BUILD_ARGS+=("$NO_BUILD_FLAG"); uv run --frozen "${NO_BUILD_ARGS[@]}" coverage html  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+        shell: bash
+
+      - name: Check coverage threshold
         env:
           COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold }}
-        run: |
-          echo "::group::Combined Coverage"
-          ls -la .coverage.* coverage-*.xml junit-*.xml 2>/dev/null || true
-          # shellcheck disable=SC2086
-          uv run --frozen $NO_BUILD_FLAG coverage combine .coverage.*  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
-          # shellcheck disable=SC2086
-          uv run --frozen $NO_BUILD_FLAG coverage xml -o coverage.xml  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
-          # shellcheck disable=SC2086
-          uv run --frozen $NO_BUILD_FLAG coverage html  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
-          # shellcheck disable=SC2086
-          uv run --frozen $NO_BUILD_FLAG coverage report --fail-under="$COVERAGE_THRESHOLD"  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
-          echo "::endgroup::"
+        run: NO_BUILD_ARGS=(); [ -n "$NO_BUILD_FLAG" ] && NO_BUILD_ARGS+=("$NO_BUILD_FLAG"); uv run --frozen "${NO_BUILD_ARGS[@]}" coverage report --fail-under="$COVERAGE_THRESHOLD"  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+        shell: bash
 
       - name: Upload coverage artifacts
-        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: coverage-reports

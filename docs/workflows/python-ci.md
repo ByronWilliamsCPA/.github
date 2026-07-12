@@ -82,7 +82,7 @@ jobs:
 | `test-directory` | string | `tests` | Directory containing the test suite |
 | `coverage-threshold` | number | `80` | Minimum coverage percentage |
 | `enable-matrix-testing` | boolean | `false` | Enable tiered multi-version matrix testing |
-| `parallel-tests` | boolean | `false` | Opt-in: run unit/integration/security as parallel jobs (`test-unit`, `test-integration`, `test-security`) instead of sequential steps in `quality-checks`, cutting wall-clock time on repos with a large integration suite. A `coverage-combine` job merges their coverage data back into the same `coverage-reports` artifact, so no caller-side change is needed to adopt it. **Requires** the caller's `pyproject.toml` to set `[tool.coverage.run] relative_files = true` — without it, `coverage combine` cannot correctly merge data recorded on three separate runners and the combined coverage percentage will be wrong. |
+| `parallel-tests` | boolean | `false` | Opt-in: run unit/integration/security as parallel jobs (`test-unit`, `test-integration`, `test-security`) instead of sequential steps in `quality-checks`, cutting wall-clock time on repos with a large integration suite. A `coverage-combine` job merges their coverage data back into the same `coverage-reports` artifact, so no caller-side change is needed to adopt it. **Requires** the caller's `pyproject.toml` to set `[tool.coverage.run] relative_files = true`; without it, `coverage combine` cannot correctly merge data recorded on three separate runners and the combined coverage percentage will be wrong. |
 
 See the workflow file for the full input list.
 
