@@ -111,6 +111,18 @@ on:
         type: boolean
         default: true
 
+      parallel-tests:
+        description: >-
+          Opt-in: run the unit/integration/security test buckets as separate
+          parallel jobs (test-unit, test-integration, test-security) instead
+          of sequential steps inside quality-checks, with a coverage-combine
+          job producing the same coverage-reports artifact downstream callers
+          already expect. Default false preserves the existing single-job
+          behavior for all other callers.
+        required: false
+        type: boolean
+        default: false
+
 permissions: {}
 
 jobs:
@@ -305,11 +317,12 @@ jobs:
           echo "::endgroup::"
 
       - name: Run unit tests with coverage
-        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
+        if: '!inputs.parallel-tests && (steps.detect.outputs.state == ''uv-locked'' || steps.detect.outputs.state == ''uv-no-lock'')'
         env:
           SRC_DIR: ${{ inputs.source-directory }}
         run: |
           echo "::group::Unit Test Execution"
+          # shellcheck disable=SC2086
           # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
           uv run --frozen $NO_BUILD_FLAG pytest \
             -m "unit or not (integration or security or slow)" \
@@ -323,12 +336,13 @@ jobs:
           echo "::endgroup::"
 
       - name: Run integration tests with coverage
-        if: inputs.run-integration-tests && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock')
+        if: 'inputs.run-integration-tests && !inputs.parallel-tests && (steps.detect.outputs.state == ''uv-locked'' || steps.detect.outputs.state == ''uv-no-lock'')'
         env:
           SRC_DIR: ${{ inputs.source-directory }}
         run: |
           echo "::group::Integration Test Execution"
           set +e
+          # shellcheck disable=SC2086
           # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
           uv run --frozen $NO_BUILD_FLAG pytest \
             -m "integration" \
@@ -346,12 +360,13 @@ jobs:
           if [ $EXIT -ne 0 ] && [ $EXIT -ne 5 ]; then exit $EXIT; fi
 
       - name: Run security tests with coverage
-        if: inputs.run-security-tests && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock')
+        if: 'inputs.run-security-tests && !inputs.parallel-tests && (steps.detect.outputs.state == ''uv-locked'' || steps.detect.outputs.state == ''uv-no-lock'')'
         env:
           SRC_DIR: ${{ inputs.source-directory }}
         run: |
           echo "::group::Security Test Execution"
           set +e
+          # shellcheck disable=SC2086
           # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
           uv run --frozen $NO_BUILD_FLAG pytest \
             -m "security" \
@@ -369,7 +384,7 @@ jobs:
           if [ $EXIT -ne 0 ] && [ $EXIT -ne 5 ]; then exit $EXIT; fi
 
       - name: Generate combined coverage report
-        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
+        if: '!inputs.parallel-tests && (steps.detect.outputs.state == ''uv-locked'' || steps.detect.outputs.state == ''uv-no-lock'')'
         env:
           COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold }}
         run: |
@@ -431,7 +446,511 @@ jobs:
           echo "::endgroup::"
 
       - name: Upload coverage artifacts
+        # Skipped under parallel-tests: coverage-combine produces and uploads
+        # this same-named artifact from the three parallel test jobs instead.
+        if: '!inputs.parallel-tests && (steps.detect.outputs.state == ''uv-locked'' || steps.detect.outputs.state == ''uv-no-lock'')'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: coverage-reports
+          include-hidden-files: true
+          path: |
+            coverage.xml
+            coverage-*.xml
+            junit-*.xml
+            htmlcov/
+          retention-days: 7
+
+  # ============================================================================
+  # Job 1b: Parallel Test Buckets (opt-in via inputs.parallel-tests)
+  # ============================================================================
+  # Each job mirrors quality-checks' own checkout/install so it can run fully
+  # independently in parallel; the ~15-30s of duplicated setup is the trade
+  # for taking the multi-minute integration/security suites off the critical
+  # path they currently share with unit tests inside quality-checks.
+  #
+  # NOSONAR placement: every `uv sync`/`uv run` line below that carries a
+  # dynamic $NO_BUILD_FLAG builds it into a bash array (NO_BUILD_ARGS) on a
+  # single physical `run:` line, then expands "${NO_BUILD_ARGS[@]}" and adds
+  # a trailing NOSONAR(S8541[,S8544]) comment. This is Pattern A from
+  # docs/sonarcloud-nosonar-patterns.md: SonarCloud's githubactions ruleset
+  # only reliably honors NOSONAR when it is a trailing comment on a genuine
+  # single-line YAML `run:` scalar, not a preceding-line comment inside a
+  # `run: |` block (empirically confirmed broken in PR #166 commit bb31ec1,
+  # and independently reconfirmed while building this feature: an earlier
+  # commit here used preceding-line comments and SonarCloud still flagged all
+  # 12 occurrences). The array (vs. a bare unquoted $NO_BUILD_FLAG) is what
+  # keeps these shellcheck-clean without a `# shellcheck disable=SC2086`
+  # comment, which would itself require its own preceding line and so cannot
+  # coexist with Pattern A's single-line requirement. The multi-line pytest
+  # commands below keep the older preceding-line, single-rule NOSONAR
+  # (Pattern B): that shape is empirically reliable specifically for
+  # multi-line backslash-continued commands with a literal --frozen, per the
+  # same doc, and was not flagged by SonarCloud in either of this feature's
+  # prior review rounds.
+  test-unit:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    if: inputs.parallel-tests
+    permissions:
+      contents: read
+    timeout-minutes: 15
+    env:
+      NO_BUILD_FLAG: ${{ inputs.no-build && '--no-build' || '' }}
+      COVERAGE_FILE: .coverage.unit
+    outputs:
+      # Exposed so coverage-combine can tell a genuine 'skip' (no pyproject.toml
+      # / poetry-not-supported: no artifact was ever uploaded) apart from a
+      # normal success, instead of unconditionally trying to download an
+      # artifact that was never produced.
+      repo-state: ${{ steps.detect.outputs.state }}
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+        with:
+          fetch-depth: 0
+
+      - name: Validate source layout
+        shell: bash
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
+          TEST_DIR: ${{ inputs.test-directory }}
+        run: |
+          missing=()
+          [ -d "$SRC_DIR" ] || missing+=("$SRC_DIR")
+          [ -d "$TEST_DIR" ] || missing+=("$TEST_DIR")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::python-ci.yml requires the following directories to exist: ${missing[*]}"
+            exit 1
+          fi
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990  # v8.3.2
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        env:
+          PYTHON_VERSION: ${{ inputs.python-version }}
+        run: uv python install "$PYTHON_VERSION"
+
+      # See quality-checks' "Detect repo state" step for the rationale.
+      - name: Detect repo state
+        id: detect
+        run: |
+          if [ ! -f pyproject.toml ]; then
+            echo "state=skip" >> "$GITHUB_OUTPUT"
+          elif [ -f poetry.lock ] || grep -qE '^\[tool\.poetry(\.|])' pyproject.toml; then
+            echo "state=poetry-not-supported" >> "$GITHUB_OUTPUT"
+            echo "::error::This repo uses Poetry. The python-ci.yml reusable workflow is uv-only by org policy."
+            exit 1
+          elif [ -f uv.lock ]; then
+            echo "state=uv-locked" >> "$GITHUB_OUTPUT"
+          else
+            echo "state=uv-no-lock" >> "$GITHUB_OUTPUT"
+          fi
+        shell: bash
+
+      - name: Install dependencies (uv with lockfile)
+        if: steps.detect.outputs.state == 'uv-locked'
+        run: NO_BUILD_ARGS=(); [ -n "$NO_BUILD_FLAG" ] && NO_BUILD_ARGS+=("$NO_BUILD_FLAG"); uv sync --all-extras --frozen "${NO_BUILD_ARGS[@]}"  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+        shell: bash
+
+      - name: Install dependencies (uv without lockfile)
+        if: steps.detect.outputs.state == 'uv-no-lock'
+        run: NO_BUILD_ARGS=(); [ -n "$NO_BUILD_FLAG" ] && NO_BUILD_ARGS+=("$NO_BUILD_FLAG"); uv sync --all-extras "${NO_BUILD_ARGS[@]}"  # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path
+        shell: bash
+
+      - name: Run unit tests with coverage
         if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
+        run: |
+          echo "::group::Unit Test Execution"
+          # shellcheck disable=SC2086
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          uv run --frozen $NO_BUILD_FLAG pytest \
+            -m "unit or not (integration or security or slow)" \
+            --cov="$SRC_DIR" \
+            --cov-report=xml:coverage-unit.xml \
+            --cov-report=term-missing \
+            --cov-branch \
+            --junitxml=junit-unit.xml \
+            -o junit_family=xunit2 \
+            -v
+          echo "::endgroup::"
+
+      - name: Upload unit test artifacts
+        if: always() && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: coverage-data-unit
+          include-hidden-files: true
+          path: |
+            .coverage.unit
+            coverage-unit.xml
+            junit-unit.xml
+          retention-days: 1
+
+  test-integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    if: inputs.parallel-tests && inputs.run-integration-tests
+    permissions:
+      contents: read
+    timeout-minutes: 15
+    env:
+      NO_BUILD_FLAG: ${{ inputs.no-build && '--no-build' || '' }}
+      COVERAGE_FILE: .coverage.integration
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+        with:
+          fetch-depth: 0
+
+      - name: Validate source layout
+        shell: bash
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
+          TEST_DIR: ${{ inputs.test-directory }}
+        run: |
+          missing=()
+          [ -d "$SRC_DIR" ] || missing+=("$SRC_DIR")
+          [ -d "$TEST_DIR" ] || missing+=("$TEST_DIR")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::python-ci.yml requires the following directories to exist: ${missing[*]}"
+            exit 1
+          fi
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990  # v8.3.2
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        env:
+          PYTHON_VERSION: ${{ inputs.python-version }}
+        run: uv python install "$PYTHON_VERSION"
+
+      - name: Detect repo state
+        id: detect
+        run: |
+          if [ ! -f pyproject.toml ]; then
+            echo "state=skip" >> "$GITHUB_OUTPUT"
+          elif [ -f poetry.lock ] || grep -qE '^\[tool\.poetry(\.|])' pyproject.toml; then
+            echo "state=poetry-not-supported" >> "$GITHUB_OUTPUT"
+            echo "::error::This repo uses Poetry. The python-ci.yml reusable workflow is uv-only by org policy."
+            exit 1
+          elif [ -f uv.lock ]; then
+            echo "state=uv-locked" >> "$GITHUB_OUTPUT"
+          else
+            echo "state=uv-no-lock" >> "$GITHUB_OUTPUT"
+          fi
+        shell: bash
+
+      - name: Install dependencies (uv with lockfile)
+        if: steps.detect.outputs.state == 'uv-locked'
+        run: NO_BUILD_ARGS=(); [ -n "$NO_BUILD_FLAG" ] && NO_BUILD_ARGS+=("$NO_BUILD_FLAG"); uv sync --all-extras --frozen "${NO_BUILD_ARGS[@]}"  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+        shell: bash
+
+      - name: Install dependencies (uv without lockfile)
+        if: steps.detect.outputs.state == 'uv-no-lock'
+        run: NO_BUILD_ARGS=(); [ -n "$NO_BUILD_FLAG" ] && NO_BUILD_ARGS+=("$NO_BUILD_FLAG"); uv sync --all-extras "${NO_BUILD_ARGS[@]}"  # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path
+        shell: bash
+
+      - name: Run integration tests with coverage
+        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
+        run: |
+          echo "::group::Integration Test Execution"
+          set +e
+          # shellcheck disable=SC2086
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          uv run --frozen $NO_BUILD_FLAG pytest \
+            -m "integration" \
+            --cov="$SRC_DIR" \
+            --cov-report=xml:coverage-integration.xml \
+            --cov-report=term-missing \
+            --cov-branch \
+            --junitxml=junit-integration.xml \
+            -o junit_family=xunit2 \
+            -v
+          EXIT=$?
+          set -e
+          echo "::endgroup::"
+          if [ $EXIT -ne 0 ] && [ $EXIT -ne 5 ]; then exit $EXIT; fi
+
+      - name: Upload integration test artifacts
+        if: always() && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: coverage-data-integration
+          include-hidden-files: true
+          path: |
+            .coverage.integration
+            coverage-integration.xml
+            junit-integration.xml
+          retention-days: 1
+
+  test-security:
+    name: Security Tests
+    runs-on: ubuntu-latest
+    if: inputs.parallel-tests && inputs.run-security-tests
+    permissions:
+      contents: read
+    timeout-minutes: 15
+    env:
+      NO_BUILD_FLAG: ${{ inputs.no-build && '--no-build' || '' }}
+      COVERAGE_FILE: .coverage.security
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+        with:
+          fetch-depth: 0
+
+      - name: Validate source layout
+        shell: bash
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
+          TEST_DIR: ${{ inputs.test-directory }}
+        run: |
+          missing=()
+          [ -d "$SRC_DIR" ] || missing+=("$SRC_DIR")
+          [ -d "$TEST_DIR" ] || missing+=("$TEST_DIR")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::python-ci.yml requires the following directories to exist: ${missing[*]}"
+            exit 1
+          fi
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990  # v8.3.2
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        env:
+          PYTHON_VERSION: ${{ inputs.python-version }}
+        run: uv python install "$PYTHON_VERSION"
+
+      - name: Detect repo state
+        id: detect
+        run: |
+          if [ ! -f pyproject.toml ]; then
+            echo "state=skip" >> "$GITHUB_OUTPUT"
+          elif [ -f poetry.lock ] || grep -qE '^\[tool\.poetry(\.|])' pyproject.toml; then
+            echo "state=poetry-not-supported" >> "$GITHUB_OUTPUT"
+            echo "::error::This repo uses Poetry. The python-ci.yml reusable workflow is uv-only by org policy."
+            exit 1
+          elif [ -f uv.lock ]; then
+            echo "state=uv-locked" >> "$GITHUB_OUTPUT"
+          else
+            echo "state=uv-no-lock" >> "$GITHUB_OUTPUT"
+          fi
+        shell: bash
+
+      - name: Install dependencies (uv with lockfile)
+        if: steps.detect.outputs.state == 'uv-locked'
+        run: NO_BUILD_ARGS=(); [ -n "$NO_BUILD_FLAG" ] && NO_BUILD_ARGS+=("$NO_BUILD_FLAG"); uv sync --all-extras --frozen "${NO_BUILD_ARGS[@]}"  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+        shell: bash
+
+      - name: Install dependencies (uv without lockfile)
+        if: steps.detect.outputs.state == 'uv-no-lock'
+        run: NO_BUILD_ARGS=(); [ -n "$NO_BUILD_FLAG" ] && NO_BUILD_ARGS+=("$NO_BUILD_FLAG"); uv sync --all-extras "${NO_BUILD_ARGS[@]}"  # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path
+        shell: bash
+
+      - name: Run security tests with coverage
+        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
+        env:
+          SRC_DIR: ${{ inputs.source-directory }}
+        run: |
+          echo "::group::Security Test Execution"
+          set +e
+          # shellcheck disable=SC2086
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          uv run --frozen $NO_BUILD_FLAG pytest \
+            -m "security" \
+            --cov="$SRC_DIR" \
+            --cov-report=xml:coverage-security.xml \
+            --cov-report=term-missing \
+            --cov-branch \
+            --junitxml=junit-security.xml \
+            -o junit_family=xunit2 \
+            -v
+          EXIT=$?
+          set -e
+          echo "::endgroup::"
+          if [ $EXIT -ne 0 ] && [ $EXIT -ne 5 ]; then exit $EXIT; fi
+
+      - name: Upload security test artifacts
+        if: always() && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: coverage-data-security
+          include-hidden-files: true
+          path: |
+            .coverage.security
+            coverage-security.xml
+            junit-security.xml
+          retention-days: 1
+
+  # coverage-combine re-produces the same `coverage-reports` artifact (same
+  # name, same file set) that quality-checks uploads in the non-parallel path,
+  # so downstream callers (e.g. a repo's own coverage-upload job) need no
+  # changes regardless of which path is active.
+  #
+  # #CRITICAL: data integrity: `coverage combine` correctly merging .coverage.*
+  # SQLite data files produced on three separate runners requires the caller's
+  # [tool.coverage.run] to set `relative_files = true` (coverage.py's
+  # documented mechanism for combining data recorded under different absolute
+  # paths/machines); without it, paths recorded by each runner's absolute
+  # $GITHUB_WORKSPACE would not line up and combine would silently under-count
+  # coverage while still reporting a passing gate.
+  # #VERIFY: enforced below by "Verify relative_files is configured", which
+  # fails the job with an actionable error instead of a silent wrong number.
+  coverage-combine:
+    name: Combine Coverage
+    runs-on: ubuntu-latest
+    needs: [test-unit, test-integration, test-security]
+    # needs.test-unit.outputs.repo-state != 'skip' excludes the case where the
+    # caller has no pyproject.toml: test-unit's own steps all no-op (its
+    # "Detect repo state" sets state=skip), so it reports success with nothing
+    # uploaded, and this job's download-artifact step would otherwise fail on
+    # a coverage-data-unit artifact that was never produced.
+    if: |
+      always() && inputs.parallel-tests &&
+      needs.test-unit.result == 'success' &&
+      needs.test-unit.outputs.repo-state != 'skip' &&
+      (needs.test-integration.result == 'success' || needs.test-integration.result == 'skipped') &&
+      (needs.test-security.result == 'success' || needs.test-security.result == 'skipped')
+    permissions:
+      contents: read
+    timeout-minutes: 10
+    env:
+      NO_BUILD_FLAG: ${{ inputs.no-build && '--no-build' || '' }}
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+        with:
+          fetch-depth: 0
+
+      # See the job-level #CRITICAL/#VERIFY comment above: a caller that opts
+      # into parallel-tests without this setting gets a green gate over a
+      # wrong coverage percentage, which is worse than an explicit failure.
+      - name: Verify relative_files is configured
+        run: |
+          python3 -c "
+          import sys, tomllib
+          with open('pyproject.toml', 'rb') as f:
+              cfg = tomllib.load(f)
+          if not cfg.get('tool', {}).get('coverage', {}).get('run', {}).get('relative_files'):
+              print('::error::parallel-tests requires [tool.coverage.run] relative_files = true in pyproject.toml so coverage-combine can merge coverage data recorded on three separate runners. See docs/workflows/python-ci.md.')
+              sys.exit(1)
+          "
+        shell: bash
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990  # v8.3.2
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        env:
+          PYTHON_VERSION: ${{ inputs.python-version }}
+        run: uv python install "$PYTHON_VERSION"
+
+      # coverage-combine runs `coverage` itself on its own runner, so it needs
+      # the same lockfile-aware install branch as every other job here (the
+      # job-level `if:` above already confirmed via test-unit's output that
+      # pyproject.toml exists and isn't Poetry, so only the lockfile check
+      # remains).
+      - name: Detect repo state
+        id: detect
+        run: |
+          if [ -f uv.lock ]; then
+            echo "state=uv-locked" >> "$GITHUB_OUTPUT"
+          else
+            echo "state=uv-no-lock" >> "$GITHUB_OUTPUT"
+          fi
+        shell: bash
+
+      - name: Install dependencies (uv with lockfile)
+        if: steps.detect.outputs.state == 'uv-locked'
+        run: NO_BUILD_ARGS=(); [ -n "$NO_BUILD_FLAG" ] && NO_BUILD_ARGS+=("$NO_BUILD_FLAG"); uv sync --all-extras --frozen "${NO_BUILD_ARGS[@]}"  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+        shell: bash
+
+      - name: Install dependencies (uv without lockfile)
+        if: steps.detect.outputs.state == 'uv-no-lock'
+        run: NO_BUILD_ARGS=(); [ -n "$NO_BUILD_FLAG" ] && NO_BUILD_ARGS+=("$NO_BUILD_FLAG"); uv sync --all-extras "${NO_BUILD_ARGS[@]}"  # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path
+        shell: bash
+
+      - name: Download unit coverage data
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: coverage-data-unit
+          path: .
+
+      - name: Download integration coverage data
+        if: needs.test-integration.result == 'success'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: coverage-data-integration
+          path: .
+
+      - name: Download security coverage data
+        if: needs.test-security.result == 'success'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
+        with:
+          name: coverage-data-security
+          path: .
+
+      - name: List downloaded coverage data
+        run: ls -la .coverage.* coverage-*.xml junit-*.xml 2>/dev/null || true
+        shell: bash
+
+      # --keep and || true mirror quality-checks' own "Generate combined
+      # coverage report" step: --keep preserves the per-bucket .coverage.*
+      # files (useful if this job is re-run), and || true tolerates the
+      # (expected) case where only test-unit's data file is present, e.g.
+      # run-integration-tests/run-security-tests are both false.
+      - name: Combine coverage data
+        run: NO_BUILD_ARGS=(); [ -n "$NO_BUILD_FLAG" ] && NO_BUILD_ARGS+=("$NO_BUILD_FLAG"); uv run --frozen "${NO_BUILD_ARGS[@]}" coverage combine --keep .coverage.* || true  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+        shell: bash
+
+      - name: Generate coverage XML
+        run: NO_BUILD_ARGS=(); [ -n "$NO_BUILD_FLAG" ] && NO_BUILD_ARGS+=("$NO_BUILD_FLAG"); uv run --frozen "${NO_BUILD_ARGS[@]}" coverage xml -o coverage.xml  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+        shell: bash
+
+      - name: Generate coverage HTML
+        run: NO_BUILD_ARGS=(); [ -n "$NO_BUILD_FLAG" ] && NO_BUILD_ARGS+=("$NO_BUILD_FLAG"); uv run --frozen "${NO_BUILD_ARGS[@]}" coverage html  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+        shell: bash
+
+      - name: Check coverage threshold
+        env:
+          COVERAGE_THRESHOLD: ${{ inputs.coverage-threshold }}
+        run: NO_BUILD_ARGS=(); [ -n "$NO_BUILD_FLAG" ] && NO_BUILD_ARGS+=("$NO_BUILD_FLAG"); uv run --frozen "${NO_BUILD_ARGS[@]}" coverage report --fail-under="$COVERAGE_THRESHOLD"  # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+        shell: bash
+
+      - name: Upload coverage artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: coverage-reports
@@ -682,7 +1201,7 @@ jobs:
   ci-gate:
     name: CI Gate
     runs-on: ubuntu-latest
-    needs: [quality-checks, llm-governance, matrix-testing]
+    needs: [quality-checks, llm-governance, matrix-testing, test-unit, test-integration, test-security, coverage-combine]
     if: always()
     timeout-minutes: 10
     permissions:
@@ -700,6 +1219,10 @@ jobs:
           RESULT_QUALITY_CHECKS: ${{ needs.quality-checks.result }}
           RESULT_LLM_GOVERNANCE: ${{ needs.llm-governance.result }}
           RESULT_MATRIX_TESTING: ${{ needs.matrix-testing.result }}
+          RESULT_TEST_UNIT: ${{ needs.test-unit.result }}
+          RESULT_TEST_INTEGRATION: ${{ needs.test-integration.result }}
+          RESULT_TEST_SECURITY: ${{ needs.test-security.result }}
+          RESULT_COVERAGE_COMBINE: ${{ needs.coverage-combine.result }}
         run: |
           is_acceptable() { [[ "$1" == "success" || "$1" == "skipped" ]]; }
 
@@ -713,6 +1236,26 @@ jobs:
           fi
           if ! is_acceptable "$RESULT_MATRIX_TESTING"; then
             echo "::error::CI Gate failed: matrix-testing is $RESULT_MATRIX_TESTING"
+            exit 1
+          fi
+          # test-unit/test-integration/test-security/coverage-combine only run
+          # under the opt-in parallel-tests path; they report "skipped" (and
+          # pass is_acceptable) when that flag is off, exactly like
+          # matrix-testing does for enable-matrix-testing today.
+          if ! is_acceptable "$RESULT_TEST_UNIT"; then
+            echo "::error::CI Gate failed: test-unit is $RESULT_TEST_UNIT"
+            exit 1
+          fi
+          if ! is_acceptable "$RESULT_TEST_INTEGRATION"; then
+            echo "::error::CI Gate failed: test-integration is $RESULT_TEST_INTEGRATION"
+            exit 1
+          fi
+          if ! is_acceptable "$RESULT_TEST_SECURITY"; then
+            echo "::error::CI Gate failed: test-security is $RESULT_TEST_SECURITY"
+            exit 1
+          fi
+          if ! is_acceptable "$RESULT_COVERAGE_COMBINE"; then
+            echo "::error::CI Gate failed: coverage-combine is $RESULT_COVERAGE_COMBINE"
             exit 1
           fi
           echo "CI Gate passed"

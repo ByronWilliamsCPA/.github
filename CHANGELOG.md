@@ -13,6 +13,22 @@ an immutable point tag; see `USAGE_EXAMPLES.md` for the pinning guidance.
 
 ## [Unreleased]
 
+### Added
+
+- `python-ci.yml`: opt-in `parallel-tests` input (default `false`). Splits
+  the unit/integration/security pytest buckets out of `quality-checks` into
+  three parallel jobs (`test-unit`, `test-integration`, `test-security`)
+  plus a `coverage-combine` job that merges their coverage data back into
+  the same `coverage-reports` artifact existing callers already consume, so
+  adopting it requires no downstream changes. Existing callers are
+  unaffected: every step this touches in `quality-checks` gained
+  `&& !inputs.parallel-tests`, a no-op when the input is unset. Requires the
+  caller's `pyproject.toml` to set `[tool.coverage.run] relative_files =
+  true`; `coverage-combine` fails fast with an actionable error if it is
+  missing. See `docs/workflows/python-ci.md` for the input and
+  `docs/sonarcloud-nosonar-patterns.md` for why the new jobs' `--no-build`/
+  `--frozen` suppressions use Pattern A.
+
 ### Fixed
 
 - Retired the frozen `v1` floating-tag scheme. The `v1` tag was created before
