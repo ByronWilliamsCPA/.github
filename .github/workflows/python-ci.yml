@@ -573,12 +573,17 @@ jobs:
           echo "::group::Unit Test Execution"
           # shellcheck disable=SC2086
           # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          # --cov-fail-under=0 overrides any whole-suite threshold the caller sets
+          # in pyproject addopts: this bucket covers only its own test slice, so a
+          # per-bucket threshold check would false-fail. The real threshold is
+          # enforced once, post-merge, by the coverage-combine job.
           uv run --frozen $NO_BUILD_FLAG pytest \
             -m "unit or not (integration or security or slow)" \
             --cov="$SRC_DIR" \
             --cov-report=xml:coverage-unit.xml \
             --cov-report=term-missing \
             --cov-branch \
+            --cov-fail-under=0 \
             --junitxml=junit-unit.xml \
             -o junit_family=xunit2 \
             -v
@@ -676,12 +681,17 @@ jobs:
           set +e
           # shellcheck disable=SC2086
           # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          # --cov-fail-under=0 overrides any whole-suite threshold the caller sets
+          # in pyproject addopts: this bucket covers only its own test slice, so a
+          # per-bucket threshold check would false-fail. The real threshold is
+          # enforced once, post-merge, by the coverage-combine job.
           uv run --frozen $NO_BUILD_FLAG pytest \
             -m "integration" \
             --cov="$SRC_DIR" \
             --cov-report=xml:coverage-integration.xml \
             --cov-report=term-missing \
             --cov-branch \
+            --cov-fail-under=0 \
             --junitxml=junit-integration.xml \
             -o junit_family=xunit2 \
             -v
@@ -782,12 +792,17 @@ jobs:
           set +e
           # shellcheck disable=SC2086
           # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          # --cov-fail-under=0 overrides any whole-suite threshold the caller sets
+          # in pyproject addopts: this bucket covers only its own test slice, so a
+          # per-bucket threshold check would false-fail. The real threshold is
+          # enforced once, post-merge, by the coverage-combine job.
           uv run --frozen $NO_BUILD_FLAG pytest \
             -m "security" \
             --cov="$SRC_DIR" \
             --cov-report=xml:coverage-security.xml \
             --cov-report=term-missing \
             --cov-branch \
+            --cov-fail-under=0 \
             --junitxml=junit-security.xml \
             -o junit_family=xunit2 \
             -v
