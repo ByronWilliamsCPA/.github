@@ -211,7 +211,7 @@ jobs:
 
       - name: Upload to Qlty
         if: steps.verify.outputs.primary_exists == 'true'
-        uses: qltysh/qlty-action/coverage@dafbc1e328f1f92525f1a3916724bd5fa01498e8  # v2.2.3
+        uses: qltysh/qlty-action/coverage@08a0a862c159eae9b9003081da6663d96efef637  # v2.3.0
         with:
           token: ${{ secrets.QLTY_COVERAGE_TOKEN }}
           files: ${{ inputs.coverage-file-path }}${{ inputs.additional-files != '' && format(',{0}', inputs.additional-files) || '' }}
