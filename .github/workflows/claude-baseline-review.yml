@@ -138,7 +138,7 @@ jobs:
         run: git submodule update --init --recursive
 
       - name: Run baseline triage review
-        uses: anthropics/claude-code-action@37b464ce72700f7b2c5ff8d2db7fa7b15df792f5  # v1.0.169
+        uses: anthropics/claude-code-action@536f2c32a39763739000b0e1ac69ca2647d97ce9  # v1.0.170
         with:
           # #CRITICAL: secret reference; ANTHROPIC_API_KEY must exist as a
           # repository or organization secret or this step fails at startup.
