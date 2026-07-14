@@ -1,5 +1,7 @@
 # Tiered PR Review Architecture: Reference for Reviewers
 
+Diagram: see [diagrams/tiered-pr-review-flow.svg](diagrams/tiered-pr-review-flow.svg) for the flow through the tiers and their gates.
+
 Status: Proposed (this document ships with the PR that introduces Tier 0)
 Date: 2026-06-12
 Owners: ByronWilliamsCPA (solo maintainer)
