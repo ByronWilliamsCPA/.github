@@ -44,4 +44,4 @@ for the full support policy.
 We welcome and encourage contributions to improve our support processes.
 Feel free to submit pull requests against this document or associated workflows.
 
-Last updated: April 23, 2026
+Last updated: July 14, 2026
