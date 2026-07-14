@@ -1,7 +1,8 @@
 # ============================================================================
-# Reusable FIPS Compatibility Workflow
+# Reusable FIPS Compatibility and PQC Readiness Workflow
 # ============================================================================
-# Checks code and dependencies for FIPS 140-2/140-3 compliance issues
+# Checks code and dependencies for FIPS 140-2/140-3 compliance issues and
+# post-quantum cryptography (PQC) readiness.
 #
 # Usage from downstream repos:
 #   jobs:
@@ -10,6 +11,10 @@
 #       with:
 #         strict-mode: false
 #         include-tests: true
+#         pqc-mode: warn
+#   (pqc-mode, use-central-checker, central-checker-ref and
+#   fail-on-missing-script require the first release cut from v8.0.0;
+#   Renovate advances the pin.)
 #
 # FIPS (Federal Information Processing Standards) mode restricts cryptographic
 # algorithms to NIST-approved ones. This is required for:
@@ -18,12 +23,35 @@
 #   - Financial services
 #   - Ubuntu LTS with fips-updates package
 #
+# PQC readiness: NIST finalized FIPS 203 (ML-KEM), FIPS 204 (ML-DSA) and
+# FIPS 205 (SLH-DSA) in August 2024, and NIST IR 8547 schedules deprecation
+# of 112-bit-strength classical algorithms after 2030 (disallowed after
+# 2035). The org migration target is hybrid key establishment (classical
+# exchange combined with ML-KEM per NIST SP 800-56C Rev. 2). The `pqc-mode`
+# input is the migration ratchet: off (skip) -> warn (report, default) ->
+# error (gate on quantum-vulnerable key establishment).
+#
+# Checker resolution (v8.0.0):
+#   1. Caller-local script at `script-path`, when present (custom override).
+#   2. Org-central scripts/check_fips_compatibility.py, fetched from
+#      ByronWilliamsCPA/.github at `central-checker-ref`. This is the default
+#      path: PQC and FIPS rule updates roll out fleet-wide from one place.
+#   3. None available: soft-skip with a warning, or hard fail when
+#      fail-on-missing-script is true.
+#
+# BREAKING (v8.0.0): the checker CLI contract now includes
+# `--pqc-mode {off,warn,error}`. Caller-local custom checkers must accept
+# this flag (one argparse line); see docs/workflows/python-fips-compatibility.md.
+#
 # Features:
 #   - Static analysis for non-FIPS crypto usage
+#   - PQC readiness analysis (quantum-vulnerable key establishment/signatures)
 #   - Dependency scanning for problematic packages
+#   - CBOM-style algorithm inventory artifact (fips-inventory.json)
 #   - Optional strict mode for zero-tolerance
 #   - PR comment integration
 #   - Artifact retention
+#   - Optional runtime test with a hybrid-PQC capability probe
 # ============================================================================
 
 name: FIPS Compatibility (Reusable)
@@ -32,7 +60,7 @@ on:
   workflow_call:
     inputs:
       strict-mode:
-        description: 'Treat warnings as errors'
+        description: 'Treat classic FIPS warnings as errors (PQC findings are governed by pqc-mode, not strict-mode)'
         type: boolean
         required: false
         default: false
@@ -62,7 +90,7 @@ on:
         default: '3.12'
 
       script-path:
-        description: 'Path to FIPS check script (default: scripts/check_fips_compatibility.py)'
+        description: 'Path to a caller-local FIPS check script overriding the org-central checker (default: scripts/check_fips_compatibility.py)'
         type: string
         required: false
         default: 'scripts/check_fips_compatibility.py'
@@ -72,11 +100,36 @@ on:
         type: boolean
         required: false
         default: false
+
       no-build:
         description: 'Pass --no-build to uv sync/run commands (disable for projects with a build backend like hatchling)'
         required: false
         type: boolean
         default: true
+
+      pqc-mode:
+        description: 'PQC readiness ratchet: off (skip PQC rules), warn (report only, default), error (gate on quantum-vulnerable key establishment)'
+        type: string
+        required: false
+        default: 'warn'
+
+      use-central-checker:
+        description: 'Fall back to the org-central checker from ByronWilliamsCPA/.github when script-path is absent in the caller repo'
+        type: boolean
+        required: false
+        default: true
+
+      central-checker-ref:
+        description: 'Git ref of ByronWilliamsCPA/.github to fetch the central checker from; pin an immutable point tag or full SHA for supply-chain rigor'
+        type: string
+        required: false
+        default: 'main'
+
+      fail-on-missing-script:
+        description: 'Fail instead of soft-skipping when no checker is available (flip org-wide once the central checker is rolled out)'
+        type: boolean
+        required: false
+        default: false
 
 permissions: {}
 
@@ -129,7 +182,7 @@ jobs:
           fi
         shell: bash
 
-      - name: Verify FIPS check script exists
+      - name: Verify caller-local FIPS check script
         id: script-check
         env:
           SCRIPT_PATH: ${{ inputs.script-path }}
@@ -148,10 +201,10 @@ jobs:
           # the canonical path stays inside GITHUB_WORKSPACE. A symlink at
           # scripts/legit.py pointing to /etc/passwd passes the regex above
           # but is blocked here. Missing files fall through to the existence
-          # check below, which handles them as a soft warning per the
-          # workflow's contract.
+          # check below; the central checker or the soft-skip path handles
+          # them per the workflow's contract.
           # #CRITICAL realpath -e fails if any path component is missing;
-          # gate on [ -e ] so the soft-warning branch still fires for missing files.
+          # gate on [ -e ] so the fallback branch still fires for missing files.
           if [ -e "$SCRIPT_PATH" ]; then
             RESOLVED=$(realpath -e "$SCRIPT_PATH")
             case "$RESOLVED" in
@@ -164,14 +217,89 @@ jobs:
           fi
           if [ -f "$SCRIPT_PATH" ]; then
             echo "script_exists=true" >> $GITHUB_OUTPUT
-            echo "FIPS check script found at $SCRIPT_PATH"
+            echo "Caller-local FIPS check script found at $SCRIPT_PATH"
           else
             echo "script_exists=false" >> $GITHUB_OUTPUT
-            echo "::warning::FIPS check script not found at $SCRIPT_PATH"
+            echo "No caller-local FIPS check script at $SCRIPT_PATH; the org-central checker will be used if enabled."
+          fi
+
+      # Central checker fallback: fetch the canonical checker from the org
+      # .github repo so FIPS/PQC rule updates roll out fleet-wide from one
+      # place instead of requiring per-repo script edits.
+      # #ASSUME ByronWilliamsCPA/.github is public; the caller job's default
+      # GITHUB_TOKEN (contents: read on the CALLER repo) is not needed for a
+      # public cross-repo checkout, and no secret is passed here.
+      # #VERIFY central-checker-ref defaults to 'main' (floating) as the
+      # freshness/pinning trade-off; callers wanting supply-chain rigor pin an
+      # immutable point tag or full SHA via the input. The org tag ruleset
+      # makes v* tags immutable.
+      - name: Fetch org-central FIPS checker
+        if: >-
+          steps.script-check.outputs.script_exists != 'true'
+          && inputs.use-central-checker
+          && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock')
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+        with:
+          repository: ByronWilliamsCPA/.github
+          ref: ${{ inputs.central-checker-ref }}
+          path: .fips-central-checker
+          persist-credentials: false
+
+      # Resolve which checker runs and validate enum-like string inputs before
+      # anything interpolates them. #CRITICAL pqc-mode is validated against an
+      # allowlist here and only the validated step output is referenced by
+      # later steps (env indirection); never interpolate inputs.pqc-mode into
+      # a script body directly.
+      - name: Resolve checker
+        id: resolve
+        env:
+          SCRIPT_PATH: ${{ inputs.script-path }}
+          SCRIPT_EXISTS: ${{ steps.script-check.outputs.script_exists }}
+          USE_CENTRAL: ${{ inputs.use-central-checker }}
+          FAIL_ON_MISSING: ${{ inputs.fail-on-missing-script }}
+          PQC_MODE: ${{ inputs.pqc-mode }}
+          REPO_STATE: ${{ steps.detect.outputs.state }}
+        shell: bash
+        run: |
+          case "$PQC_MODE" in
+            off|warn|error) ;;
+            *)
+              echo "::error::pqc-mode must be one of: off, warn, error (got: $PQC_MODE)"
+              exit 1
+              ;;
+          esac
+          echo "pqc_mode=$PQC_MODE" >> $GITHUB_OUTPUT
+
+          # Docs-only callers (state=skip) skip gracefully; fail-on-missing-script
+          # governs repos that COULD run the check, not repos with no Python project.
+          if [ "$REPO_STATE" != "uv-locked" ] && [ "$REPO_STATE" != "uv-no-lock" ]; then
+            echo "checker_path=" >> $GITHUB_OUTPUT
+            echo "checker_source=none" >> $GITHUB_OUTPUT
+            echo "No runnable Python project detected (state: $REPO_STATE); checker resolution skipped."
+            exit 0
+          fi
+
+          CENTRAL_PATH=".fips-central-checker/scripts/check_fips_compatibility.py"
+          if [ "$SCRIPT_EXISTS" == "true" ]; then
+            echo "checker_path=$SCRIPT_PATH" >> $GITHUB_OUTPUT
+            echo "checker_source=local" >> $GITHUB_OUTPUT
+            echo "Using caller-local checker at $SCRIPT_PATH"
+          elif [ "$USE_CENTRAL" == "true" ] && [ -f "$CENTRAL_PATH" ]; then
+            echo "checker_path=$CENTRAL_PATH" >> $GITHUB_OUTPUT
+            echo "checker_source=central" >> $GITHUB_OUTPUT
+            echo "Using org-central checker at $CENTRAL_PATH"
+          else
+            echo "checker_path=" >> $GITHUB_OUTPUT
+            echo "checker_source=none" >> $GITHUB_OUTPUT
+            if [ "$FAIL_ON_MISSING" == "true" ]; then
+              echo "::error::No FIPS checker available (no caller-local script at $SCRIPT_PATH, central checker disabled or unavailable) and fail-on-missing-script is true."
+              exit 1
+            fi
+            echo "::warning::No FIPS checker available; the FIPS compatibility check will be skipped."
           fi
 
       - name: Install dependencies (uv with lockfile)
-        if: steps.script-check.outputs.script_exists == 'true' && steps.detect.outputs.state == 'uv-locked'
+        if: steps.resolve.outputs.checker_source != 'none' && steps.detect.outputs.state == 'uv-locked'
         run: uv sync --all-extras --frozen $NO_BUILD_FLAG
         shell: bash
 
@@ -181,7 +309,7 @@ jobs:
       # suppressed inline with rationale; the uv-locked install step above keeps the literal
       # --frozen so the scanner can see it.
       - name: Install dependencies (uv without lockfile)
-        if: steps.script-check.outputs.script_exists == 'true' && steps.detect.outputs.state == 'uv-no-lock'
+        if: steps.resolve.outputs.checker_source != 'none' && steps.detect.outputs.state == 'uv-no-lock'
         run: uv sync --all-extras $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path
         shell: bash
 
@@ -194,13 +322,14 @@ jobs:
       # #ASSUME steps.detect runs before the install steps above; #VERIFY the if: condition
       # on every install step references steps.detect.outputs.state.
       - name: Run FIPS compatibility check
-        if: steps.script-check.outputs.script_exists == 'true' && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock')
+        if: steps.resolve.outputs.checker_source != 'none' && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock')
         id: fips-check
         env:
-          SCRIPT_PATH: ${{ inputs.script-path }}
+          CHECKER_PATH: ${{ steps.resolve.outputs.checker_path }}
           STRICT_MODE: ${{ inputs.strict-mode }}
           FIX_HINTS: ${{ inputs.fix-hints }}
           INCLUDE_TESTS: ${{ inputs.include-tests }}
+          PQC_MODE: ${{ steps.resolve.outputs.pqc_mode }}
         shell: bash
         run: |
           # Build command arguments
@@ -222,7 +351,8 @@ jobs:
           # Run check and capture output
           set +e
           # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
-          uv run --frozen $NO_BUILD_FLAG python "$SCRIPT_PATH" \
+          uv run --frozen $NO_BUILD_FLAG python "$CHECKER_PATH" \
+            --pqc-mode "$PQC_MODE" \
             $FIX_HINTS_FLAG \
             $INCLUDE_TESTS_FLAG \
             $STRICT_FLAG \
@@ -232,49 +362,63 @@ jobs:
 
           # Also generate JSON report
           # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
-          uv run --frozen $NO_BUILD_FLAG python "$SCRIPT_PATH" \
+          uv run --frozen $NO_BUILD_FLAG python "$CHECKER_PATH" \
             --json \
+            --pqc-mode "$PQC_MODE" \
             $INCLUDE_TESTS_FLAG \
             > fips-report.json 2>/dev/null || true
 
           echo "exit_code=$EXIT_CODE" >> $GITHUB_OUTPUT
 
-          # Extract summary for PR comment
+          # Extract summary for PR comment; pqc_findings and the CBOM-style
+          # inventory come from the v8 contract and default to empty for
+          # caller-local checkers that predate it.
           if [ -f fips-report.json ]; then
-            ERRORS=$(jq -r '.summary.errors' fips-report.json)
-            WARNINGS=$(jq -r '.summary.warnings' fips-report.json)
-            INFO=$(jq -r '.summary.info' fips-report.json)
+            ERRORS=$(jq -r '.summary.errors // 0' fips-report.json)
+            WARNINGS=$(jq -r '.summary.warnings // 0' fips-report.json)
+            INFO=$(jq -r '.summary.info // 0' fips-report.json)
+            PQC_FINDINGS=$(jq -r '.summary.pqc_findings // 0' fips-report.json)
             echo "errors=$ERRORS" >> $GITHUB_OUTPUT
             echo "warnings=$WARNINGS" >> $GITHUB_OUTPUT
             echo "info=$INFO" >> $GITHUB_OUTPUT
+            echo "pqc_findings=$PQC_FINDINGS" >> $GITHUB_OUTPUT
+            if jq -e '.inventory' fips-report.json > /dev/null 2>&1; then
+              jq '.inventory' fips-report.json > fips-inventory.json
+            fi
           else
             echo "errors=0" >> $GITHUB_OUTPUT
             echo "warnings=0" >> $GITHUB_OUTPUT
             echo "info=0" >> $GITHUB_OUTPUT
+            echo "pqc_findings=0" >> $GITHUB_OUTPUT
           fi
 
       # Gate on detect state too so docs-only callers (state=skip) and poetry-not-supported
       # callers don't emit upload-artifact "No files were found" warnings when the FIPS
       # check step was skipped and produced no report files.
       - name: Upload FIPS report
-        if: always() && steps.script-check.outputs.script_exists == 'true' && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock')
+        if: >-
+          always() && steps.resolve.outputs.checker_source != 'none'
+          && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock')
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: fips-compatibility-report
           path: |
             fips-report.txt
             fips-report.json
+            fips-inventory.json
           retention-days: ${{ inputs.artifact-retention-days }}
           if-no-files-found: warn
 
       - name: Comment on PR
-        if: github.event_name == 'pull_request' && steps.script-check.outputs.script_exists == 'true'
+        if: github.event_name == 'pull_request' && steps.resolve.outputs.checker_source != 'none'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
         with:
           script: |
             const errors = parseInt('${{ steps.fips-check.outputs.errors }}') || 0;
             const warnings = parseInt('${{ steps.fips-check.outputs.warnings }}') || 0;
             const info = parseInt('${{ steps.fips-check.outputs.info }}') || 0;
+            const pqcFindings = parseInt('${{ steps.fips-check.outputs.pqc_findings }}') || 0;
+            const pqcMode = '${{ steps.resolve.outputs.pqc_mode }}';
 
             let status = '✅ PASSED';
             let emoji = '✅';
@@ -293,8 +437,9 @@ jobs:
             | Errors | ${errors} |
             | Warnings | ${warnings} |
             | Info | ${info} |
+            | PQC readiness findings | ${pqcFindings} |
 
-            **Status:** ${status}
+            **Status:** ${status} (PQC mode: ${pqcMode})
 
             ${errors > 0 ?
               '⚠️ This PR introduces FIPS-incompatible code or dependencies. ' +
@@ -304,24 +449,37 @@ jobs:
             ${warnings > 0 && errors === 0 ?
               'ℹ️ Some packages may need verification for FIPS compliance. ' +
               'See the workflow artifacts for details.' : ''}
+            ${pqcFindings > 0 ?
+              '🧭 ' + pqcFindings + ' finding(s) track post-quantum migration readiness ' +
+              '(quantum-vulnerable key establishment or signatures). These do not block ' +
+              'merges in warn mode; see the fips-inventory.json artifact for the ' +
+              'algorithm inventory.' : ''}
 
             <details>
-            <summary>What is FIPS?</summary>
+            <summary>What are FIPS and PQC readiness?</summary>
 
             FIPS 140-2/140-3 is a US government standard for cryptographic modules.
             Systems running Ubuntu LTS with \`fips-updates\` or similar configurations
             restrict cryptographic algorithms to NIST-approved ones.
 
+            PQC readiness findings (\`PQC-*\` codes) mark quantum-vulnerable
+            primitives. NIST finalized FIPS 203 (ML-KEM), FIPS 204 (ML-DSA) and
+            FIPS 205 (SLH-DSA) in August 2024; NIST IR 8547 deprecates
+            112-bit-strength classical algorithms after 2030. The migration target
+            is hybrid key establishment (classical exchange combined with ML-KEM
+            per NIST SP 800-56C Rev. 2).
+
             **Common issues:**
             - Using \`hashlib.md5()\` without \`usedforsecurity=False\`
             - Dependencies using non-approved algorithms (bcrypt, DES, RC4)
-            - Weak cipher configurations
+            - Classical-only key establishment (ECDH, RSA-OAEP) with no hybrid plan
 
             **How to fix:**
             1. Use \`hashlib.md5(b'data', usedforsecurity=False)\` for non-security purposes
             2. Replace MD5/SHA1 with SHA-256 or SHA-512 for security contexts
             3. Audit dependencies for FIPS-approved alternatives
-            4. Test on FIPS-enabled systems if targeting government/healthcare
+            4. Plan hybrid key establishment (ML-KEM + classical) for quantum-vulnerable exchanges
+            5. Test on FIPS-enabled systems if targeting government/healthcare
 
             </details>
             `;
@@ -358,24 +516,32 @@ jobs:
         if: always()
         env:
           SCRIPT_PATH: ${{ inputs.script-path }}
+          CHECKER_SOURCE: ${{ steps.resolve.outputs.checker_source }}
+          REPO_STATE: ${{ steps.detect.outputs.state }}
         run: |
           echo "## FIPS Compatibility Check" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          if [ "${{ steps.script-check.outputs.script_exists }}" != "true" ]; then
+          if [ "$CHECKER_SOURCE" == "none" ] || [ -z "$CHECKER_SOURCE" ]; then
             echo "**Status:** ⚠️ Skipped" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "FIPS check script not found at \`$SCRIPT_PATH\`" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "To enable FIPS checking:" >> $GITHUB_STEP_SUMMARY
-            echo "1. Ensure the FIPS compatibility script exists in your repository" >> $GITHUB_STEP_SUMMARY
-            echo "2. Or specify the correct path via the \`script-path\` input" >> $GITHUB_STEP_SUMMARY
+            if [ "$REPO_STATE" != "uv-locked" ] && [ "$REPO_STATE" != "uv-no-lock" ]; then
+              echo "No runnable Python project detected (state: \`$REPO_STATE\`)." >> $GITHUB_STEP_SUMMARY
+            else
+              echo "No FIPS checker available (no caller-local script at \`$SCRIPT_PATH\`, central checker disabled or unavailable)." >> $GITHUB_STEP_SUMMARY
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "To enable FIPS checking:" >> $GITHUB_STEP_SUMMARY
+              echo "1. Leave \`use-central-checker\` enabled to use the org-central checker, or" >> $GITHUB_STEP_SUMMARY
+              echo "2. Ship a custom checker in your repository and point \`script-path\` at it" >> $GITHUB_STEP_SUMMARY
+            fi
             exit 0
           fi
 
           ERRORS="${{ steps.fips-check.outputs.errors }}"
           WARNINGS="${{ steps.fips-check.outputs.warnings }}"
           INFO="${{ steps.fips-check.outputs.info }}"
+          PQC_FINDINGS="${{ steps.fips-check.outputs.pqc_findings }}"
+          PQC_MODE="${{ steps.resolve.outputs.pqc_mode }}"
 
           if [ "$ERRORS" == "0" ]; then
             if [ "$WARNINGS" == "0" ]; then
@@ -394,16 +560,23 @@ jobs:
           fi
 
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Checker source: \`$CHECKER_SOURCE\`; PQC mode: \`$PQC_MODE\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
           echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
           echo "| Errors | $ERRORS |" >> $GITHUB_STEP_SUMMARY
           echo "| Warnings | $WARNINGS |" >> $GITHUB_STEP_SUMMARY
           echo "| Info | $INFO |" >> $GITHUB_STEP_SUMMARY
+          echo "| PQC readiness findings | $PQC_FINDINGS |" >> $GITHUB_STEP_SUMMARY
 
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Resources" >> $GITHUB_STEP_SUMMARY
           echo "- [FIPS 140-2 Overview](https://csrc.nist.gov/pubs/fips/140-2/upd2/final)" >> $GITHUB_STEP_SUMMARY
           echo "- [FIPS 140-3 Standard](https://csrc.nist.gov/pubs/fips/140-3/final)" >> $GITHUB_STEP_SUMMARY
+          echo "- [FIPS 203: ML-KEM](https://csrc.nist.gov/pubs/fips/203/final)" >> $GITHUB_STEP_SUMMARY
+          echo "- [FIPS 204: ML-DSA](https://csrc.nist.gov/pubs/fips/204/final)" >> $GITHUB_STEP_SUMMARY
+          echo "- [FIPS 205: SLH-DSA](https://csrc.nist.gov/pubs/fips/205/final)" >> $GITHUB_STEP_SUMMARY
+          echo "- [NIST IR 8547: Transition to PQC](https://csrc.nist.gov/pubs/ir/8547/ipd)" >> $GITHUB_STEP_SUMMARY
           echo "- [Python FIPS Mode](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/security_hardening/using-the-system-wide-cryptographic-policies_security-hardening#proc_enabling-fips-mode-in-a-system_using-the-system-wide-cryptographic-policies)" >> $GITHUB_STEP_SUMMARY
 
       # Gate on detect state to avoid a false failure when the fips-check step was skipped
@@ -411,20 +584,26 @@ jobs:
       # output is empty; `empty != '0'` evaluates true and would otherwise trigger this step
       # as a false-failure for docs-only callers.
       - name: Check result
-        if: steps.script-check.outputs.script_exists == 'true' && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock') && steps.fips-check.outputs.exit_code != '0'
+        if: steps.resolve.outputs.checker_source != 'none' && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock') && steps.fips-check.outputs.exit_code != '0'
         run: |
           echo "::error::FIPS compatibility issues found. See the report for details."
           exit 1
 
-  # Optional: Test on actual FIPS-enabled environment
+  # Optional: Test on actual FIPS-enabled environment.
+  # The matrix adds a pqc-probe leg (when pqc-mode is not 'off') that reports
+  # hybrid-KEM capability of the runner and the project's dependency stack.
   fips-runtime-test:
-    name: FIPS Runtime Test
+    name: FIPS Runtime Test (${{ matrix.crypto-backend }})
     runs-on: ubuntu-latest
     if: inputs.enable-runtime-test
     needs: fips-check
     permissions:
       contents: read
     timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        crypto-backend: ${{ fromJSON(inputs.pqc-mode != 'off' && '["classical", "pqc-probe"]' || '["classical"]') }}
     env:
       NO_BUILD_FLAG: ${{ inputs.no-build && '--no-build' || '' }}
 
@@ -486,7 +665,7 @@ jobs:
       # S8541 (--no-build) remains suppressed below because `--no-build` is opt-out via the
       # `no-build` workflow input and SonarCloud cannot follow the env-var indirection.
       - name: Test crypto imports in simulated FIPS mode
-        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
+        if: matrix.crypto-backend == 'classical' && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock')
         shell: bash
         run: |
           # This tests if the code can import without using non-FIPS algorithms
@@ -520,13 +699,69 @@ jobs:
           print('\\nBasic FIPS compatibility: PASSED')
           "
 
+      # Informational by design: capability depends on the runner image's
+      # OpenSSL and the project's dependency stack, not on the caller's code,
+      # so a missing capability must not fail the build. #EDGE flip this to a
+      # hard gate only once fleet baseline images ship OpenSSL 3.5+ (the first
+      # release with ML-KEM and the X25519MLKEM768 hybrid TLS group).
+      - name: Probe hybrid PQC capability
+        if: matrix.crypto-backend == 'pqc-probe' && (steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock')
+        shell: bash
+        run: |
+          PROBE=pqc-probe.md
+          echo "### PQC capability probe" > "$PROBE"
+          echo "" >> "$PROBE"
+          echo "- Runner OpenSSL: $(openssl version)" >> "$PROBE"
+
+          if openssl list -kem-algorithms 2>/dev/null | grep -qi 'ML-KEM'; then
+            echo "- ML-KEM (FIPS 203): ✅ available in runner OpenSSL" >> "$PROBE"
+          else
+            echo "- ML-KEM (FIPS 203): ❌ not available; hybrid TLS groups such as X25519MLKEM768 require OpenSSL 3.5+" >> "$PROBE"
+          fi
+
+          if openssl list -signature-algorithms 2>/dev/null | grep -qi 'ML-DSA'; then
+            echo "- ML-DSA (FIPS 204): ✅ available in runner OpenSSL" >> "$PROBE"
+          else
+            echo "- ML-DSA (FIPS 204): ❌ not available in runner OpenSSL" >> "$PROBE"
+          fi
+
+          # NOSONAR(S8541): --no-build is opt-out via `no-build` workflow input
+          uv run --frozen $NO_BUILD_FLAG python - >> "$PROBE" <<'PYEOF'
+          import ssl
+
+          print(f"- Python ssl links: {ssl.OPENSSL_VERSION}")
+          try:
+              import cryptography
+              print(f"- cryptography: {cryptography.__version__}")
+              try:
+                  from cryptography.hazmat.primitives.asymmetric import ml_kem  # noqa: F401
+                  print("- cryptography ML-KEM bindings: ✅ available")
+              except ImportError:
+                  print("- cryptography ML-KEM bindings: ❌ not available (needs cryptography 46+ built against OpenSSL 3.5+)")
+          except ImportError:
+              print("- cryptography: not installed in the project environment")
+          PYEOF
+
+          echo "" >> "$PROBE"
+          echo "The probe is informational: it reports whether this environment can negotiate hybrid key establishment, and never fails the build." >> "$PROBE"
+
+          cat "$PROBE"
+          cat "$PROBE" >> $GITHUB_STEP_SUMMARY
+
       - name: Runtime Test Summary
         if: always()
+        env:
+          BACKEND: ${{ matrix.crypto-backend }}
         run: |
-          echo "## FIPS Runtime Test" >> $GITHUB_STEP_SUMMARY
+          echo "## FIPS Runtime Test ($BACKEND)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Status:** ${{ job.status == 'success' && '✅ Passed' || '❌ Failed' }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "This test simulates FIPS mode by checking basic cryptographic operations." >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Note:** Full FIPS validation requires testing on a system with FIPS mode enabled at the kernel level." >> $GITHUB_STEP_SUMMARY
+          if [ "$BACKEND" == "classical" ]; then
+            echo "This test simulates FIPS mode by checking basic cryptographic operations." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Note:** Full FIPS validation requires testing on a system with FIPS mode enabled at the kernel level." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "This leg probes hybrid PQC capability (ML-KEM/ML-DSA availability) of the runner and dependency stack." >> $GITHUB_STEP_SUMMARY
+            echo "See the probe section above; it is informational and never fails the build." >> $GITHUB_STEP_SUMMARY
+          fi
