@@ -37,7 +37,7 @@ inventory (JSON `inventory` key) so compliance state can be aggregated across
 the fleet; that inventory is the migration progress metric.
 
 Exit codes: 0 = compliant (per mode); 1 = errors found, or classic warnings
-found under --strict.
+found under --strict; 2 = usage error (e.g. --root is not a directory).
 """
 
 from __future__ import annotations
@@ -225,7 +225,7 @@ SOURCE_RULES: list[SourceRule] = [
     SourceRule(
         code="PQC-CLASSICAL-KEX",
         severity="warning",
-        pattern=re.compile(r"ec\.ECDH\s*\(|\b(X25519|X448)PrivateKey\b"),
+        pattern=re.compile(r"ec\.(ECDH)\s*\(|\b(X25519|X448)PrivateKey\b"),
         message=(
             "Classical-only key establishment is quantum-vulnerable "
             "(harvest-now-decrypt-later risk)."
@@ -235,7 +235,7 @@ SOURCE_RULES: list[SourceRule] = [
             "classical exchange per NIST SP 800-56C Rev. 2."
         ),
         pqc=True,
-        algorithm="ECDH",
+        algorithm="{1}",
         category="key-establishment",
         quantum_vulnerable=True,
     ),
@@ -260,18 +260,20 @@ SOURCE_RULES: list[SourceRule] = [
         code="PQC-CLASSICAL-SIG",
         severity="info",
         pattern=re.compile(
-            r"ec\.ECDSA\s*\(|padding\.PSS\s*\(|\b(Ed25519|Ed448)PrivateKey\b|\bdsa\.generate_private_key\b"
+            r"ec\.(ECDSA)\s*\(|padding\.(PSS|PKCS1v15)\s*\("
+            r"|\b(Ed25519|Ed448)PrivateKey\b|\b(dsa|rsa)\.generate_private_key\b"
         ),
         message=(
-            "Classical-only digital signature; quantum-vulnerable in the "
-            "NIST IR 8547 transition timeline (deprecated after 2030)."
+            "Classical-only public-key primitive (signature or RSA keygen); "
+            "quantum-vulnerable in the NIST IR 8547 transition timeline "
+            "(deprecated after 2030)."
         ),
         fix_hint=(
             "Plan migration to ML-DSA (FIPS 204) or SLH-DSA (FIPS 205), or a "
             "hybrid signature scheme."
         ),
         pqc=True,
-        algorithm="RSA/ECDSA/EdDSA",
+        algorithm="{1}",
         category="signature",
         quantum_vulnerable=True,
     ),
@@ -314,7 +316,7 @@ DEP_RULES: dict[str, tuple[str, str, bool, str, str]] = {
         "warning",
         False,
         "bcrypt uses Blowfish-based hashing, which is not FIPS-approved.",
-        "Use PBKDF2-HMAC-SHA256 (NIST SP 800-132), e.g. passlib[pbkdf2] or hashlib.pbkdf2_hmac.",
+        "Use PBKDF2-HMAC-SHA256 (NIST SP 800-132), e.g. passlib or hashlib.pbkdf2_hmac.",
     ),
     "pycrypto": (
         "FIPS-DEP",
@@ -450,17 +452,23 @@ def scan_source_file(path: Path, rel: str, issues: list[Issue], inventory: list[
     for rule in SOURCE_RULES:
         for match in rule.pattern.finditer(content):
             line_no = line_of(content, match.start())
-            algorithm = rule.algorithm
-            if "{1}" in algorithm and match.lastindex:
-                algorithm = match.group(1) or algorithm
-            if algorithm:
-                inventory.append(
-                    InventoryEntry(algorithm, rule.category, rel, line_no, rule.quantum_vulnerable)
-                )
+            # Suppressed and usedforsecurity=False touchpoints are excluded from
+            # BOTH findings and the inventory, so the CBOM migration metric and
+            # the PQC-NO-CAPABILITY heuristic count only actionable crypto.
             if rule.honors_usedforsecurity and call_has_usedforsecurity_false(content, match.start()):
                 continue
             if is_suppressed(lines, line_no, rule.code):
                 continue
+            # algorithm="{1}" resolves to whichever alternation group matched
+            # (match.lastindex), so mixed patterns label the actual primitive
+            # (X25519 vs ECDH, ECDSA vs RSA) instead of a static string.
+            algorithm = rule.algorithm
+            if algorithm == "{1}":
+                algorithm = match.group(match.lastindex) if match.lastindex else ""
+            if algorithm:
+                inventory.append(
+                    InventoryEntry(algorithm, rule.category, rel, line_no, rule.quantum_vulnerable)
+                )
             issues.append(
                 Issue(rel, line_no, rule.severity, rule.code, rule.message, rule.fix_hint, rule.pqc)
             )
@@ -474,13 +482,14 @@ def scan_source_file(path: Path, rel: str, issues: list[Issue], inventory: list[
                 InventoryEntry(algorithm, category, rel, line_of(content, match.start()), qv)
             )
 
-    pqc_capable = PQC_CAPABLE_CODE_RE.search(content) is not None
-    if pqc_capable:
-        match = PQC_CAPABLE_CODE_RE.search(content)
+    pqc_match = PQC_CAPABLE_CODE_RE.search(content)
+    if pqc_match:
         inventory.append(
-            InventoryEntry(match.group(1), "pqc", rel, line_of(content, match.start()), False)
+            InventoryEntry(
+                pqc_match.group(1), "pqc", rel, line_of(content, pqc_match.start()), False
+            )
         )
-    return pqc_capable
+    return pqc_match is not None
 
 
 def dep_name(requirement: str) -> str:
@@ -514,17 +523,52 @@ def cryptography_bound_predates_pqc(spec: str) -> bool:
     return excluded
 
 
-def collect_requirements(root: Path) -> list[tuple[str, str, int]]:
-    """Return (requirement, source_file, line) tuples from pyproject and requirements files."""
+def collect_requirements(root: Path) -> tuple[list[tuple[str, str, int]], list[Issue]]:
+    """Return (requirements, manifest_issues).
+
+    requirements are (requirement, source_file, line) tuples from pyproject and
+    requirements files. manifest_issues surfaces conditions that would otherwise
+    SILENTLY disable dependency scanning: an unparseable pyproject.toml (raised
+    as an error so the gate fails loudly instead of passing green), or a
+    pyproject.toml present on a runtime whose stdlib lacks tomllib (Python < 3.11).
+    """
     found: list[tuple[str, str, int]] = []
+    manifest_issues: list[Issue] = []
 
     pyproject = root / "pyproject.toml"
-    if pyproject.is_file() and tomllib is not None:
+    if pyproject.is_file():
+        if tomllib is None:
+            manifest_issues.append(
+                Issue(
+                    "pyproject.toml",
+                    1,
+                    "warning",
+                    "FIPS-TOML-UNAVAILABLE",
+                    "pyproject.toml is present but tomllib is unavailable "
+                    "(Python < 3.11); its declared dependencies were NOT scanned.",
+                    "Run the checker on Python 3.11+ so pyproject dependencies are scanned.",
+                )
+            )
+            return found, manifest_issues
+
         try:
             raw = pyproject.read_text(encoding="utf-8", errors="replace")
             data = tomllib.loads(raw)
-        except (OSError, tomllib.TOMLDecodeError):
-            data, raw = {}, ""
+        except OSError:
+            raw, data = "", {}
+        except tomllib.TOMLDecodeError as exc:
+            raw, data = "", {}
+            manifest_issues.append(
+                Issue(
+                    "pyproject.toml",
+                    1,
+                    "error",
+                    "FIPS-MANIFEST-UNPARSEABLE",
+                    f"pyproject.toml could not be parsed ({exc}); dependency "
+                    "scanning was skipped and may hide non-FIPS packages.",
+                    "Fix the pyproject.toml syntax so declared dependencies are scanned.",
+                )
+            )
         raw_lines = raw.splitlines()
 
         def locate(req: str) -> int:
@@ -551,13 +595,15 @@ def collect_requirements(root: Path) -> list[tuple[str, str, int]]:
         except OSError:
             continue
 
-    return found
+    return found, manifest_issues
 
 
 def scan_dependencies(root: Path, issues: list[Issue], inventory: list[InventoryEntry]) -> bool:
     """Scan dependency declarations; returns True if a PQC-capable dep is present."""
     pqc_capable = False
-    for requirement, source, line_no in collect_requirements(root):
+    requirements, manifest_issues = collect_requirements(root)
+    issues.extend(manifest_issues)
+    for requirement, source, line_no in requirements:
         name = dep_name(requirement)
         if not name:
             continue
@@ -648,7 +694,9 @@ def print_text_report(report: dict, issues: list[Issue], fix_hints: bool) -> Non
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(
+        description=(__doc__ or "FIPS/PQC compatibility checker").splitlines()[0]
+    )
     parser.add_argument("--strict", action="store_true", help="classic FIPS warnings fail the build")
     parser.add_argument("--fix-hints", action="store_true", help="show fix hints in text output")
     parser.add_argument("--include-tests", action="store_true", help="also scan test files")
@@ -663,6 +711,12 @@ def main() -> int:
     args = parser.parse_args()
 
     root = Path(args.root).resolve()
+    if not root.is_dir():
+        print(
+            f"error: --root is not an existing directory: {args.root}",
+            file=sys.stderr,
+        )
+        return 2
     issues: list[Issue] = []
     inventory: list[InventoryEntry] = []
 

@@ -52,9 +52,18 @@ The workflow resolves which checker script to run in this order:
 Set `use-central-checker: false` to disable the fallback (restores the pre-v8
 behavior of requiring a repo-local script).
 
-`central-checker-ref` defaults to `main` so rule updates apply immediately.
-Repos wanting supply-chain rigor should pin an immutable point tag or a full
-40-character SHA (the org tag ruleset makes `v*` tags immutable).
+> [!WARNING]
+> **Supply-chain: the default `central-checker-ref` is a floating ref.**
+> `central-checker-ref` defaults to `main`, so the checker code that runs in
+> your CI is whatever `HEAD` of `ByronWilliamsCPA/.github` points to at run
+> time, not a pinned artifact. This is deliberate (rule updates apply
+> fleet-wide without a per-repo bump) and is the same trust already placed in
+> the reusable workflow, but it is **not** a pinned dependency. For
+> reproducible or audited CI (regulated / high-assurance repos), set
+> `central-checker-ref` to an immutable full 40-character SHA or a `v*` tag and
+> let Renovate advance it. The org tag ruleset makes `v*` tags immutable;
+> `main` is not. To pin the checker without the network fetch at all, ship a
+> repo-local `script-path` and set `use-central-checker: false`.
 
 ## PQC Readiness and the Hybrid Migration
 
@@ -129,6 +138,9 @@ default.
 ```yaml
 jobs:
   fips-check:
+    # Renovate advances this pin. pqc-mode, use-central-checker,
+    # central-checker-ref and fail-on-missing-script require the first release
+    # cut from v8.0.0 or later.
     uses: ByronWilliamsCPA/.github/.github/workflows/python-fips-compatibility.yml@aaf22b70696819de5122dcde708406aaff968484 # v7.0.20
     with:
       # Treat classic FIPS warnings as errors (default: false).
@@ -142,7 +154,9 @@ jobs:
       use-central-checker: true
 
       # Ref of ByronWilliamsCPA/.github for the central checker (default: main).
-      # Pin an immutable point tag or full SHA for supply-chain rigor.
+      # WARNING: main is a FLOATING ref (see the Checker Resolution warning
+      # above). For reproducible/audited CI, pin a full 40-char SHA or v* tag
+      # and let Renovate advance it.
       central-checker-ref: 'main'
 
       # Fail instead of soft-skipping when no checker is available (default: false)
@@ -203,7 +217,7 @@ jobs:
 | `strict-mode` | boolean | No | `false` | Treat classic FIPS warnings as errors (PQC findings are governed by `pqc-mode`) |
 | `pqc-mode` | string | No | `'warn'` | PQC readiness ratchet: `off`, `warn`, or `error` |
 | `use-central-checker` | boolean | No | `true` | Fall back to the org-central checker when no local script exists |
-| `central-checker-ref` | string | No | `'main'` | Ref of `ByronWilliamsCPA/.github` to fetch the central checker from |
+| `central-checker-ref` | string | No | `'main'` | Ref of `ByronWilliamsCPA/.github` to fetch the central checker from. Default `main` is a **floating** ref; pin a full SHA or `v*` tag for reproducible/audited CI (see the Checker Resolution warning) |
 | `fail-on-missing-script` | boolean | No | `false` | Fail instead of soft-skipping when no checker is available |
 | `include-tests` | boolean | No | `true` | Include test files in FIPS analysis |
 | `fix-hints` | boolean | No | `true` | Show fix hints in output |
@@ -312,12 +326,19 @@ cipher = algorithms.AES(key)  # ✅ AES is FIPS-approved
 bcrypt==4.1.2  # ❌ Uses Blowfish (not FIPS-approved)
 ```
 
-**Fix:**
+**Fix:** prefer the standard library, which routes through the system FIPS
+module and needs no dependency:
 
-```text
-passlib[pbkdf2]==1.7.4  # ✅ PBKDF2-HMAC-SHA256 (NIST SP 800-132 approved)
-# Note: argon2-cffi is NOT FIPS-approved; use PBKDF2 or another NIST-approved KDF
+```python
+import hashlib
+# PBKDF2-HMAC-SHA256, NIST SP 800-132 approved
+dk = hashlib.pbkdf2_hmac("sha256", password, salt, 600_000)  # ✅
 ```
+
+`hashlib.scrypt` (stdlib) is another option. If you need a password-hashing
+library rather than a raw KDF, choose one whose backend is a NIST-approved
+algorithm; note that `argon2-cffi` and `bcrypt` are **not** FIPS-approved, and
+`passlib` is effectively unmaintained (last release 1.7.4, 2020).
 
 ### Issue: Classical-Only Key Establishment (PQC)
 
@@ -347,8 +368,15 @@ python scripts/check_fips_compatibility.py \
   [--fix-hints] \
   [--include-tests] \
   [--json] \
-  [--pqc-mode {off,warn,error}]
+  [--pqc-mode {off,warn,error}] \
+  [--root PATH]
 ```
+
+The workflow invokes the checker from the repo root and always passes the
+first five flags. `--root PATH` (default `.`) scopes the scan to a directory
+and is provided for local invocation and testing; the reusable workflow does
+not pass it, so a custom checker is not required to accept it. The org-central
+checker exits `2` if `--root` is not an existing directory.
 
 **BREAKING (v8.0.0):** the workflow always passes `--pqc-mode`. Custom
 checkers written against the v7 contract must add the flag (one argparse

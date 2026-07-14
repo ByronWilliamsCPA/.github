@@ -39,6 +39,16 @@
 #   3. None available: soft-skip with a warning, or hard fail when
 #      fail-on-missing-script is true.
 #
+# SUPPLY-CHAIN NOTE (central-checker-ref): the default is 'main', a FLOATING
+# ref. Fetching the checker from a floating ref means the exact code that runs
+# in your CI is whatever HEAD of ByronWilliamsCPA/.github points to at run
+# time. This is deliberate (rule updates roll out without a per-repo bump) and
+# is the same trust already extended to the reusable workflow itself, but it is
+# NOT the same as a pinned dependency. For a repo that requires reproducible,
+# audited CI (regulated / high-assurance), pass an immutable full SHA or point
+# tag as central-checker-ref and let Renovate advance it. The org v* tag
+# ruleset makes v* tags immutable; 'main' is not.
+#
 # BREAKING (v8.0.0): the checker CLI contract now includes
 # `--pqc-mode {off,warn,error}`. Caller-local custom checkers must accept
 # this flag (one argparse line); see docs/workflows/python-fips-compatibility.md.
@@ -120,7 +130,10 @@ on:
         default: true
 
       central-checker-ref:
-        description: 'Git ref of ByronWilliamsCPA/.github to fetch the central checker from; pin an immutable point tag or full SHA for supply-chain rigor'
+        # SUPPLY-CHAIN: default 'main' is a floating ref (see header note). The
+        # checker code that runs is whatever HEAD points to at run time. Pin a
+        # full SHA or immutable v* tag for reproducible/audited CI.
+        description: 'Git ref of ByronWilliamsCPA/.github for the central checker. Default main is FLOATING; pin a full SHA or v* tag for supply-chain rigor (see header note)'
         type: string
         required: false
         default: 'main'
@@ -373,23 +386,34 @@ jobs:
           # Extract summary for PR comment; pqc_findings and the CBOM-style
           # inventory come from the v8 contract and default to empty for
           # caller-local checkers that predate it.
+          # #CRITICAL Shape-guard every value before it reaches GITHUB_OUTPUT.
+          # A caller-local (pre-v8) checker controls this JSON, so a value
+          # containing a newline could otherwise inject extra key=value lines
+          # into GITHUB_OUTPUT (org GITHUB_OUTPUT-injection convention, PR #234).
+          # #VERIFY the regex rejects anything that is not a bare non-negative
+          # integer; non-matching input falls back to 0.
+          emit_int() {
+            local key="$1" val="$2"
+            [[ "$val" =~ ^[0-9]+$ ]] || val=0
+            echo "${key}=${val}" >> "$GITHUB_OUTPUT"
+          }
           if [ -f fips-report.json ]; then
             ERRORS=$(jq -r '.summary.errors // 0' fips-report.json)
             WARNINGS=$(jq -r '.summary.warnings // 0' fips-report.json)
             INFO=$(jq -r '.summary.info // 0' fips-report.json)
             PQC_FINDINGS=$(jq -r '.summary.pqc_findings // 0' fips-report.json)
-            echo "errors=$ERRORS" >> $GITHUB_OUTPUT
-            echo "warnings=$WARNINGS" >> $GITHUB_OUTPUT
-            echo "info=$INFO" >> $GITHUB_OUTPUT
-            echo "pqc_findings=$PQC_FINDINGS" >> $GITHUB_OUTPUT
+            emit_int errors "$ERRORS"
+            emit_int warnings "$WARNINGS"
+            emit_int info "$INFO"
+            emit_int pqc_findings "$PQC_FINDINGS"
             if jq -e '.inventory' fips-report.json > /dev/null 2>&1; then
               jq '.inventory' fips-report.json > fips-inventory.json
             fi
           else
-            echo "errors=0" >> $GITHUB_OUTPUT
-            echo "warnings=0" >> $GITHUB_OUTPUT
-            echo "info=0" >> $GITHUB_OUTPUT
-            echo "pqc_findings=0" >> $GITHUB_OUTPUT
+            emit_int errors 0
+            emit_int warnings 0
+            emit_int info 0
+            emit_int pqc_findings 0
           fi
 
       # Gate on detect state too so docs-only callers (state=skip) and poetry-not-supported
@@ -412,13 +436,23 @@ jobs:
       - name: Comment on PR
         if: github.event_name == 'pull_request' && steps.resolve.outputs.checker_source != 'none'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3  # v9.0.0
+        env:
+          FIPS_ERRORS: ${{ steps.fips-check.outputs.errors }}
+          FIPS_WARNINGS: ${{ steps.fips-check.outputs.warnings }}
+          FIPS_INFO: ${{ steps.fips-check.outputs.info }}
+          FIPS_PQC_FINDINGS: ${{ steps.fips-check.outputs.pqc_findings }}
+          FIPS_PQC_MODE: ${{ steps.resolve.outputs.pqc_mode }}
         with:
           script: |
-            const errors = parseInt('${{ steps.fips-check.outputs.errors }}') || 0;
-            const warnings = parseInt('${{ steps.fips-check.outputs.warnings }}') || 0;
-            const info = parseInt('${{ steps.fips-check.outputs.info }}') || 0;
-            const pqcFindings = parseInt('${{ steps.fips-check.outputs.pqc_findings }}') || 0;
-            const pqcMode = '${{ steps.resolve.outputs.pqc_mode }}';
+            // Read step outputs from env, never interpolate expressions into
+            // the script body: keeps caller-influenced values out of the JS
+            // source and lets Number() coerce defensively.
+            const errors = Number(process.env.FIPS_ERRORS) || 0;
+            const warnings = Number(process.env.FIPS_WARNINGS) || 0;
+            const info = Number(process.env.FIPS_INFO) || 0;
+            const pqcFindings = Number(process.env.FIPS_PQC_FINDINGS) || 0;
+            const pqcMode = process.env.FIPS_PQC_MODE || 'warn';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
 
             let status = '✅ PASSED';
             let emoji = '✅';
@@ -443,17 +477,17 @@ jobs:
 
             ${errors > 0 ?
               '⚠️ This PR introduces FIPS-incompatible code or dependencies. ' +
-              'Please review the [workflow run](' +
-              '${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}' +
-              ') for details.' : ''}
+              'Please review the [workflow run](' + runUrl + ') for details.' : ''}
             ${warnings > 0 && errors === 0 ?
               'ℹ️ Some packages may need verification for FIPS compliance. ' +
               'See the workflow artifacts for details.' : ''}
             ${pqcFindings > 0 ?
               '🧭 ' + pqcFindings + ' finding(s) track post-quantum migration readiness ' +
-              '(quantum-vulnerable key establishment or signatures). These do not block ' +
-              'merges in warn mode; see the fips-inventory.json artifact for the ' +
-              'algorithm inventory.' : ''}
+              '(quantum-vulnerable key establishment or signatures). ' +
+              (pqcMode === 'error'
+                ? 'In `error` mode these gate the check. '
+                : 'These do not block merges in `' + pqcMode + '` mode. ') +
+              'See the fips-inventory.json artifact for the algorithm inventory.' : ''}
 
             <details>
             <summary>What are FIPS and PQC readiness?</summary>

@@ -26,6 +26,37 @@ an immutable point tag; see `USAGE_EXAMPLES.md` for the pinning guidance.
   `summary.pqc_findings`, `pqc_mode`, and `inventory` keys, and the artifact
   adds `fips-inventory.json`.
 
+### Fixed
+
+- `scripts/check_fips_compatibility.py`: an unparseable `pyproject.toml` now
+  fails closed. Previously a `TOMLDecodeError` was swallowed and dependency
+  scanning returned zero findings, so a broken manifest declaring a non-FIPS
+  package reported a false pass (exit 0). It now emits
+  `FIPS-MANIFEST-UNPARSEABLE` at error severity and exits non-zero. On
+  Python < 3.11 (no `tomllib`) it emits `FIPS-TOML-UNAVAILABLE` (warning)
+  instead of silently skipping dependency scanning.
+- `scripts/check_fips_compatibility.py`: classical-only signature and RSA/DSA
+  key-generation primitives (`ec.ECDSA`, `padding.PSS`, `padding.PKCS1v15`,
+  `Ed25519`/`Ed448`, `rsa.generate_private_key`, `dsa.generate_private_key`)
+  are now detected under `PQC-CLASSICAL-SIG`, and inventory labels reflect the
+  matched primitive rather than a static rule name. Line suppressions
+  (`# fips: ignore`) are applied before the inventory append, so a suppressed
+  line no longer appears in the algorithm inventory.
+- `scripts/check_fips_compatibility.py`: `--root` now validates that its
+  argument is an existing directory, exiting `2` (usage error) instead of
+  producing an empty clean report for a nonexistent path.
+
+### Security
+
+- `python-fips-compatibility.yml`: counts extracted from the checker's JSON
+  are shape-guarded (integer regex) before being written to `GITHUB_OUTPUT`,
+  preventing a caller-local (pre-v8) checker from injecting extra
+  `key=value` output lines via a newline-bearing value. The PR-comment
+  `github-script` step now reads step outputs from `env` instead of
+  interpolating expressions into the script body, and its PQC text is
+  mode-aware (it no longer claims findings "do not block" when `pqc-mode`
+  is `error`).
+
 ### Added
 
 - `python-fips-compatibility.yml`: PQC (post-quantum cryptography) readiness
