@@ -99,6 +99,17 @@ Calling repos must provide:
 - **[SLSA Provenance](.github/workflows/python-slsa.yml)** (`python-slsa.yml`) - SLSA build provenance attestation for release artifacts
 - **[PR Validation](.github/workflows/python-pr-validation.yml)** (`python-pr-validation.yml`) - Deprecated; migrate to `python-ci.yml`
 
+### Other Reusable Workflows
+
+Not part of the `python-*` naming convention above, but also `workflow_call` reusable
+workflows any repo can call directly:
+
+- **[Claude Baseline Review](docs/workflows/claude-baseline-review.md)** (`claude-baseline-review.yml`) - Tier 0 automated PR triage: classifies, spot-checks, and posts an advisory `BASELINE-OK`/`ESCALATE` verdict
+- **[Supply Chain: Mirror Verify](docs/workflows/supply-chain-mirror-verify.md)** (`supply-chain-mirror-verify.yml`) - Resolves and signature-verifies an upstream image digest before promotion
+- **[Supply Chain: Build Verify](docs/workflows/supply-chain-build-verify.md)** (`supply-chain-build-verify.yml`) - Validates digest-pinned bases and builds a no-push local image before promotion
+- **[Supply Chain: Promote Core](docs/workflows/supply-chain-promote-core.md)** (`supply-chain-promote-core.yml`) - Shared scan, publish, sign, and lock-update chokepoint for both promotion paths
+- **[Supply Chain: Consume Verify](docs/workflows/supply-chain-consume-verify.md)** (`supply-chain-consume-verify.yml`) - Deploy-time gate verifying an image's approved-lock entry and signer identity
+
 ### Key Features
 
 ✅ **Security Hardened** - All actions pinned to commit SHAs

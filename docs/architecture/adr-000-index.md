@@ -26,3 +26,4 @@ Architecture references that are not decision records (no Context/Decision/Conse
 |----------|-------|--------|------|
 | [tiered-pr-review](tiered-pr-review.md) | Tiered PR Review Architecture: Reference for Reviewers | Proposed | 2026-06-12 |
 | [sonarcloud-nosonar-patterns](../sonarcloud-nosonar-patterns.md) | SonarCloud `# NOSONAR` Suppression Patterns | Living guide | 2026-05-25 |
+| [repo-ci-pipeline](repo-ci-pipeline.md) | This Repo's Own CI/CD Pipeline | Reference | 2026-07-14 |
