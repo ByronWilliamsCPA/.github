@@ -319,6 +319,30 @@ See [PyPI Publishing Migration Guide](../migration/pypi-publishing-migration.md)
 3. Test with TestPyPI
 4. Verify production release
 
+## Migration Background
+
+Historical note from the 2025-12-06 analysis that justified adopting this
+reusable workflow org-wide (originally `PYPI_WORKFLOW_ANALYSIS.md` at the repo
+root; merged here for provenance).
+
+The comparison that drove the migration, using `image_detection`'s prior
+177-line standalone workflow as the baseline:
+
+| Feature | Standalone workflow | This reusable workflow | Advantage |
+|---------|---------------------|-------------------------|-----------|
+| Lines of code | 177 | ~22 (caller only) | -88% |
+| OIDC Publishing | Yes | Yes | Same |
+| TestPyPI | Yes | Yes | Same |
+| Security scanning | No | Yes (Safety + Bandit) | Reusable |
+| Python version | Hardcoded | Configurable | Reusable |
+| Maintenance | Per-repo | Org-level | Reusable |
+
+**Recommendation at the time**: migrate immediately, test with TestPyPI
+first, keep the OIDC Trusted Publisher configuration unchanged (rollback is
+a simple `git revert`, since the publishing mechanism itself does not
+change). This recommendation has since been carried out; the standalone
+workflow pattern is no longer in use.
+
 ## Examples
 
 - [Complete Example](../../examples/publish-pypi-caller.yml) - Ready-to-use caller workflow

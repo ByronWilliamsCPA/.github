@@ -34,8 +34,8 @@ The capabilities being wired in:
 Evaluation summary: Snyk was selected over Cycode, Checkmarx One, and Endor Labs
 based on breadth of coverage (SAST + SCA + IaC + secrets), GitHub Actions native
 integration, MCP Server availability (Invariant Labs acquisition), and a free tier
-matching the org's use pattern. See `handoff-snyk-cicd.md` for full selection
-rationale.
+matching the org's use pattern. See `../archive/handoff-snyk-cicd.md` for full
+selection rationale.
 
 ---
 

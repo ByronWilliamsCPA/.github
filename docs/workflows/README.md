@@ -1,18 +1,18 @@
 # Reusable Workflows Documentation
 
-This directory contains documentation for the organization's reusable GitHub Actions workflows.
+This directory contains per-workflow documentation for the organization's
+reusable GitHub Actions workflows. For the full, current list of every
+workflow with its one-line purpose and doc link, see the
+[Available Workflows](../../README.md#available-workflows) section of the
+repository README, which is the canonical index; this page covers what's
+specific to browsing docs here.
 
-## Available Workflows
+## Further Reading
 
-### Python Workflows
-
-| Workflow | Purpose | Documentation |
-|----------|---------|---------------|
-| **python-publish-pypi.yml** | Publish Python packages to PyPI/TestPyPI using OIDC | [Migration Guide](../migration/pypi-publishing-migration.md) |
-| **python-fips-compatibility.yml** | Validate FIPS 140-2 compatibility | [FIPS Guide](python-fips-compatibility.md) |
-| **python-ci.yml** | Python CI pipeline | *Coming soon* |
-| **python-release.yml** | Automated semantic releases | *Coming soon* |
-| **python-security-analysis.yml** | Security scanning suite | *Coming soon* |
+- [NEW_WORKFLOWS_SUMMARY.md](NEW_WORKFLOWS_SUMMARY.md) - summary of workflows
+  added since the initial reusable-workflow rollout.
+- [workflow-optimizations.md](workflow-optimizations.md) - optimization notes
+  applied across the workflow library.
 
 ## Quick Start
 

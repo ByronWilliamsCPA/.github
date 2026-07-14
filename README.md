@@ -128,8 +128,8 @@ jobs:
 
 - **[USAGE_EXAMPLES.md](USAGE_EXAMPLES.md)** - Detailed usage examples
 - **[docs/python-versions.md](docs/python-versions.md)** - Python version policy (single source of truth, enforced in CI)
-- **[QLTY_INTEGRATION.md](QLTY_INTEGRATION.md)** - Qlty Cloud integration guide
-- **[PYPI_WORKFLOW_ANALYSIS.md](PYPI_WORKFLOW_ANALYSIS.md)** - PyPI workflow analysis & migration
+- **[docs/integrations/qlty-cloud.md](docs/integrations/qlty-cloud.md)** - Qlty Cloud integration guide
+- **[docs/architecture/adr-000-index.md](docs/architecture/adr-000-index.md)** - Architecture Decision Records index
 - **[docs/workflows/](docs/workflows/)** - Workflow-specific documentation
 - **[docs/migration/](docs/migration/)** - Step-by-step migration guides
 - **[examples/](examples/)** - Ready-to-use workflow examples
@@ -138,7 +138,7 @@ jobs:
 
 ## Qlty Cloud Integration
 
-Qlty Cloud provides centralized code quality management across all repositories. See [QLTY_INTEGRATION.md](QLTY_INTEGRATION.md) for setup guide.
+Qlty Cloud provides centralized code quality management across all repositories. See [docs/integrations/qlty-cloud.md](docs/integrations/qlty-cloud.md) for setup guide.
 
 ## How It Works
 

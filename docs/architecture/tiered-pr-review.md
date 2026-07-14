@@ -36,7 +36,7 @@ Every PR in this repo currently gets, in rough order:
 Constraints that shape the design:
 
 - Solo maintainer. Required human approvals are intentionally disabled
-  (see `docs/compliance-reports/manual-actions.md`); automation is the
+  (see `docs/compliance/manual-actions.md`); automation is the
   review capacity.
 - The deep pass is expensive (multi-agent, Opus-class consensus) and
   manual. PRs that never get it are gated only by the static layer and raw
@@ -233,4 +233,4 @@ advisory, nothing else is affected.
 - Traffic analysis basis: PRs #141 to #210 of this repo; deep-review value
   evidence: #175 review producing #176 and #177
 - Repo workflow standards: `.claude/CLAUDE.md` (RAD tagging, writing
-  rules), `docs/audit/2026-05-29/00-final-report.md` (baseline audit)
+  rules), `docs/compliance/audits/2026-05-29/00-final-report.md` (baseline audit)

@@ -163,5 +163,5 @@ posting is disabled.
 - **Role boundary.** Snyk owns SAST + IaC + AIBOM and keeps Open Source
   advisory; deterministic transitive-provenance reporting is handled by this
   workflow plus a local interpretation agent. See
-  [ADR-003](../planning/adr/adr-003-snyk-ai-code-security.md) and
+  [ADR-003](../architecture/adr-003-snyk-ai-code-security.md) and
   ByronWilliamsCPA/.claude ADR-009.
