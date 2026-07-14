@@ -23,14 +23,14 @@ or contributor reading the repo, not for a downstream integrator.
 
 ## Categories
 
-- [PR / merge-queue gating](#pr--merge-queue-gating): required checks that block a merge.
+- [PR and merge-queue gating](#pr-and-merge-queue-gating): required checks that block a merge.
 - [Self-testing and quality](#self-testing-and-quality): validates this repo's own
   workflows, scripts, and code quality.
 - [Scheduled security and supply-chain scanning](#scheduled-security-and-supply-chain-scanning):
   vulnerability and provenance scans, mostly schedule-driven.
 - [Release automation](#release-automation): cuts the semver tag consumers pin to.
 
-## PR / merge-queue gating
+## PR and merge-queue gating
 
 Checks that gate `pull_request` (and, where noted, `merge_group`) events. These are the
 checks a contributor sees fail directly on their own PR.

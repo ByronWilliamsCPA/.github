@@ -192,7 +192,7 @@ provenance workflow exists alongside Snyk:
   consumes no Snyk hosted quota and no Anthropic API key, and only produces the
   report; deciding which fix to apply is the local agent's job, run separately on
   the operator's subscription. See
-  [docs/workflows/python-dependency-provenance.md](../../workflows/python-dependency-provenance.md)
+  [docs/workflows/python-dependency-provenance.md](../workflows/python-dependency-provenance.md)
   and ByronWilliamsCPA/.claude ADR-009 for the interpretation-agent boundary.
 
 This note records the division of labour; it does not change any decision above.
