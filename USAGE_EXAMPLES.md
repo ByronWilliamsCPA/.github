@@ -548,6 +548,6 @@ jobs:
 
 For more information:
 
-- [QLTY_INTEGRATION.md](QLTY_INTEGRATION.md) - Qlty Cloud integration guide
+- [docs/integrations/qlty-cloud.md](docs/integrations/qlty-cloud.md) - Qlty Cloud integration guide
 - [README.md](README.md) - Main repository documentation
 - [GitHub Reusable Workflows Docs](https://docs.github.com/en/actions/using-workflows/reusing-workflows)

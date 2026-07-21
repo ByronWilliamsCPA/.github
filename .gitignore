@@ -49,6 +49,6 @@ actionlint
 
 # Internal planning and brainstorming docs (not for public consumption)
 docs/superpowers/
-docs/compliance-reports/
-# Audit working area: findings manifests kept local, not published to the repo
-docs/audit/
+
+# MkDocs build output
+site/

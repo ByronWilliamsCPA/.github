@@ -1,0 +1,78 @@
+@startuml tiered-pr-review-flow
+title Tiered PR Review: Flow and Gates
+
+skinparam backgroundColor #FFFFFF
+skinparam ActivityBackgroundColor #F5F5F5
+skinparam ActivityBorderColor #666666
+skinparam ActivityDiamondBackgroundColor #FFF3E0
+skinparam ActivityDiamondBorderColor #666666
+
+start
+:PR opened or synchronized;
+
+partition "Static CI (always runs, blocking)" {
+  :pre-commit, actionlint + shellcheck self-test,
+Bats and pytest suites, conventional-commit
+title validation, CodeQL, secret scanning;
+}
+
+partition "Async AI Reviewers (always runs, non-blocking)" {
+  :Copilot code review (auto-enrolled);
+  :CodeRabbit comments on the diff;
+}
+
+if (Non-draft, same-repo PR targeting main?) then (yes)
+  partition "Tier 0: claude-baseline-review.yml (advisory)" {
+    :Classify PR into one of five classes:
+renovate-deps, pattern-series, docs-only,
+config-tweak, substantive;
+    :Run the class-specific spot check;
+    if (Deterministic escalation trigger fires?\n(workflow permissions/secrets/OIDC/triggers changed;\nscripts/ writes via gh api, secrets, transfer/delete;\nbreaking-change label or "!" in title;\n>500 changed lines excl. lockfiles/generated;\nrenovate tag/SHA mismatch or major bump;\nor reviewer judgment)) then (yes)
+      :Verdict = ESCALATE;
+      :Apply "needs-deep-review" label;
+    else (no)
+      :Verdict = BASELINE-OK;
+    endif
+    :Post ONE sticky comment\n(marker: claude-baseline-review)\nwith verdict, findings, and\nCopilot/CodeRabbit/CI status;
+  }
+else (no: draft, fork PR,\nor non-main target)
+  :Tier 0 skipped;
+  note right
+    Fork PRs cannot read the API-key
+    secret, so the job would only fail
+    at startup there. Advisory only:
+    a skipped or failed Tier 0 job
+    never blocks other checks.
+  end note
+endif
+
+if ("needs-deep-review" label applied?) then (yes)
+  partition "Tier 1: /pr-review skill (manual, ByronWilliamsCPA/.claude)" {
+    :Maintainer runs /pr-review;
+    :Aggregate Copilot, CodeRabbit,\nSonarQube, and CI findings;
+    :13 specialized agents + premise gate\n-> confidence-scored, deduplicated,\nconsensus-validated findings across\nfour severity tiers;
+    :Maintainer runs /pr-fix to remediate;
+  }
+else (no)
+  :PR remains gated only by the\nstatic layer plus raw bot comments\n(no deep pass);
+endif
+
+:Maintainer merge decision;
+stop
+
+note left
+  **Source:**
+  [[../tiered-pr-review.md]]
+
+  Tier 0 is advisory only: its verdict is a
+  sticky comment plus a label, never a merge
+  block. Escalation is deterministic where
+  possible (doc section 3); "reviewer
+  judgment" is the catch-all sixth trigger.
+  Docs-only changes, pattern-series PRs
+  matching their precedent, and clean
+  patch/minor pin bumps do not escalate
+  on their own.
+end note
+
+@enduml

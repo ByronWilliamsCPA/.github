@@ -141,5 +141,5 @@ acting on rather than waiting for a Renovate fix-PR.
 Results appear in the Snyk dashboard (app.snyk.io) under the connected project, not
 in the GitHub Security tab (OSS findings are not uploaded as SARIF).
 
-See [ADR-003](../planning/adr/adr-003-snyk-ai-code-security.md) for the adoption
+See [ADR-003](../architecture/adr-003-snyk-ai-code-security.md) for the adoption
 rationale.
