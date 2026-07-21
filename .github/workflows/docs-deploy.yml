@@ -54,7 +54,7 @@ jobs:
       # No pyproject.toml in this repo (docs-only site): run mkdocs-material
       # via uvx in an ephemeral environment rather than `uv sync`.
       - name: Build site with MkDocs (strict mode)
-        run: uvx --from mkdocs-material mkdocs build --strict
+        run: uvx --no-build --from mkdocs-material==9.7.7 mkdocs build --strict
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9  # v5.0.0
