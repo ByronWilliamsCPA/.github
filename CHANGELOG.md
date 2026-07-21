@@ -29,6 +29,21 @@ an immutable point tag; see `USAGE_EXAMPLES.md` for the pinning guidance.
   `docs/sonarcloud-nosonar-patterns.md` for why the new jobs' `--no-build`/
   `--frozen` suppressions use Pattern A.
 
+### Deprecated
+
+- `python-supplemental-checks.yml`: deprecated per-PR CHANGELOG enforcement.
+  `enable-changelog-check` is now a no-op that emits a deprecation warning and
+  passes; the `changelog-check` job id and display name are unchanged for
+  required-check compatibility, and the `changelog-path` and
+  `changelog-skip-labels` inputs are retained for backward compatibility. Every
+  PR editing the same `CHANGELOG.md` produced textual conflicts in the org merge
+  queue (which stacks PRs speculatively), so only one PR could sit in the queue
+  at a time. The changelog is already generated at release by
+  python-semantic-release from Conventional Commits, so the per-PR edit was
+  redundant. Migrate by setting `enable-commit-lint: true` here and
+  `semantic-release: true` in your release job, then drop
+  `enable-changelog-check`. See `docs/workflows/python-supplemental-checks.md`.
+
 ### Fixed
 
 - `python-ci.yml`: the `parallel-tests` per-bucket jobs (`test-unit`,
