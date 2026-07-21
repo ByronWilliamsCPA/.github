@@ -1,0 +1,69 @@
+@startuml reusable-workflow-relationships
+title Reusable Workflow Relationships: Standard Stack Composition
+
+skinparam backgroundColor #FFFFFF
+skinparam ArrowColor #333333
+skinparam componentStyle rectangle
+skinparam component {
+  BackgroundColor<<caller>> #E3F2FD
+  BackgroundColor<<bundle>> #E8F5E9
+  BackgroundColor<<composed>> #FFF3E0
+  BackgroundColor<<alt>> #E0E0E0
+  BorderColor #666666
+}
+
+package "Consumer Repository (generic Python project)" {
+  [Caller Workflow\n(e.g. .github/workflows/ci.yml)] <<caller>> as caller
+}
+
+[python-standard-stack.yml\n(bundling layer)] <<bundle>> as stack
+
+package "Composed by the Standard Stack (verified from jobs:)" {
+  [python-ci.yml\n(job: ci)] <<composed>> as ci
+  [python-security-analysis.yml\n(job: security, needs: ci)] <<composed>> as security
+  [python-sbom.yml\n(job: sbom, needs: ci)] <<composed>> as sbom
+  [python-snyk.yml\n(job: snyk, needs: ci,\nconditional: if inputs.run-snyk)] <<composed>> as snyk
+}
+
+package "Other Reusable Workflows\n(called directly by consumers, outside the bundle)" {
+  [python-snyk-iac.yml] <<alt>> as snykiac
+  [python-publish-pypi.yml] <<alt>> as pypi
+  [python-sonarcloud.yml] <<alt>> as sonar
+}
+
+caller --> stack : uses (workflow_call)
+stack --> ci : always
+stack --> security : needs: ci
+stack --> sbom : needs: ci
+stack ..> snyk : needs: ci\nif: inputs.run-snyk
+
+caller ..> snykiac : uses directly\n(advanced config)
+caller ..> pypi : uses directly\n(OIDC publish)
+caller ..> sonar : uses directly\n(needs SONAR_TOKEN)
+
+note right of stack
+  **Source:**
+  - .github/workflows/python-standard-stack.yml
+
+  Nesting depth: caller (1) -> standard-stack (2) ->
+  python-ci / python-security-analysis / python-sbom /
+  python-snyk (3). python-snyk's own jobs are not nested
+  reusable calls, so this stays within GitHub's 4-level
+  reusable workflow limit.
+end note
+
+note bottom of snykiac
+  **Source (catalog):**
+  - README.md, "Available Workflows" table
+  - .github/workflows/python-snyk-iac.yml
+  - .github/workflows/python-publish-pypi.yml
+  - .github/workflows/python-sonarcloud.yml
+
+  Called directly by consumer repos that need advanced
+  or matrix configuration the standard stack does not
+  expose (per python-standard-stack.yml's own comment:
+  "For advanced configuration ... call the individual
+  workflows directly").
+end note
+
+@enduml

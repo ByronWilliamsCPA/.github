@@ -9,12 +9,14 @@
 #       uses: ByronWilliamsCPA/.github/.github/workflows/python-supplemental-checks.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
 #       with:
 #         enable-link-check: true
-#         enable-changelog-check: true
+#         enable-commit-lint: true    # replaces the deprecated enable-changelog-check
 #         enable-cruft-check: true
 #
 # Features:
 #   - Documentation link checking (lychee)
-#   - Changelog enforcement (changelog-enforcer)
+#   - Changelog enforcement (DEPRECATED, no-op): per-PR CHANGELOG edits are no
+#     longer required; the changelog is generated at release by
+#     python-semantic-release. Use enable-commit-lint instead.
 #   - Cruft/template synchronization (cruft check)
 #   - Dependabot/Renovate auto-merge for minor/patch updates
 #
@@ -49,19 +51,19 @@ on:
         required: false
         default: '^https://github.com/.*/(issues|pulls|compare)/.*$,^https://linear.app/.*$'
 
-      # Changelog enforcement configuration
+      # Changelog enforcement configuration (DEPRECATED)
       enable-changelog-check:
-        description: 'Enable changelog enforcement'
+        description: 'DEPRECATED (no-op): per-PR CHANGELOG edits caused merge-queue conflicts because every PR edited the same file. The changelog is now generated at release by python-semantic-release from Conventional Commits. Use enable-commit-lint plus semantic-release at release instead. Retained for backward compatibility; enabling it now only emits a deprecation warning and passes.'
         type: boolean
         required: false
         default: false
       changelog-path:
-        description: 'Path to CHANGELOG file'
+        description: 'Path to CHANGELOG file (retained for compatibility; the changelog check is a deprecated no-op)'
         type: string
         required: false
         default: 'CHANGELOG.md'
       changelog-skip-labels:
-        description: 'PR labels that skip changelog requirement (comma-separated)'
+        description: 'PR labels that skip changelog requirement, comma-separated (retained for compatibility; the changelog check is a deprecated no-op)'
         type: string
         required: false
         default: 'skip-changelog,dependencies,documentation'
@@ -178,14 +180,21 @@ jobs:
           fi
 
   # ==========================================================================
-  # Changelog Enforcement
+  # Changelog Enforcement (Deprecated)
   # ==========================================================================
+  # DEPRECATED: per-PR changelog edits are no longer required. Every PR editing
+  # the same CHANGELOG.md produced textual conflicts in the org merge queue,
+  # which stacks PRs speculatively, so only one PR could sit in the queue at a
+  # time. The changelog is now generated at release by python-semantic-release
+  # from Conventional Commits. This job keeps its id and display name unchanged
+  # for required-check compatibility, but is now a no-op that always passes.
+  # Migrate to enable-commit-lint plus semantic-release at release, then drop
+  # enable-changelog-check.
   changelog-check:
     name: Changelog Check
-    # Skip via event payload to avoid GitHub API label-timing races on the
-    # opened event (e.g. Renovate PRs). Standard skip labels are evaluated
-    # here; custom labels passed via changelog-skip-labels are checked in
-    # the run step as a fallback.
+    # The if gate is retained so opted-out repos and skip-labelled PRs are
+    # unaffected; enabled repos now reach a no-op deprecation notice instead of
+    # a file-diff check.
     if: |
       inputs.enable-changelog-check &&
       github.event_name == 'pull_request' &&
@@ -204,42 +213,12 @@ jobs:
         with:
           egress-policy: audit
 
-      - name: Checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
-        with:
-          fetch-depth: 0
-
-      - name: Check for CHANGELOG update
-        env:
-          BASE_REF: ${{ github.base_ref }}
-          CHANGELOG_PATH: ${{ inputs.changelog-path }}
-          SKIP_LABELS: ${{ inputs.changelog-skip-labels }}
-        run: |
-          git fetch origin "$BASE_REF" --no-tags
-          MERGE_BASE=$(git merge-base HEAD "origin/$BASE_REF")
-          if git diff --name-only "$MERGE_BASE" HEAD | grep -q "^${CHANGELOG_PATH}$"; then
-            echo "${CHANGELOG_PATH} was updated - check passed."
-          else
-            echo "::error::${CHANGELOG_PATH} was not updated. Please add a changelog entry, or add one of these labels to skip: ${SKIP_LABELS}"
-            exit 1
-          fi
-
-      - name: Changelog Summary
-        if: always()
+      - name: Changelog enforcement (deprecated)
         env:
           CHANGELOG_PATH: ${{ inputs.changelog-path }}
-          CHANGELOG_SKIP_LABELS: ${{ inputs.changelog-skip-labels }}
         run: |
-          echo "## Changelog Enforcement" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ job.status }}" == "success" ]; then
-            echo "Changelog has been updated or check was skipped." >> $GITHUB_STEP_SUMMARY
-          else
-            echo "Please update \`$CHANGELOG_PATH\` with your changes." >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "To skip this check, add one of these labels:" >> $GITHUB_STEP_SUMMARY
-            echo "\`$CHANGELOG_SKIP_LABELS\`" >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "::warning title=enable-changelog-check is deprecated::Per-PR ${CHANGELOG_PATH} edits are no longer required and cause merge-queue conflicts because every PR edits the same file. The changelog is now generated at release by python-semantic-release from Conventional Commits. Migrate: set enable-commit-lint: true here and semantic-release: true in your release job, then drop enable-changelog-check."
+          echo "Changelog enforcement is deprecated; this check is now a no-op and passes."
 
   # ==========================================================================
   # Cruft Template Synchronization
@@ -567,7 +546,7 @@ jobs:
           # Changelog check
           if [ "$CHANGELOG_CHECK_ENABLED" == "true" ]; then
             if [ "${{ needs.changelog-check.result }}" == "success" ]; then
-              echo "| Changelog | Updated |" >> $GITHUB_STEP_SUMMARY
+              echo "| Changelog | Deprecated (no-op) |" >> $GITHUB_STEP_SUMMARY
             elif [ "${{ needs.changelog-check.result }}" == "skipped" ]; then
               echo "| Changelog | Skipped |" >> $GITHUB_STEP_SUMMARY
             else

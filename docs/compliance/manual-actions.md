@@ -32,3 +32,14 @@ provide structural branch protection without required reviewers.
 Scorecard requires at least one commit in the last 90 days evaluated over a 1-year window.
 **Expected resolution:** 2026-08-13 (90 days from repo creation)
 **Review by:** Re-audit after 2026-08-14.
+
+## SNYK-001: MCP Scan (pending GA)
+
+**Status:** Blocked on upstream availability
+**Reason:** Snyk MCP Scan (from the Invariant Labs acquisition) is pre-GA as of
+2026-06. Cannot implement until Snyk announces general availability.
+**Blocker:** External; watch the Snyk changelog for a GA announcement.
+**Carried forward from:** `docs/archive/handoff-snyk-cicd.md` (item 4), the
+only item from that handoff not delivered by PR #224.
+**Review by:** Re-check the Snyk changelog quarterly alongside the other
+entries in this file.

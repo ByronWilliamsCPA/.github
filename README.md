@@ -93,11 +93,22 @@ Calling repos must provide:
 - **[Snyk](docs/workflows/python-snyk.md)** (`python-snyk.yml`) - Snyk AI-code-security layer: Code/SAST, advisory OSS cross-check, AI-BOM
 - **[Snyk IaC](docs/workflows/python-snyk-iac.md)** (`python-snyk-iac.yml`) - Snyk IaC scanning: Terraform, Kubernetes, and Docker Compose
 - **[OpenSSF Scorecard](.github/workflows/python-scorecard.yml)** (`python-scorecard.yml`) - Repository security health scoring via OpenSSF Scorecard
-- **[Supplemental Checks](.github/workflows/python-supplemental-checks.yml)** (`python-supplemental-checks.yml`) - Optional PR checks including link validation and changelog enforcement
+- **[Supplemental Checks](.github/workflows/python-supplemental-checks.yml)** (`python-supplemental-checks.yml`) - Optional PR checks including link validation and Conventional Commit PR-title linting (the changelog is generated at release by python-semantic-release, not enforced per-PR; `enable-changelog-check` is a deprecated no-op)
 - **[Standard Stack](.github/workflows/python-standard-stack.yml)** (`python-standard-stack.yml`) - Bundled standard checks for typical Python repositories
 - **[Pre-commit](.github/workflows/python-precommit.yml)** (`python-precommit.yml`) - Runs pre-commit hooks as a reusable workflow
 - **[SLSA Provenance](.github/workflows/python-slsa.yml)** (`python-slsa.yml`) - SLSA build provenance attestation for release artifacts
 - **[PR Validation](.github/workflows/python-pr-validation.yml)** (`python-pr-validation.yml`) - Deprecated; migrate to `python-ci.yml`
+
+### Other Reusable Workflows
+
+Not part of the `python-*` naming convention above, but also `workflow_call` reusable
+workflows any repo can call directly:
+
+- **[Claude Baseline Review](docs/workflows/claude-baseline-review.md)** (`claude-baseline-review.yml`) - Tier 0 automated PR triage: classifies, spot-checks, and posts an advisory `BASELINE-OK`/`ESCALATE` verdict
+- **[Supply Chain: Mirror Verify](docs/workflows/supply-chain-mirror-verify.md)** (`supply-chain-mirror-verify.yml`) - Resolves and signature-verifies an upstream image digest before promotion
+- **[Supply Chain: Build Verify](docs/workflows/supply-chain-build-verify.md)** (`supply-chain-build-verify.yml`) - Validates digest-pinned bases and builds a no-push local image before promotion
+- **[Supply Chain: Promote Core](docs/workflows/supply-chain-promote-core.md)** (`supply-chain-promote-core.yml`) - Shared scan, publish, sign, and lock-update chokepoint for both promotion paths
+- **[Supply Chain: Consume Verify](docs/workflows/supply-chain-consume-verify.md)** (`supply-chain-consume-verify.yml`) - Deploy-time gate verifying an image's approved-lock entry and signer identity
 
 ### Key Features
 
@@ -128,8 +139,8 @@ jobs:
 
 - **[USAGE_EXAMPLES.md](USAGE_EXAMPLES.md)** - Detailed usage examples
 - **[docs/python-versions.md](docs/python-versions.md)** - Python version policy (single source of truth, enforced in CI)
-- **[QLTY_INTEGRATION.md](QLTY_INTEGRATION.md)** - Qlty Cloud integration guide
-- **[PYPI_WORKFLOW_ANALYSIS.md](PYPI_WORKFLOW_ANALYSIS.md)** - PyPI workflow analysis & migration
+- **[docs/integrations/qlty-cloud.md](docs/integrations/qlty-cloud.md)** - Qlty Cloud integration guide
+- **[docs/architecture/adr-000-index.md](docs/architecture/adr-000-index.md)** - Architecture Decision Records index
 - **[docs/workflows/](docs/workflows/)** - Workflow-specific documentation
 - **[docs/migration/](docs/migration/)** - Step-by-step migration guides
 - **[examples/](examples/)** - Ready-to-use workflow examples
@@ -138,7 +149,7 @@ jobs:
 
 ## Qlty Cloud Integration
 
-Qlty Cloud provides centralized code quality management across all repositories. See [QLTY_INTEGRATION.md](QLTY_INTEGRATION.md) for setup guide.
+Qlty Cloud provides centralized code quality management across all repositories. See [docs/integrations/qlty-cloud.md](docs/integrations/qlty-cloud.md) for setup guide.
 
 ## How It Works
 

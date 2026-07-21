@@ -1,6 +1,8 @@
 # Agent Catalog
 
-Subagents available for work in this repository.
+Subagents available for work in this repository. All agents listed here are
+inherited from the global `~/.claude/agents/` delegation system described in
+the user's `CLAUDE.md`; none are defined locally in this repo.
 
 ## Specialized Agents
 

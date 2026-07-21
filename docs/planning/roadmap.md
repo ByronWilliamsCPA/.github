@@ -3,7 +3,7 @@
 **TL;DR:** Three sequential PRs over three implementation sessions. Phase 1 resolves all critical and high security findings. Phase 2 applies breaking architecture cleanup. Phase 3 adds new capabilities. Each phase gates on the previous merging to `main`.
 
 **Source:** `docs/superpowers/specs/2026-04-30-workflow-security-architecture-remediation-design.md`
-**ADR:** `docs/planning/adr/adr-002-workflow-security-remediation-delivery.md`
+**ADR:** `docs/architecture/adr-002-workflow-security-remediation-delivery.md`
 
 ---
 

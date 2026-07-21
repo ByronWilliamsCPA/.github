@@ -146,5 +146,5 @@ jobs:
   `snyk-iac-kubernetes`, `snyk-iac-compose`), so they do not overwrite each
   other.
 
-See [ADR-003](../planning/adr/adr-003-snyk-ai-code-security.md) for the IaC
+See [ADR-003](../architecture/adr-003-snyk-ai-code-security.md) for the IaC
 scanning decision.

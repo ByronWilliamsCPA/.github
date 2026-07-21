@@ -1,4 +1,4 @@
-# ADR-004: PQC Readiness Enhancements for python-fips-compatibility
+# ADR-006: PQC Readiness Enhancements for python-fips-compatibility
 
 **Status:** Accepted
 **Date:** 2026-07-14
