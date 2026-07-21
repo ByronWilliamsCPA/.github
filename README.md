@@ -93,7 +93,7 @@ Calling repos must provide:
 - **[Snyk](docs/workflows/python-snyk.md)** (`python-snyk.yml`) - Snyk AI-code-security layer: Code/SAST, advisory OSS cross-check, AI-BOM
 - **[Snyk IaC](docs/workflows/python-snyk-iac.md)** (`python-snyk-iac.yml`) - Snyk IaC scanning: Terraform, Kubernetes, and Docker Compose
 - **[OpenSSF Scorecard](.github/workflows/python-scorecard.yml)** (`python-scorecard.yml`) - Repository security health scoring via OpenSSF Scorecard
-- **[Supplemental Checks](.github/workflows/python-supplemental-checks.yml)** (`python-supplemental-checks.yml`) - Optional PR checks including link validation and changelog enforcement
+- **[Supplemental Checks](.github/workflows/python-supplemental-checks.yml)** (`python-supplemental-checks.yml`) - Optional PR checks including link validation and Conventional Commit PR-title linting (the changelog is generated at release by python-semantic-release, not enforced per-PR; `enable-changelog-check` is a deprecated no-op)
 - **[Standard Stack](.github/workflows/python-standard-stack.yml)** (`python-standard-stack.yml`) - Bundled standard checks for typical Python repositories
 - **[Pre-commit](.github/workflows/python-precommit.yml)** (`python-precommit.yml`) - Runs pre-commit hooks as a reusable workflow
 - **[SLSA Provenance](.github/workflows/python-slsa.yml)** (`python-slsa.yml`) - SLSA build provenance attestation for release artifacts
