@@ -118,6 +118,7 @@ nav:
       - ADR 003 - Snyk AI Code Security: architecture/adr-003-snyk-ai-code-security.md
       - ADR 004 - Retire Floating v1 Tag: architecture/adr-004-retire-floating-v1-tag.md
       - ADR 005 - Renovate No UV Manager: architecture/adr-005-renovate-no-uv-manager.md
+      - ADR 006 - PQC Readiness Enhancements: architecture/adr-006-pqc-readiness-enhancements.md
       - Repo CI Pipeline: architecture/repo-ci-pipeline.md
       - Tiered PR Review: architecture/tiered-pr-review.md
       - Diagrams:

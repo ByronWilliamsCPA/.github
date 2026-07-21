@@ -13,7 +13,76 @@ an immutable point tag; see `USAGE_EXAMPLES.md` for the pinning guidance.
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING** `python-fips-compatibility.yml`: the checker CLI contract now
+  includes `--pqc-mode {off,warn,error}`, passed on every invocation.
+  Caller-local custom checkers must accept the flag (one argparse line; see
+  `docs/workflows/python-fips-compatibility.md`). Repos with no local script,
+  which previously soft-skipped, now run the org-central checker by default
+  and can surface real findings for the first time; set
+  `use-central-checker: false` to restore the old soft-skip. All v7 inputs,
+  artifact names, and the PR-comment shape are kept; `fips-report.json` gains
+  `summary.pqc_findings`, `pqc_mode`, and `inventory` keys, and the artifact
+  adds `fips-inventory.json`.
+
+### Fixed
+
+- `scripts/check_fips_compatibility.py`: an unparseable `pyproject.toml` now
+  fails closed. Previously a `TOMLDecodeError` was swallowed and dependency
+  scanning returned zero findings, so a broken manifest declaring a non-FIPS
+  package reported a false pass (exit 0). It now emits
+  `FIPS-MANIFEST-UNPARSEABLE` at error severity and exits non-zero. On
+  Python < 3.11 (no `tomllib`) it emits `FIPS-TOML-UNAVAILABLE` (warning)
+  instead of silently skipping dependency scanning.
+- `scripts/check_fips_compatibility.py`: classical-only signature and RSA/DSA
+  key-generation primitives (`ec.ECDSA`, `padding.PSS`, `padding.PKCS1v15`,
+  `Ed25519`/`Ed448`, `rsa.generate_private_key`, `dsa.generate_private_key`)
+  are now detected under `PQC-CLASSICAL-SIG`, and inventory labels reflect the
+  matched primitive rather than a static rule name. Line suppressions
+  (`# fips: ignore`) are applied before the inventory append, so a suppressed
+  line no longer appears in the algorithm inventory.
+- `scripts/check_fips_compatibility.py`: `--root` now validates that its
+  argument is an existing directory, exiting `2` (usage error) instead of
+  producing an empty clean report for a nonexistent path.
+
+### Security
+
+- `python-fips-compatibility.yml`: counts extracted from the checker's JSON
+  are shape-guarded (integer regex) before being written to `GITHUB_OUTPUT`,
+  preventing a caller-local (pre-v8) checker from injecting extra
+  `key=value` output lines via a newline-bearing value. The PR-comment
+  `github-script` step now reads step outputs from `env` instead of
+  interpolating expressions into the script body, and its PQC text is
+  mode-aware (it no longer claims findings "do not block" when `pqc-mode`
+  is `error`).
+
 ### Added
+
+- `python-fips-compatibility.yml`: PQC (post-quantum cryptography) readiness
+  support driving the org's hybrid-crypto transition. New inputs: `pqc-mode`
+  (`off`/`warn`/`error` ratchet, default `warn`; `warn` reports
+  quantum-vulnerable key establishment/signatures without failing, `error`
+  gates on them), `use-central-checker` (default `true`; falls back to the
+  org-central checker fetched from this repo so rule updates roll out
+  fleet-wide without per-repo scripts), `central-checker-ref` (default
+  `main`; pin an immutable tag/SHA for supply-chain rigor), and
+  `fail-on-missing-script` (default `false`; flips the soft-skip into a
+  failure). The optional runtime-test job becomes a matrix with an
+  informational `pqc-probe` leg reporting ML-KEM/ML-DSA availability of the
+  runner OpenSSL and the project's `cryptography` build. PQC findings are
+  exempt from `strict-mode` so the classic FIPS ratchet and the PQC ratchet
+  move independently.
+
+- `scripts/check_fips_compatibility.py`: new org-central FIPS/PQC checker
+  (stdlib-only, Python 3.11+). Classic FIPS denylist rules (`FIPS-*`: MD5/SHA-1
+  without `usedforsecurity=False`, DES/RC4/Blowfish/ChaCha20 ciphers, ECB mode,
+  non-validated crypto dependencies), PQC readiness rules (`PQC-*`:
+  classical-only KEX/signatures, TLS-context OpenSSL 3.5+ note, dependency
+  capability checks, non-validated PQC libs), line-level suppression via
+  `# fips: ignore[CODE]`, and a CBOM-style algorithm inventory
+  (`fips-inventory.json`) whose `quantum_vulnerable` counter is the
+  fleet-wide migration progress metric.
 
 - `python-ci.yml`: opt-in `parallel-tests` input (default `false`). Splits
   the unit/integration/security pytest buckets out of `quality-checks` into

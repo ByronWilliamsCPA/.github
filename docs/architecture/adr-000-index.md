@@ -9,6 +9,7 @@ Index of ADRs for the ByronWilliamsCPA/.github reusable workflow library.
 | [ADR-003](adr-003-snyk-ai-code-security.md) | Snyk AI code security adoption | Accepted | 2026-06-24 |
 | [ADR-004](adr-004-retire-floating-v1-tag.md) | Retire the floating v1 tag; SHA pins and point tags only | Accepted | 2026-07-02 |
 | [ADR-005](adr-005-renovate-no-uv-manager.md) | Never add "uv" to Renovate's enabledManagers | Accepted | 2026-05-25 |
+| [ADR-006](adr-006-pqc-readiness-enhancements.md) | PQC readiness enhancements for python-fips-compatibility | Accepted | 2026-07-14 |
 
 ## ADR Format
 

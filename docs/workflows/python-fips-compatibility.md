@@ -2,21 +2,104 @@
 
 ## Overview
 
-This reusable workflow validates FIPS 140-2/140-3 compliance for Python projects that use cryptographic operations. FIPS (Federal Information Processing Standards) mode is required for:
+This reusable workflow validates FIPS 140-2/140-3 compliance and post-quantum
+cryptography (PQC) readiness for Python projects that use cryptographic
+operations. FIPS (Federal Information Processing Standards) mode is required for:
 
 - US Government systems
 - Healthcare systems (HIPAA compliance)
 - Financial services
 - Ubuntu LTS systems with `fips-updates` package
 
+PQC readiness checking supports the org's transition to hybrid cryptography:
+NIST finalized FIPS 203 (ML-KEM), FIPS 204 (ML-DSA) and FIPS 205 (SLH-DSA) in
+August 2024, and NIST IR 8547 schedules deprecation of 112-bit-strength
+classical algorithms after 2030 (disallowed after 2035). Because ML-KEM and
+ML-DSA are NIST-approved, FIPS compliance and hybrid PQC are the same goal:
+the migration target is hybrid key establishment (a classical exchange
+combined with ML-KEM per NIST SP 800-56C Rev. 2).
+
 ## Features
 
 - **Static Analysis**: Detects non-FIPS cryptographic algorithms in code
+- **PQC Readiness Analysis**: Flags quantum-vulnerable key establishment and
+  signatures (`PQC-*` rule codes) with a three-stage ratchet (`pqc-mode`)
+- **Org-Central Checker**: Rules roll out fleet-wide from
+  `ByronWilliamsCPA/.github`; no per-repo script needed
+- **Algorithm Inventory**: CBOM-style `fips-inventory.json` artifact for
+  fleet-wide migration tracking
 - **Dependency Scanning**: Identifies problematic packages
 - **Fix Hints**: Provides suggestions for remediation
 - **PR Integration**: Automatic comments on pull requests
-- **Runtime Testing**: Optional simulated FIPS environment testing
+- **Runtime Testing**: Optional simulated FIPS test plus a hybrid-PQC
+  capability probe of the runner and dependency stack
 - **Flexible Configuration**: Customizable severity levels and paths
+
+## Checker Resolution
+
+The workflow resolves which checker script to run in this order:
+
+1. **Caller-local override**: a script at `script-path`
+   (default `scripts/check_fips_compatibility.py`) in the calling repository,
+   if present. Custom checkers must honor the CLI and JSON contract below.
+2. **Org-central checker** (default path): `scripts/check_fips_compatibility.py`
+   fetched from `ByronWilliamsCPA/.github` at `central-checker-ref`. This is
+   how FIPS and PQC rule updates reach every consuming repo from one place.
+3. **None available**: the check soft-skips with a warning, or fails when
+   `fail-on-missing-script: true`. Docs-only repos (no `pyproject.toml`)
+   always skip gracefully.
+
+Set `use-central-checker: false` to disable the fallback (restores the pre-v8
+behavior of requiring a repo-local script).
+
+> [!WARNING]
+> **Supply-chain: the default `central-checker-ref` is a floating ref.**
+> `central-checker-ref` defaults to `main`, so the checker code that runs in
+> your CI is whatever `HEAD` of `ByronWilliamsCPA/.github` points to at run
+> time, not a pinned artifact. This is deliberate (rule updates apply
+> fleet-wide without a per-repo bump) and is the same trust already placed in
+> the reusable workflow, but it is **not** a pinned dependency. For
+> reproducible or audited CI (regulated / high-assurance repos), set
+> `central-checker-ref` to an immutable full 40-character SHA or a `v*` tag and
+> let Renovate advance it. The org tag ruleset makes `v*` tags immutable;
+> `main` is not. To pin the checker without the network fetch at all, ship a
+> repo-local `script-path` and set `use-central-checker: false`.
+
+## PQC Readiness and the Hybrid Migration
+
+### The pqc-mode ratchet
+
+| Mode | Behavior |
+|------|----------|
+| `off` | PQC rules skipped; algorithm inventory still collected |
+| `warn` (default) | PQC findings reported in the report, PR comment and summary; never fail the build; exempt from `strict-mode` escalation so the classic FIPS ratchet and the PQC ratchet move independently |
+| `error` | Warning-level PQC findings (quantum-vulnerable key establishment, non-validated PQC dependencies) are escalated to errors and gate the build |
+
+The intended migration sequence per repo: `off` or `warn` for visibility,
+inventory review, remediation planning, then `error` as the milestone gate.
+
+### PQC rule codes (org-central checker)
+
+| Code | Default severity | Meaning |
+|------|------------------|---------|
+| `PQC-CLASSICAL-KEX` | warning | Classical-only key establishment (ECDH, X25519/X448, RSA-OAEP key transport); quantum-vulnerable with harvest-now-decrypt-later risk |
+| `PQC-CLASSICAL-SIG` | info | Classical-only signatures (ECDSA, RSA-PSS, Ed25519/Ed448, DSA) |
+| `PQC-TLS-CONTEXT` | info | TLS context creation; hybrid groups (e.g. X25519MLKEM768) require OpenSSL 3.5+ at runtime |
+| `PQC-DEP-CAPABILITY` | info | `cryptography` version constraint may exclude ML-KEM/ML-DSA-capable releases |
+| `PQC-DEP-NONVALIDATED` | warning | PQC library (liboqs, pqcrypto) that is not FIPS 140-3 validated; the FIPS-approved component of a hybrid scheme must stay inside a validated module boundary |
+| `PQC-NO-CAPABILITY` | info | Quantum-vulnerable crypto present but no PQC-capable dependency or code path exists yet |
+
+Suppress a finding on a specific line with a trailing comment:
+`# fips: ignore` or `# fips: ignore[PQC-CLASSICAL-KEX]`.
+
+### Algorithm inventory (CBOM)
+
+Every crypto touchpoint (hashes, ciphers, key establishment, signatures, TLS
+contexts, PQC primitives) is recorded in the JSON report's `inventory` key and
+uploaded as `fips-inventory.json`. Aggregating these artifacts across repos
+gives the fleet-wide cryptographic inventory that NIST/CISA migration guidance
+treats as step one; the `quantum_vulnerable` counter is the migration progress
+metric.
 
 ## Usage
 
@@ -39,21 +122,45 @@ permissions:
 
 jobs:
   fips-check:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-fips-compatibility.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
+    # Renovate advances this pin; pqc-mode and the other v8 inputs require
+    # the first release cut from v8.0.0 or later.
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-fips-compatibility.yml@aaf22b70696819de5122dcde708406aaff968484 # v7.0.20
     permissions:
       contents: read
       pull-requests: write
 ```
+
+No repo-local checker script is needed: the org-central checker is used by
+default.
 
 ### Advanced Configuration
 
 ```yaml
 jobs:
   fips-check:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-fips-compatibility.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
+    # Renovate advances this pin. pqc-mode, use-central-checker,
+    # central-checker-ref and fail-on-missing-script require the first release
+    # cut from v8.0.0 or later.
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-fips-compatibility.yml@aaf22b70696819de5122dcde708406aaff968484 # v7.0.20
     with:
-      # Treat warnings as errors (default: false)
+      # Treat classic FIPS warnings as errors (default: false).
+      # PQC findings are governed by pqc-mode, not strict-mode.
       strict-mode: true
+
+      # PQC readiness ratchet: off | warn | error (default: warn)
+      pqc-mode: error
+
+      # Fall back to the org-central checker (default: true)
+      use-central-checker: true
+
+      # Ref of ByronWilliamsCPA/.github for the central checker (default: main).
+      # WARNING: main is a FLOATING ref (see the Checker Resolution warning
+      # above). For reproducible/audited CI, pin a full 40-char SHA or v* tag
+      # and let Renovate advance it.
+      central-checker-ref: 'main'
+
+      # Fail instead of soft-skipping when no checker is available (default: false)
+      fail-on-missing-script: false
 
       # Include test files in analysis (default: true)
       include-tests: false
@@ -67,10 +174,11 @@ jobs:
       # Python version to use (default: '3.12')
       python-version: '3.11'
 
-      # Path to FIPS check script (default: scripts/check_fips_compatibility.py)
+      # Caller-local override checker (default: scripts/check_fips_compatibility.py)
       script-path: 'tools/fips_checker.py'
 
-      # Enable runtime FIPS test (default: false)
+      # Enable runtime FIPS test (default: false). With pqc-mode not 'off',
+      # a second matrix leg probes hybrid-PQC capability of the environment.
       enable-runtime-test: true
     permissions:
       contents: read
@@ -96,7 +204,7 @@ on:
 
 jobs:
   fips-check:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-fips-compatibility.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-fips-compatibility.yml@aaf22b70696819de5122dcde708406aaff968484 # v7.0.20
     with:
       strict-mode: ${{ github.event.inputs.strict_mode || false }}
       enable-runtime-test: ${{ github.event_name == 'schedule' }}
@@ -106,13 +214,18 @@ jobs:
 
 | Input | Type | Required | Default | Description |
 |-------|------|----------|---------|-------------|
-| `strict-mode` | boolean | No | `false` | Treat warnings as errors |
+| `strict-mode` | boolean | No | `false` | Treat classic FIPS warnings as errors (PQC findings are governed by `pqc-mode`) |
+| `pqc-mode` | string | No | `'warn'` | PQC readiness ratchet: `off`, `warn`, or `error` |
+| `use-central-checker` | boolean | No | `true` | Fall back to the org-central checker when no local script exists |
+| `central-checker-ref` | string | No | `'main'` | Ref of `ByronWilliamsCPA/.github` to fetch the central checker from. Default `main` is a **floating** ref; pin a full SHA or `v*` tag for reproducible/audited CI (see the Checker Resolution warning) |
+| `fail-on-missing-script` | boolean | No | `false` | Fail instead of soft-skipping when no checker is available |
 | `include-tests` | boolean | No | `true` | Include test files in FIPS analysis |
 | `fix-hints` | boolean | No | `true` | Show fix hints in output |
 | `artifact-retention-days` | number | No | `30` | Days to retain compliance artifacts |
 | `python-version` | string | No | `'3.12'` | Python version to use for checks |
-| `script-path` | string | No | `'scripts/check_fips_compatibility.py'` | Path to FIPS check script |
+| `script-path` | string | No | `'scripts/check_fips_compatibility.py'` | Path to a caller-local override checker |
 | `enable-runtime-test` | boolean | No | `false` | Enable runtime FIPS compatibility test |
+| `no-build` | boolean | No | `true` | Pass `--no-build` to uv sync/run commands |
 
 ## Permissions Required
 
@@ -133,24 +246,39 @@ The workflow uploads the following artifacts:
 - **fips-compatibility-report**
   - `fips-report.txt`: Human-readable report
   - `fips-report.json`: Machine-readable JSON report
+  - `fips-inventory.json`: CBOM-style algorithm inventory (org-central checker,
+    or any custom checker emitting the v8 contract)
   - Retention: Configurable (default 30 days)
 
 ### PR Comments
 
 For pull requests, the workflow posts a comment with:
 
-- Summary table (Errors, Warnings, Info counts)
-- Overall status (PASSED, NEEDS REVIEW, FAILED)
+- Summary table (Errors, Warnings, Info, PQC readiness findings)
+- Overall status (PASSED, NEEDS REVIEW, FAILED) and the active PQC mode
 - Link to detailed workflow run
-- FIPS overview and common fixes
+- FIPS/PQC overview and common fixes
 
 ### GitHub Step Summary
 
 Available in the workflow run summary:
 
-- Compliance status
-- Issue breakdown table
-- Links to FIPS resources
+- Compliance status and checker source (`local` or `central`)
+- Issue breakdown table including PQC findings
+- Links to FIPS 140-2/140-3, FIPS 203/204/205 and NIST IR 8547
+
+## Runtime Test Matrix
+
+With `enable-runtime-test: true` the runtime job runs as a matrix:
+
+- **classical**: the simulated FIPS-mode import test (unchanged from v7).
+  Full FIPS validation still requires a FIPS-enabled kernel.
+- **pqc-probe** (only when `pqc-mode` is not `off`): reports whether the
+  runner's OpenSSL exposes ML-KEM/ML-DSA and whether the project's
+  `cryptography` build has ML-KEM bindings. The probe is informational by
+  design; it reflects the environment, not the caller's code, so it never
+  fails the build. It becomes a hard gate only once fleet baseline images
+  ship OpenSSL 3.5+.
 
 ## Common FIPS Issues & Fixes
 
@@ -180,7 +308,7 @@ hash = hashlib.sha256(data)  # ✅
 
 ```python
 from cryptography.hazmat.primitives.ciphers import algorithms
-cipher = algorithms.DES(key)  # ❌ DES not FIPS-approved
+cipher = algorithms.TripleDES(key)  # ❌ Not FIPS-approved
 ```
 
 **Fix:**
@@ -198,16 +326,39 @@ cipher = algorithms.AES(key)  # ✅ AES is FIPS-approved
 bcrypt==4.1.2  # ❌ Uses Blowfish (not FIPS-approved)
 ```
 
-**Fix:**
+**Fix:** prefer the standard library, which routes through the system FIPS
+module and needs no dependency:
 
-```text
-passlib[pbkdf2]==1.7.4  # ✅ PBKDF2-HMAC-SHA256 (NIST SP 800-132 approved)
-# Note: argon2-cffi is NOT FIPS-approved; use PBKDF2 or another NIST-approved KDF
+```python
+import hashlib
+# PBKDF2-HMAC-SHA256, NIST SP 800-132 approved
+dk = hashlib.pbkdf2_hmac("sha256", password, salt, 600_000)  # ✅
 ```
 
-## FIPS Check Script Requirements
+`hashlib.scrypt` (stdlib) is another option. If you need a password-hashing
+library rather than a raw KDF, choose one whose backend is a NIST-approved
+algorithm; note that `argon2-cffi` and `bcrypt` are **not** FIPS-approved, and
+`passlib` is effectively unmaintained (last release 1.7.4, 2020).
 
-The workflow expects a Python script at the configured path (default: `scripts/check_fips_compatibility.py`) with the following interface:
+### Issue: Classical-Only Key Establishment (PQC)
+
+**Problem:**
+
+```python
+shared = private_key.exchange(ec.ECDH(), peer_public_key)  # 🧭 PQC-CLASSICAL-KEX
+```
+
+**Fix:** plan a hybrid scheme; combine the classical shared secret with an
+ML-KEM (FIPS 203) shared secret per NIST SP 800-56C Rev. 2. For TLS, hybrid
+negotiation (X25519MLKEM768) is handled by the runtime once it links
+OpenSSL 3.5+; track readiness with the `pqc-probe` runtime leg. Until the
+stack supports it, keep the finding visible in `warn` mode rather than
+suppressing it.
+
+## Custom Checker Contract
+
+The org-central checker is the default. A repository may override it with its
+own script at `script-path`, which must implement this interface.
 
 ### Command-Line Arguments
 
@@ -216,7 +367,24 @@ python scripts/check_fips_compatibility.py \
   [--strict] \
   [--fix-hints] \
   [--include-tests] \
-  [--json]
+  [--json] \
+  [--pqc-mode {off,warn,error}] \
+  [--root PATH]
+```
+
+The workflow invokes the checker from the repo root and always passes the
+first five flags. `--root PATH` (default `.`) scopes the scan to a directory
+and is provided for local invocation and testing; the reusable workflow does
+not pass it, so a custom checker is not required to accept it. The org-central
+checker exits `2` if `--root` is not an existing directory.
+
+**BREAKING (v8.0.0):** the workflow always passes `--pqc-mode`. Custom
+checkers written against the v7 contract must add the flag (one argparse
+line); a checker that does not recognize it exits non-zero and the check
+fails. A minimal custom checker can accept and ignore it:
+
+```python
+parser.add_argument("--pqc-mode", choices=("off", "warn", "error"), default="warn")
 ```
 
 ### Output Format (JSON)
@@ -225,95 +393,59 @@ python scripts/check_fips_compatibility.py \
 {
   "summary": {
     "errors": 0,
-    "warnings": 0,
-    "info": 0
+    "warnings": 1,
+    "info": 0,
+    "pqc_findings": 1
   },
+  "pqc_mode": "warn",
   "issues": [
     {
       "file": "src/crypto.py",
       "line": 42,
-      "severity": "error",
-      "code": "FIPS-MD5",
-      "message": "MD5 usage without usedforsecurity=False",
-      "fix_hint": "Add usedforsecurity=False parameter"
+      "severity": "warning",
+      "code": "PQC-CLASSICAL-KEX",
+      "message": "Classical-only key establishment is quantum-vulnerable",
+      "fix_hint": "Plan hybrid key establishment (ML-KEM + classical)",
+      "pqc": true
     }
-  ]
+  ],
+  "inventory": {
+    "algorithms": [
+      {
+        "algorithm": "ECDH",
+        "category": "key-establishment",
+        "file": "src/crypto.py",
+        "line": 42,
+        "quantum_vulnerable": true
+      }
+    ],
+    "stats": {
+      "total": 1,
+      "quantum_vulnerable": 1,
+      "by_category": { "key-establishment": 1 }
+    }
+  }
 }
 ```
 
+`summary.errors`, `summary.warnings` and `summary.info` are required.
+`summary.pqc_findings` and `inventory` are part of the v8 contract; the
+workflow defaults them to `0`/absent for older custom checkers, so v7-era
+JSON (plus the `--pqc-mode` flag) keeps working.
+
 ### Exit Codes
 
-- `0`: No issues (or only info/warnings in non-strict mode)
-- `1`: Errors found (or warnings in strict mode)
+- `0`: No issues (or only info/warnings in non-strict mode; PQC findings in
+  `off`/`warn` mode never affect the exit code)
+- `1`: Errors found, classic warnings in strict mode, or escalated PQC
+  findings in `error` mode
 
-## Example Check Script
+### Reference Implementation
 
-A minimal FIPS compatibility checker:
-
-```python
-#!/usr/bin/env python3
-"""FIPS compatibility checker."""
-import argparse
-import json
-import re
-import sys
-from pathlib import Path
-from typing import Any
-
-def check_file(file_path: Path) -> list[dict[str, Any]]:
-    """Check a single file for FIPS issues."""
-    issues = []
-    content = file_path.read_text()
-
-    # Check for MD5 without usedforsecurity
-    md5_pattern = r'hashlib\.md5\([^)]+\)(?!\s*,\s*usedforsecurity\s*=\s*False)'
-    for match in re.finditer(md5_pattern, content):
-        line_num = content[:match.start()].count('\n') + 1
-        issues.append({
-            'file': str(file_path),
-            'line': line_num,
-            'severity': 'error',
-            'code': 'FIPS-MD5',
-            'message': 'MD5 usage without usedforsecurity=False',
-            'fix_hint': 'Add usedforsecurity=False or use SHA-256'
-        })
-
-    return issues
-
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--strict', action='store_true')
-    parser.add_argument('--fix-hints', action='store_true')
-    parser.add_argument('--include-tests', action='store_true')
-    parser.add_argument('--json', action='store_true')
-    args = parser.parse_args()
-
-    all_issues = []
-    src_path = Path('src')
-
-    for py_file in src_path.rglob('*.py'):
-        all_issues.extend(check_file(py_file))
-
-    errors = sum(1 for i in all_issues if i['severity'] == 'error')
-    warnings = sum(1 for i in all_issues if i['severity'] == 'warning')
-    info = sum(1 for i in all_issues if i['severity'] == 'info')
-
-    if args.json:
-        print(json.dumps({
-            'summary': {'errors': errors, 'warnings': warnings, 'info': info},
-            'issues': all_issues
-        }))
-    else:
-        for issue in all_issues:
-            print(f"{issue['file']}:{issue['line']} [{issue['severity']}] {issue['message']}")
-            if args.fix_hints and 'fix_hint' in issue:
-                print(f"  Fix: {issue['fix_hint']}")
-
-    return 1 if errors > 0 or (args.strict and warnings > 0) else 0
-
-if __name__ == '__main__':
-    sys.exit(main())
-```
+See
+[`scripts/check_fips_compatibility.py`](../../scripts/check_fips_compatibility.py)
+in `ByronWilliamsCPA/.github` for the canonical implementation of the
+contract, including the PQC ruleset and the inventory generator.
 
 ## Integration with CI/CD
 
@@ -351,13 +483,23 @@ on:
 
 ## Troubleshooting
 
-### Script Not Found
+### Check Skipped
 
-**Issue:** `FIPS check script not found at scripts/check_fips_compatibility.py`
+**Issue:** `No FIPS checker available; the FIPS compatibility check will be skipped.`
 
 **Solution:**
-1. Create the script at the expected path, or
-2. Configure `script-path` input to point to your script location
+1. Leave `use-central-checker: true` (default) so the org-central checker is used, or
+2. Ship a custom checker and point `script-path` at it.
+3. Set `fail-on-missing-script: true` to turn this soft-skip into a failure
+   once the repo is expected to be covered.
+
+### Custom Checker Rejects --pqc-mode
+
+**Issue:** `error: unrecognized arguments: --pqc-mode`
+
+**Solution:** the v8 workflow always passes `--pqc-mode`. Add the flag to the
+custom checker's argparse (see Custom Checker Contract), or delete the custom
+script to adopt the org-central checker.
 
 ### False Positives
 
@@ -368,6 +510,8 @@ on:
 ```python
 hashlib.md5(data, usedforsecurity=False)
 ```
+
+For other rules, suppress a specific line with `# fips: ignore[CODE]`.
 
 ### Dependency Conflicts
 
@@ -382,6 +526,11 @@ hashlib.md5(data, usedforsecurity=False)
 
 - [FIPS 140-2 Standard](https://csrc.nist.gov/pubs/fips/140-2/upd2/final)
 - [FIPS 140-3 Standard](https://csrc.nist.gov/pubs/fips/140-3/final)
+- [FIPS 203: ML-KEM](https://csrc.nist.gov/pubs/fips/203/final)
+- [FIPS 204: ML-DSA](https://csrc.nist.gov/pubs/fips/204/final)
+- [FIPS 205: SLH-DSA](https://csrc.nist.gov/pubs/fips/205/final)
+- [NIST IR 8547: Transition to Post-Quantum Cryptography Standards](https://csrc.nist.gov/pubs/ir/8547/ipd)
+- [NIST SP 800-56C Rev. 2 (hybrid shared secrets)](https://csrc.nist.gov/pubs/sp/800/56/c/r2/final)
 - [Python FIPS Mode (RHEL)](https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/8/html/security_hardening/using-the-system-wide-cryptographic-policies_security-hardening)
 - [NIST Approved Algorithms](https://csrc.nist.gov/projects/cryptographic-algorithm-validation-program)
 
@@ -390,7 +539,8 @@ hashlib.md5(data, usedforsecurity=False)
 To improve this workflow:
 
 1. Submit issues to [ByronWilliamsCPA/.github](https://github.com/ByronWilliamsCPA/.github/issues)
-2. Propose enhancements via pull requests
+2. Propose enhancements via pull requests; PQC/FIPS rule changes belong in
+   `scripts/check_fips_compatibility.py` so they roll out fleet-wide
 3. Share your FIPS check script improvements
 
 ## License
