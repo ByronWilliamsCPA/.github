@@ -114,7 +114,7 @@ jobs:
           egress-policy: audit
 
       - name: Checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
 
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
@@ -286,7 +286,7 @@ jobs:
       # The sparse-checkout uses the caller-configured grype-config-path so a custom
       # path (e.g., configs/.grype.yaml) is fetched too. Path is validated above.
       - name: Checkout repository (for grype config and SARIF context)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           sparse-checkout: |
             ${{ inputs.grype-config-path }}
@@ -374,7 +374,7 @@ jobs:
 
       - name: Upload Grype results to GitHub Security tab
         if: always() && steps.grype-sarif.outputs.sarif != ''
-        uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9  # v4.37.0
+        uses: github/codeql-action/upload-sarif@e0647621c2984b5ed2f768cb892365bf2a616ad1  # v4.37.2
         continue-on-error: true  # Don't fail if Code Scanning not enabled on repo
         with:
           sarif_file: ${{ steps.grype-sarif.outputs.sarif }}
@@ -412,7 +412,7 @@ jobs:
           egress-policy: audit
 
       - name: Checkout repository (for SARIF context)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           sparse-checkout: |
             .git
@@ -450,7 +450,7 @@ jobs:
 
       - name: Upload OSV-Scanner results to GitHub Security tab
         if: always()
-        uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9  # v4.37.0
+        uses: github/codeql-action/upload-sarif@e0647621c2984b5ed2f768cb892365bf2a616ad1  # v4.37.2
         continue-on-error: true
         with:
           sarif_file: osv-sbom-runtime.sarif
@@ -511,7 +511,7 @@ jobs:
       # #VERIFY: on first caller run, confirm the checked-out script SHA matches
       # the called workflow ref in the job log.
       - name: Checkout license checker script
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           repository: ${{ job.workflow_repository }}
           ref: ${{ job.workflow_sha }}
