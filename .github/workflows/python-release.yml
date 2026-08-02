@@ -144,7 +144,7 @@ jobs:
           egress-policy: audit
 
       - name: Checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           fetch-depth: 0
 
@@ -286,7 +286,7 @@ jobs:
           echo "Pre-release tests skipped intentionally. Reason: $SKIP_TESTS_REASON"
 
       - name: Checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           fetch-depth: 0
           token: ${{ github.token }}
@@ -488,7 +488,7 @@ jobs:
         # potential future provenance use.
         # #VERIFY: if Sigstore bundle uploads fail, check the id-token and contents
         # grants, not attestations.
-        uses: sigstore/gh-action-sigstore-python@5b79a39c381910c090341a2c9b0bf022c8b387e1  # v3.4.0
+        uses: sigstore/gh-action-sigstore-python@790bc6befb9d733738f18d8f895854b453640ec9  # v3.5.0
         with:
           inputs: ./dist/*.tar.gz ./dist/*.whl
           release-signing-artifacts: true
@@ -520,7 +520,7 @@ jobs:
 
       - name: Create GitHub Release (Manual)
         if: ${{ !inputs.semantic-release }}
-        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b  # v3.0.1
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228  # v3.0.2
         with:
           tag_name: ${{ steps.manual-release.outputs.tag }}
           generate_release_notes: true
