@@ -121,6 +121,16 @@ reaching the scanner as a malformed argument: a patch version (`3.12.1`), a rang
 (`>=3.11`), a trailing comma, or whitespace inside a version (`3 .11`), which is rejected
 rather than silently normalized into a different version.
 
+**When the input is empty.** The fallback derives `sonar.python.version` from
+`python-version` instead, and it is deliberately lenient there, because `python-version`
+feeds `actions/setup-python` and its accepted syntax is much wider than a Sonar version
+list. The leading `MAJOR.MINOR` is extracted, so `3.12.1` resolves to `3.12`, `>=3.11` to
+`3.11`, and `pypy3.10` to `3.10`. All of these are legal `python-version` values and none of
+them should fail an analysis. Only a value with no derivable minor version (`3.x`, `pypy`,
+or empty) fails, and the message points at `sonar-python-version` rather than guessing a
+version you never declared. The strict list validation above applies to
+`sonar-python-version` alone, since that input means a Sonar version list and nothing else.
+
 ## Usage Examples
 
 ### Basic Configuration

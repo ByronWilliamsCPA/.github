@@ -429,29 +429,54 @@ jobs:
           SONAR_PYTHON_VERSION: ${{ inputs.sonar-python-version }}
           PYTHON_VERSION: ${{ inputs.python-version }}
         run: |
+          # Reduce a caller-controlled value to a safe charset before echoing it: a raw newline
+          # or colon would otherwise let it forge a ::workflow-command:: in the log.
+          safe() { printf '%s' "${1//[^0-9A-Za-z.,_ +>=<-]/?}"; }
+
           if [ -n "$SONAR_PYTHON_VERSION" ]; then
-            RAW="$SONAR_PYTHON_VERSION"
-            FROM_INPUT="sonar-python-version"
+            # The explicit input is a sonar.python.version list and nothing else, so hold it to
+            # exactly that shape. Validate BEFORE stripping, so whitespace is tolerated only
+            # where it is meaningless: around the commas and at the ends. That accepts
+            # SonarSource's documented "3.11, 3.12" spacing while still rejecting whitespace
+            # inside a version ("3 .11"), which stripping first would have silently normalized
+            # into a different version.
+            if [[ ! "$SONAR_PYTHON_VERSION" =~ ^[[:space:]]*[0-9]+\.[0-9]+([[:space:]]*,[[:space:]]*[0-9]+\.[0-9]+)*[[:space:]]*$ ]]; then
+              echo "::error::sonar-python-version must be a comma-separated list of MAJOR.MINOR Python versions, for example '3.11,3.12,3.13'. Received: '$(safe "$SONAR_PYTHON_VERSION")'"
+              exit 1
+            fi
+            VERSION="${SONAR_PYTHON_VERSION//[[:space:]]/}"
+            echo "Resolved sonar.python.version=$VERSION (from sonar-python-version)"
           else
-            RAW="$PYTHON_VERSION"
-            FROM_INPUT="python-version (sonar-python-version was empty)"
+            # #CRITICAL: the fallback path must NOT apply the strict list shape. python-version
+            # feeds actions/setup-python, whose accepted syntax is much wider than MAJOR.MINOR:
+            # '3.12.1', '3.13.0-rc.1', '>=3.11', '3.x', and 'pypy3.10' are all legal there and
+            # all worked before this step existed. Rejecting them would break existing callers
+            # that never opted into sonar.python.version at all.
+            # #VERIFY: a caller passing python-version '3.12.1' still analyzes, as 3.12.
+            #
+            # sonar.python.version only accepts MAJOR.MINOR, so extract the leading one rather
+            # than passing the raw value through. '3.x' and other version-less forms have no
+            # derivable MINOR, so they fail with a pointer to the explicit input instead of
+            # guessing a version the caller never stated.
+            if [[ "$PYTHON_VERSION" =~ ([0-9]+)\.([0-9]+) ]]; then
+              VERSION="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+            else
+              echo "::error::Could not derive a MAJOR.MINOR Python version from python-version '$(safe "$PYTHON_VERSION")'. Set sonar-python-version explicitly to the versions your source supports, for example '3.11,3.12,3.13'."
+              exit 1
+            fi
+            if [ "$VERSION" = "$PYTHON_VERSION" ]; then
+              echo "Resolved sonar.python.version=$VERSION (from python-version; sonar-python-version was empty)"
+            else
+              echo "Resolved sonar.python.version=$VERSION (narrowed from python-version '$(safe "$PYTHON_VERSION")'; sonar-python-version was empty)"
+            fi
+            echo "::notice::sonar.python.version defaulted to the single build version $VERSION. If this project's requires-python is wider, set sonar-python-version, because Sonar gates version-specific rules on ALL declared versions."
           fi
 
-          # Validate BEFORE stripping, so whitespace is tolerated only where it is meaningless:
-          # around the commas and at the ends. That accepts SonarSource's documented
-          # "3.11, 3.12" spacing while still rejecting whitespace inside a version ("3 .11"),
-          # which stripping first would have silently normalized into a different version.
-          if [[ ! "$RAW" =~ ^[[:space:]]*[0-9]+\.[0-9]+([[:space:]]*,[[:space:]]*[0-9]+\.[0-9]+)*[[:space:]]*$ ]]; then
-            # Reduce the echoed value to a safe charset first: it is caller-controlled, and a
-            # raw newline or colon would let it forge a ::workflow-command:: in the log.
-            SAFE_RAW="${RAW//[^0-9A-Za-z.,_ -]/?}"
-            echo "::error::$FROM_INPUT must be a comma-separated list of MAJOR.MINOR Python versions, for example '3.11,3.12,3.13'. Received: '$SAFE_RAW'"
-            exit 1
-          fi
-
-          VERSION="${RAW//[[:space:]]/}"
-
-          echo "Resolved sonar.python.version=$VERSION (from $FROM_INPUT)"
+          # #CRITICAL: this is the GITHUB_OUTPUT shape guard. A caller value containing a newline
+          # could otherwise append extra key=value lines and forge unrelated step outputs (#234).
+          # #VERIFY: both branches assign VERSION from digits-and-dots only, either a
+          # whitespace-stripped match of the strict list regex or two numeric BASH_REMATCH
+          # groups, so no newline, '=', or shell metacharacter can reach the output file.
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
         shell: bash
 
