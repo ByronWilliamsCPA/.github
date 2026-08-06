@@ -57,7 +57,8 @@ jobs:
 
 | Input | Type | Default | Description |
 |-------|------|---------|-------------|
-| `python-version` | string | '3.12' | Python version for analysis |
+| `python-version` | string | '3.12' | Single Python version used to build the project and run the analysis; feeds `actions/setup-python` |
+| `sonar-python-version` | string | '' | Python versions the source supports, comma-separated (`3.11,3.12,3.13`). Sets `sonar.python.version`. Falls back to `python-version` when empty. See [Declaring supported source versions](#declaring-supported-source-versions) |
 | `source-directory` | string | 'src' | Source code directory |
 | `coverage-paths` | string | 'coverage.xml' | Coverage report paths (comma-separated) |
 | `coverage-exclusions` | string | See below | Paths to exclude from coverage |
@@ -81,6 +82,54 @@ jobs:
 | Secret | Description |
 |--------|-------------|
 | `SONAR_TOKEN` | SonarCloud authentication token (optional if `skip-if-no-token: true`) |
+
+### Declaring supported source versions
+
+`python-version` and `sonar-python-version` answer two different questions. Keep them
+separate:
+
+| Input | Question it answers | Cardinality |
+|-------|---------------------|-------------|
+| `python-version` | Which interpreter builds the project and runs the scan? | Exactly one (`actions/setup-python` rejects a list) |
+| `sonar-python-version` | Which versions must the source code remain valid on? | One or more, comma-separated |
+
+Set `sonar-python-version` whenever your `requires-python` range is wider than the single
+version used to build:
+
+```yaml
+with:
+  python-version: '3.12'                    # builds and scans on 3.12
+  sonar-python-version: '3.11,3.12,3.13'    # source must stay valid on all three
+```
+
+**Why it matters.** SonarPython gates version-specific rules on *every* declared version,
+not the highest one. Declaring only the build version tells the analyzer the project is
+3.12-only, so it raises 3.12+ syntax rules (PEP 695 `type` aliases, `python:S6794` and
+`python:S6796`) against code that still has to run on 3.11. Adding 3.11 to the list
+correctly silences them.
+
+**The inverse also holds, and it loses findings silently.** Because the gate requires all
+declared versions to meet a rule's threshold, declaring versions *below* your real floor
+suppresses rules you actually want. A project whose `requires-python` is `>=3.12` that
+declares `3.9,3.12` gets no 3.10+, 3.11+, or 3.12+ rules at all, with no warning. Declare
+the range that matches `requires-python` and nothing wider.
+
+**Format.** Comma-separated `MAJOR.MINOR` values. Whitespace around the commas and at the
+ends is tolerated and stripped, so both `3.11,3.12` and SonarSource's own documented
+`3.11, 3.12` spacing work. Anything else fails the job with an explicit message rather than
+reaching the scanner as a malformed argument: a patch version (`3.12.1`), a range operator
+(`>=3.11`), a trailing comma, or whitespace inside a version (`3 .11`), which is rejected
+rather than silently normalized into a different version.
+
+**When the input is empty.** The fallback derives `sonar.python.version` from
+`python-version` instead, and it is deliberately lenient there, because `python-version`
+feeds `actions/setup-python` and its accepted syntax is much wider than a Sonar version
+list. The leading `MAJOR.MINOR` is extracted, so `3.12.1` resolves to `3.12`, `>=3.11` to
+`3.11`, and `pypy3.10` to `3.10`. All of these are legal `python-version` values and none of
+them should fail an analysis. Only a value with no derivable minor version (`3.x`, `pypy`,
+or empty) fails, and the message points at `sonar-python-version` rather than guessing a
+version you never declared. The strict list validation above applies to
+`sonar-python-version` alone, since that input means a Sonar version list and nothing else.
 
 ## Usage Examples
 
@@ -193,7 +242,8 @@ sonar.projectVersion=1.0.0
 # Source configuration
 sonar.sources=src
 sonar.tests=tests
-sonar.python.version=3.12
+# Every version the source must stay valid on, not just the build version.
+sonar.python.version=3.11,3.12,3.13
 
 # Coverage configuration
 sonar.python.coverage.reportPaths=coverage.xml
@@ -207,7 +257,9 @@ sonar.test.exclusions=**/integration_tests/**
 sonar.sourceEncoding=UTF-8
 ```
 
-**Note:** Workflow inputs override properties file settings.
+**Note:** Workflow inputs override properties file settings. The workflow always passes
+`-Dsonar.python.version` on the command line, so a `sonar.python.version` key in this file
+is ignored; set the `sonar-python-version` input instead.
 
 ## Quality Gate Configuration
 

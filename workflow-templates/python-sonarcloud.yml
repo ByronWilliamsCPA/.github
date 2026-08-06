@@ -88,6 +88,13 @@ jobs:
             ls -lh coverage.xml
           fi
 
+      # Widen -Dsonar.python.version below to every version your requires-python range
+      # supports, comma-separated with no spaces, for example 3.11,3.12,3.13. SonarPython
+      # gates version-specific rules on ALL declared versions, so declaring only the build
+      # version raises rules for syntax the project cannot use (PEP 695 S6794/S6796 against
+      # 3.11-compatible code). Declaring versions BELOW your real floor silently suppresses
+      # valid rules. Note that args: is a folded block scalar: keep each value space-free,
+      # because YAML joins these lines with spaces and the scanner splits on whitespace.
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@713881670b6b3676cda39549040e2d88c70d582e # v8
         env:
