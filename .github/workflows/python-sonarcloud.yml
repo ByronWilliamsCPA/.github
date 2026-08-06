@@ -68,10 +68,25 @@ on:
         required: true
 
       python-version:
-        description: 'Python version for analysis'
+        description: 'Python version used to build and run the analysis (single version; feeds actions/setup-python)'
         type: string
         required: false
         default: '3.12'
+
+      sonar-python-version:
+        description: >-
+          Python versions the SOURCE supports, comma-separated (e.g. "3.11,3.12,3.13,3.14").
+          Sets -Dsonar.python.version. Defaults to python-version when empty.
+          Set this whenever requires-python is wider than the single version used to
+          build, because Sonar gates version-specific rules on ALL declared versions
+          (PythonVersionUtils.areSourcePythonVersionsGreaterOrEqualThan is allMatch).
+          Declaring only the build version makes the analyzer raise rules for syntax
+          the project cannot actually use, e.g. PEP 695 S6794/S6796 against a codebase
+          that still supports 3.11. This is separate from python-version because
+          actions/setup-python accepts exactly one version and would fail on a list.
+        type: string
+        required: false
+        default: ''
 
       source-directory:
         description: 'Source code directory to analyze (default: src)'
@@ -392,7 +407,7 @@ jobs:
           args: >
             -Dsonar.organization=${{ inputs.sonar-organization }}
             -Dsonar.projectKey=${{ inputs.sonar-project-key }}
-            -Dsonar.python.version=${{ inputs.python-version }}
+            -Dsonar.python.version=${{ inputs.sonar-python-version != '' && inputs.sonar-python-version || inputs.python-version }}
             -Dsonar.sources=${{ inputs.source-directory }}
             -Dsonar.python.coverage.reportPaths=${{ inputs.coverage-paths }}
             -Dsonar.coverage.exclusions=${{ inputs.coverage-exclusions }}
