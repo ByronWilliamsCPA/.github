@@ -77,9 +77,10 @@ on:
         description: >-
           Python versions the SOURCE supports, comma-separated (e.g. "3.11,3.12,3.13").
           Sets -Dsonar.python.version. Defaults to python-version when empty.
-          Whitespace around commas is stripped, so SonarSource's own documented
-          "3.11, 3.12" spacing is accepted; any other shape fails the job with an
-          explicit message instead of reaching the scanner malformed.
+          Whitespace around the commas and at the ends is stripped, so SonarSource's own
+          documented "3.11, 3.12" spacing is accepted. Anything else, including whitespace
+          inside a version ("3 .11"), fails the job with an explicit message instead of
+          reaching the scanner malformed.
           Set this whenever requires-python is wider than the single version used to
           build, because Sonar gates version-specific rules on ALL declared versions
           (PythonVersionUtils.areSourcePythonVersionsGreaterOrEqualThan is allMatch).
@@ -418,8 +419,9 @@ jobs:
       # #CRITICAL: the regex is also the GITHUB_OUTPUT shape guard. A caller value containing
       # a newline could otherwise append extra key=value lines to the output file and forge
       # unrelated step outputs (see PR #234).
-      # #VERIFY: the echo to $GITHUB_OUTPUT is reachable only after the ^[0-9]+\.[0-9]+ match
-      # succeeds, which admits no newline, no '=', and no shell metacharacter.
+      # #VERIFY: the echo to $GITHUB_OUTPUT is reachable only after the match below succeeds,
+      # which admits only digits, dots, commas and whitespace; stripping the whitespace then
+      # leaves no newline, no '=', and no shell metacharacter.
       - name: Resolve sonar.python.version
         id: sonar_python
         if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
@@ -435,15 +437,19 @@ jobs:
             FROM_INPUT="python-version (sonar-python-version was empty)"
           fi
 
-          VERSION="${RAW//[[:space:]]/}"
-
-          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+(,[0-9]+\.[0-9]+)*$ ]]; then
+          # Validate BEFORE stripping, so whitespace is tolerated only where it is meaningless:
+          # around the commas and at the ends. That accepts SonarSource's documented
+          # "3.11, 3.12" spacing while still rejecting whitespace inside a version ("3 .11"),
+          # which stripping first would have silently normalized into a different version.
+          if [[ ! "$RAW" =~ ^[[:space:]]*[0-9]+\.[0-9]+([[:space:]]*,[[:space:]]*[0-9]+\.[0-9]+)*[[:space:]]*$ ]]; then
             # Reduce the echoed value to a safe charset first: it is caller-controlled, and a
             # raw newline or colon would let it forge a ::workflow-command:: in the log.
             SAFE_RAW="${RAW//[^0-9A-Za-z.,_ -]/?}"
             echo "::error::$FROM_INPUT must be a comma-separated list of MAJOR.MINOR Python versions, for example '3.11,3.12,3.13'. Received: '$SAFE_RAW'"
             exit 1
           fi
+
+          VERSION="${RAW//[[:space:]]/}"
 
           echo "Resolved sonar.python.version=$VERSION (from $FROM_INPUT)"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"

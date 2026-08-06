@@ -114,10 +114,12 @@ suppresses rules you actually want. A project whose `requires-python` is `>=3.12
 declares `3.9,3.12` gets no 3.10+, 3.11+, or 3.12+ rules at all, with no warning. Declare
 the range that matches `requires-python` and nothing wider.
 
-**Format.** Comma-separated `MAJOR.MINOR` values. Surrounding whitespace is tolerated and
-stripped, so both `3.11,3.12` and SonarSource's own documented `3.11, 3.12` spacing work.
-Anything else (a patch version, a range operator, a non-numeric token) fails the job with
-an explicit message rather than reaching the scanner as a malformed argument.
+**Format.** Comma-separated `MAJOR.MINOR` values. Whitespace around the commas and at the
+ends is tolerated and stripped, so both `3.11,3.12` and SonarSource's own documented
+`3.11, 3.12` spacing work. Anything else fails the job with an explicit message rather than
+reaching the scanner as a malformed argument: a patch version (`3.12.1`), a range operator
+(`>=3.11`), a trailing comma, or whitespace inside a version (`3 .11`), which is rejected
+rather than silently normalized into a different version.
 
 ## Usage Examples
 
