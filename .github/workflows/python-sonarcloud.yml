@@ -75,8 +75,11 @@ on:
 
       sonar-python-version:
         description: >-
-          Python versions the SOURCE supports, comma-separated (e.g. "3.11,3.12,3.13,3.14").
+          Python versions the SOURCE supports, comma-separated (e.g. "3.11,3.12,3.13").
           Sets -Dsonar.python.version. Defaults to python-version when empty.
+          Whitespace around commas is stripped, so SonarSource's own documented
+          "3.11, 3.12" spacing is accepted; any other shape fails the job with an
+          explicit message instead of reaching the scanner malformed.
           Set this whenever requires-python is wider than the single version used to
           build, because Sonar gates version-specific rules on ALL declared versions
           (PythonVersionUtils.areSourcePythonVersionsGreaterOrEqualThan is allMatch).
@@ -397,6 +400,55 @@ jobs:
             fi
           fi
 
+      # Resolve sonar.python.version in bash rather than inline in the args: block below.
+      # The args: block is a folded scalar, so YAML turns every newline into a space and the
+      # scanner splits the result on whitespace. A value containing a space therefore becomes
+      # two scanner arguments and the version list is silently truncated. SonarSource's own
+      # documentation writes the property with spaces after commas ("3.11, 3.12"), so a caller
+      # copying the vendor format would hit that misparse with no validation and no warning.
+      # Stripping whitespace here makes both spellings work and keeps args: single-token.
+      #
+      # #CRITICAL: SONAR_PYTHON_VERSION and PYTHON_VERSION are caller-controlled, so both are
+      # passed through env: rather than interpolated into the run: body via ${{ ... }};
+      # template expansion runs before bash sees the line, so shell metacharacters in a
+      # caller's value would become script text (CodeQL py/code-injection).
+      # #VERIFY: this step references only $SONAR_PYTHON_VERSION and $PYTHON_VERSION, never
+      # ${{ inputs.* }} inside run:.
+      #
+      # #CRITICAL: the regex is also the GITHUB_OUTPUT shape guard. A caller value containing
+      # a newline could otherwise append extra key=value lines to the output file and forge
+      # unrelated step outputs (see PR #234).
+      # #VERIFY: the echo to $GITHUB_OUTPUT is reachable only after the ^[0-9]+\.[0-9]+ match
+      # succeeds, which admits no newline, no '=', and no shell metacharacter.
+      - name: Resolve sonar.python.version
+        id: sonar_python
+        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
+        env:
+          SONAR_PYTHON_VERSION: ${{ inputs.sonar-python-version }}
+          PYTHON_VERSION: ${{ inputs.python-version }}
+        run: |
+          if [ -n "$SONAR_PYTHON_VERSION" ]; then
+            RAW="$SONAR_PYTHON_VERSION"
+            FROM_INPUT="sonar-python-version"
+          else
+            RAW="$PYTHON_VERSION"
+            FROM_INPUT="python-version (sonar-python-version was empty)"
+          fi
+
+          VERSION="${RAW//[[:space:]]/}"
+
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+(,[0-9]+\.[0-9]+)*$ ]]; then
+            # Reduce the echoed value to a safe charset first: it is caller-controlled, and a
+            # raw newline or colon would let it forge a ::workflow-command:: in the log.
+            SAFE_RAW="${RAW//[^0-9A-Za-z.,_ -]/?}"
+            echo "::error::$FROM_INPUT must be a comma-separated list of MAJOR.MINOR Python versions, for example '3.11,3.12,3.13'. Received: '$SAFE_RAW'"
+            exit 1
+          fi
+
+          echo "Resolved sonar.python.version=$VERSION (from $FROM_INPUT)"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+        shell: bash
+
       - name: SonarCloud Scan
         if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
         uses: SonarSource/sonarqube-scan-action@713881670b6b3676cda39549040e2d88c70d582e  # v8.2  # nosemgrep: detected-sonarqube-docs-api-key  # FP -- see #37
@@ -407,7 +459,7 @@ jobs:
           args: >
             -Dsonar.organization=${{ inputs.sonar-organization }}
             -Dsonar.projectKey=${{ inputs.sonar-project-key }}
-            -Dsonar.python.version=${{ inputs.sonar-python-version != '' && inputs.sonar-python-version || inputs.python-version }}
+            -Dsonar.python.version=${{ steps.sonar_python.outputs.version }}
             -Dsonar.sources=${{ inputs.source-directory }}
             -Dsonar.python.coverage.reportPaths=${{ inputs.coverage-paths }}
             -Dsonar.coverage.exclusions=${{ inputs.coverage-exclusions }}
