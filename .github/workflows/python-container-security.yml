@@ -68,6 +68,53 @@ on:
         required: false
         default: true
 
+      # #ASSUME callers pass true on pull_request/merge_group (fast gate, only
+      # actionable findings block a merge) and false on the weekly schedule or a
+      # manual run (full inventory, including base-image CVEs with no upstream
+      # fix). Default is false so the reusable workflow keeps reporting the full
+      # set unless a caller opts into the reduced view.
+      # #EDGE this suppresses findings from both the failing gate and the SARIF
+      # upload, so a scan run with ignore-unfixed: true will retire previously
+      # uploaded unfixed alerts in the Security tab for the same category. The
+      # weekly full scan re-opens them.
+      ignore-unfixed:
+        description: 'Ignore vulnerabilities that have no available fix'
+        type: boolean
+        required: false
+        default: false
+
+      # Suppression revisit dates. A Trivy suppression with no `expired_at` is
+      # permanent: the finding leaves every scan and nothing forces a second
+      # look. This gate requires a revisit date on each entry, no further out
+      # than ignore-expiry-horizon-days.
+      enforce-ignore-expiry:
+        description: 'Require a revisit date (expired_at) on every .trivyignore.yaml entry'
+        type: boolean
+        required: false
+        default: true
+
+      ignore-expiry-horizon-days:
+        description: 'Furthest a suppression revisit date may be set from today'
+        type: number
+        required: false
+        default: 90
+
+      allow-legacy-trivyignore:
+        description: 'Tolerate a plain-text .trivyignore, which cannot carry revisit dates'
+        type: boolean
+        required: false
+        default: false
+
+      # SUPPLY-CHAIN NOTE: the default is 'main', a FLOATING ref, so revisit
+      # rules roll out fleet-wide without a per-repo edit. Callers wanting
+      # supply-chain rigor pin an immutable point tag or full SHA; the org tag
+      # ruleset makes v* tags immutable. Mirrors python-fips-compatibility.yml.
+      central-checker-ref:
+        description: 'Ref of ByronWilliamsCPA/.github supplying the revisit-date checker'
+        type: string
+        required: false
+        default: 'main'
+
       # Hadolint configuration
       run-hadolint:
         description: 'Run Hadolint Dockerfile linting'
@@ -178,6 +225,97 @@ jobs:
           echo "**Dockerfile:** \`$DOCKERFILE_PATH\`" >> $GITHUB_STEP_SUMMARY
           echo "**Failure Threshold:** $HADOLINT_FAILURE_THRESHOLD" >> $GITHUB_STEP_SUMMARY
 
+  # Revisit-date enforcement for Trivy suppressions
+  #
+  # Separate job rather than a step inside trivy-scan: it needs the caller's
+  # working tree but not the image, so it runs in parallel with the build and
+  # stays green (or red) independently of whether an image was produced.
+  # #ASSUME contents: read is sufficient; the job checks out two repos and runs
+  # a local checker, with no secrets, artifacts, or SARIF upload.
+  ignore-expiry:
+    name: Suppression Revisit Dates
+    if: ${{ inputs.enforce-ignore-expiry }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 10
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+        with:
+          # No git operation in this job needs the token; leaving it in
+          # .git/config would expose it for the rest of the job.
+          persist-credentials: false
+
+      # #ASSUME ByronWilliamsCPA/.github is public; a public cross-repo
+      # checkout needs no token beyond the caller's default GITHUB_TOKEN, and
+      # no secret is passed here.
+      - name: Fetch org-central revisit checker
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+        with:
+          repository: ByronWilliamsCPA/.github
+          ref: ${{ inputs.central-checker-ref }}
+          path: .trivy-revisit-checker
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: '3.12'
+
+      - name: Install checker dependencies
+        # Pinned exactly (SonarCloud S8544: an unpinned install resolves to
+        # whatever PyPI serves at run time).
+        run: python -m pip install --quiet --disable-pip-version-check 'pyyaml==6.0.2'
+
+      # #CRITICAL the same detection the scan job uses. Validating a hardcoded
+      # `.trivyignore.yaml` while the scan honours `.trivyignore.yml` too would
+      # leave the `.yml` variant applied but never checked for `expired_at`,
+      # which is exactly the unbounded suppression this job exists to prevent.
+      - name: Detect Trivy ignore file
+        id: ignorefile
+        run: |
+          if [ -f .trivyignore.yaml ]; then
+            echo "path=.trivyignore.yaml" >> "$GITHUB_OUTPUT"
+          elif [ -f .trivyignore.yml ]; then
+            echo "path=.trivyignore.yml" >> "$GITHUB_OUTPUT"
+          else
+            # Non-existent path: the checker reports "nothing to validate".
+            echo "path=.trivyignore.yaml" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate suppression revisit dates
+        env:
+          TRIVYIGNORE_PATH: ${{ steps.ignorefile.outputs.path }}
+          LEGACY_TRIVYIGNORE_PATH: .trivyignore
+          MAX_HORIZON_DAYS: ${{ inputs.ignore-expiry-horizon-days }}
+          ALLOW_LEGACY_TRIVYIGNORE: ${{ inputs.allow-legacy-trivyignore }}
+        run: python .trivy-revisit-checker/scripts/check_trivy_ignore_expiry.py
+
+      - name: Revisit-date summary
+        if: always()
+        env:
+          MAX_HORIZON_DAYS: ${{ inputs.ignore-expiry-horizon-days }}
+          IGNORE_FILE: ${{ steps.ignorefile.outputs.path }}
+        run: |
+          # Single grouped redirect rather than one per line (SC2129).
+          {
+            echo "## Trivy Suppression Revisit Dates"
+            echo ""
+            if [ -n "${IGNORE_FILE}" ] && [ -f "${IGNORE_FILE}" ]; then
+              echo "Validated \`${IGNORE_FILE}\`: every entry must carry an"
+              echo "\`expired_at\` revisit date no more than ${MAX_HORIZON_DAYS} days out."
+            else
+              echo "No \`.trivyignore.yaml\` or \`.trivyignore.yml\` present; no suppressions to validate."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
   # Trivy container image scanning
   trivy-scan:
     name: Container Vulnerability Scan (Trivy)
@@ -193,9 +331,31 @@ jobs:
         with:
           egress-policy: audit
 
+      # Unconditional: the working tree supplies the suppression file even when
+      # no image is built here (registry-image scans via image-ref).
       - name: Checkout repository
-        if: ${{ inputs.build-image }}
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+        with:
+          # The scan reads the working tree; it runs no git operation that
+          # needs the token.
+          persist-credentials: false
+
+      # #CRITICAL Trivy's default ignorefile is `.trivyignore` only; it does NOT
+      # auto-detect the YAML variant (pkg/result.DefaultIgnoreFile). The YAML
+      # form is the only one that can carry `expired_at`, so it has to be passed
+      # explicitly or every dated suppression would be silently inert.
+      - name: Detect Trivy ignore file
+        id: ignorefile
+        run: |
+          if [ -f .trivyignore.yaml ]; then
+            echo "path=.trivyignore.yaml" >> "$GITHUB_OUTPUT"
+          elif [ -f .trivyignore.yml ]; then
+            echo "path=.trivyignore.yml" >> "$GITHUB_OUTPUT"
+          else
+            # Empty leaves the action's ignorefile handling switched off, which
+            # falls back to Trivy's own .trivyignore default.
+            echo "path=" >> "$GITHUB_OUTPUT"
+          fi
 
       # Conditional DHI login: docker/login-action emits "##[error]Username and
       # password required" when secrets are absent, which clutters CI logs even
@@ -266,6 +426,8 @@ jobs:
           format: 'table'
           severity: ${{ inputs.severity-threshold }}
           scanners: 'vuln'  # Only scan for vulnerabilities, not licenses
+          ignore-unfixed: ${{ inputs.ignore-unfixed }}
+          trivyignores: ${{ steps.ignorefile.outputs.path }}
           exit-code: ${{ inputs.fail-on-vulnerabilities && '1' || '0' }}
 
       - name: Trivy SARIF report
@@ -276,6 +438,8 @@ jobs:
           format: 'sarif'
           output: 'trivy-container-results.sarif'
           scanners: 'vuln'  # Only scan for vulnerabilities, not licenses
+          ignore-unfixed: ${{ inputs.ignore-unfixed }}
+          trivyignores: ${{ steps.ignorefile.outputs.path }}
 
       - name: Upload Trivy SARIF
         if: ${{ inputs.upload-sarif && steps.image.outputs.ref != '' }}
@@ -309,26 +473,40 @@ jobs:
         env:
           SEVERITY_THRESHOLD: ${{ inputs.severity-threshold }}
           GENERATE_SBOM: ${{ inputs.generate-sbom }}
+          IGNORE_UNFIXED: ${{ inputs.ignore-unfixed }}
+          IMAGE_SCANNED: ${{ steps.image.outputs.ref }}
         run: |
-          echo "## Container Security Scan Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          # Single grouped redirect rather than one per line (SC2129), and the
+          # image ref reaches the script through env rather than by direct
+          # interpolation into the run body.
+          {
+            echo "## Container Security Scan Results"
+            echo ""
 
-          if [ -n "${{ steps.image.outputs.ref }}" ]; then
-            echo "**Image:** \`${{ steps.image.outputs.ref }}\`" >> $GITHUB_STEP_SUMMARY
-            echo "**Severity Threshold:** $SEVERITY_THRESHOLD" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
+            if [ -n "${IMAGE_SCANNED}" ]; then
+              echo "**Image:** \`${IMAGE_SCANNED}\`"
+              echo "**Severity Threshold:** ${SEVERITY_THRESHOLD}"
 
-            if [ "$GENERATE_SBOM" == "true" ]; then
-              echo "Container SBOM generated (CycloneDX format)" >> $GITHUB_STEP_SUMMARY
+              if [ "${IGNORE_UNFIXED}" == "true" ]; then
+                echo "**Scope:** fixable vulnerabilities only (unfixed ignored)"
+              else
+                echo "**Scope:** all vulnerabilities, including those with no available fix"
+              fi
+
+              echo ""
+
+              if [ "${GENERATE_SBOM}" == "true" ]; then
+                echo "Container SBOM generated (CycloneDX format)"
+              fi
+            else
+              echo "No container image was scanned."
             fi
-          else
-            echo "No container image was scanned." >> $GITHUB_STEP_SUMMARY
-          fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
   # Summary job
   security-summary:
     name: Security Summary
-    needs: [hadolint, trivy-scan]
+    needs: [hadolint, trivy-scan, ignore-expiry]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     if: always()
@@ -341,17 +519,29 @@ jobs:
         with:
           egress-policy: audit
 
+      # #CRITICAL job results reach the script through env, never by direct
+      # interpolation into the run body (CodeQL actions/code-injection). The
+      # values are a fixed enum today, but the env indirection is the rule the
+      # rest of this library follows and it costs nothing here.
       - name: Overall security summary
+        env:
+          HADOLINT_RESULT: ${{ needs.hadolint.result }}
+          TRIVY_RESULT: ${{ needs.trivy-scan.result }}
+          IGNORE_EXPIRY_RESULT: ${{ needs.ignore-expiry.result }}
         run: |
-          echo "## Container Security Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Hadolint | ${{ needs.hadolint.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Trivy Scan | ${{ needs.trivy-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+          # Single grouped redirect rather than one per line (SC2129).
+          {
+            echo "## Container Security Summary"
+            echo ""
+            echo "| Check | Status |"
+            echo "|-------|--------|"
+            echo "| Hadolint | ${HADOLINT_RESULT} |"
+            echo "| Trivy Scan | ${TRIVY_RESULT} |"
+            echo "| Suppression Revisit Dates | ${IGNORE_EXPIRY_RESULT} |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Check for failures
-        if: ${{ needs.hadolint.result == 'failure' || needs.trivy-scan.result == 'failure' }}
+        if: ${{ needs.hadolint.result == 'failure' || needs.trivy-scan.result == 'failure' || needs.ignore-expiry.result == 'failure' }}
         run: |
           echo "::error::Container security checks failed"
           exit 1

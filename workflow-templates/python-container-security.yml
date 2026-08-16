@@ -7,10 +7,19 @@
 #   - Generates container SBOM (optional)
 #   - Uploads SARIF to GitHub Security tab
 #
+# Scan scope by trigger:
+#   - pull_request / merge_group: fixable vulnerabilities only. Base-image CVEs
+#     with no upstream patch cannot be actioned in the PR, so they do not block
+#     the merge.
+#   - push to main / weekly schedule / manual: the full inventory, including
+#     unfixed findings, so nothing is silently dropped from the Security tab.
+#
 # Triggered by:
 #   - Push to main branch
 #   - Pull requests to main branch
 #   - Changes to Dockerfile or container-related files
+#   - Weekly schedule (full scan, independent of file changes)
+#   - Manual dispatch
 
 name: Container Security
 
@@ -29,6 +38,12 @@ on:
       - 'Dockerfile*'
       - 'docker-compose*.yml'
       - '.dockerignore'
+  schedule:
+    # Weekly Monday 3:15 AM UTC. Offset from python-security-analysis.yml
+    # (2:30 AM Monday) so the two scheduled security runs do not contend for
+    # runners or for the Trivy database mirror.
+    - cron: '15 3 * * 1'
+  workflow_dispatch:
   # CRITICAL: merge_group fires against the queue's speculative merge commit.
   # Container security scan must run on the queue ref so Dockerfile or image
   # regressions introduced by the speculative merge are caught before landing
@@ -37,9 +52,10 @@ on:
   # #VERIFY same procedure as python-ci.yml's CRITICAL block; tracked in #154.
   merge_group:
 
-permissions:
-  contents: read
-  security-events: write
+# Deny by default at workflow scope; each job opts into the minimum it needs.
+# A future job added here without its own permissions block therefore inherits
+# nothing rather than silently inheriting contents/security-events.
+permissions: {}
 
 jobs:
   container-security:
@@ -51,10 +67,44 @@ jobs:
       image-tag: 'security-scan:latest'
       severity-threshold: 'CRITICAL,HIGH'
       fail-on-vulnerabilities: true
+      # CRITICAL: PR and merge-queue runs gate on fixable findings only. Every
+      # other trigger (push to main, the weekly cron, manual dispatch) runs the
+      # full scan, so the default branch SARIF that populates the Security tab
+      # always carries the unfixed findings too.
+      # #EDGE keep push-to-main on the full scan: a PR-scoped run that ignored
+      # unfixed would retire those alerts for the trivy-container category if it
+      # ever uploaded against the default branch ref.
+      ignore-unfixed: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
       run-hadolint: true
       hadolint-failure-threshold: 'error'
       generate-sbom: true
       upload-sarif: true
+      # Every .trivyignore.yaml entry must carry an expired_at revisit date no
+      # more than 90 days out, so no suppression outlives its justification.
+      enforce-ignore-expiry: true
+      ignore-expiry-horizon-days: 90
     permissions:
       contents: read
       security-events: write
+
+  # Weekly revisit tracker for CVEs with no upstream fix. Separate job because
+  # it needs issues: write, which the PR-path scan deliberately does not carry.
+  # Runs only on the schedule and on manual dispatch: the tracker is the
+  # counterweight to ignore-unfixed on pull requests, not a per-PR check.
+  container-revisit:
+    name: Unfixed CVE Revisit Tracker
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    # #CRITICAL python-container-revisit.yml first ships in the release that
+    # follows v9.0.0. Advance this pin to that release SHA before adopting the
+    # template downstream; a pin at v9.0.0 resolves to a workflow that does not
+    # exist there and the job errors at run time.
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-container-revisit.yml@7d12f5486ab5c856397ebaa4acd3c99ca385227c # v9.0.0
+    with:
+      dockerfile-path: './Dockerfile'
+      build-image: true
+      severity-threshold: 'CRITICAL,HIGH'
+      revisit-horizon-days: 90
+      fail-on-overdue: true
+    permissions:
+      contents: read
+      issues: write

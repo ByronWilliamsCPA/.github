@@ -84,7 +84,8 @@ Calling repos must provide:
 - **[Releases](USAGE_EXAMPLES.md#releases)** (`python-release.yml`) - Signed releases with SLSA provenance and SBOM
 - **[Codecov Coverage Upload](.github/workflows/python-codecov.yml)** (`python-codecov.yml`) - Securely uploads coverage reports to Codecov without re-running tests
 - **[Compatibility Testing](.github/workflows/python-compatibility.yml)** (`python-compatibility.yml`) - Matrix testing across Python versions and operating systems
-- **[Container Security](.github/workflows/python-container-security.yml)** (`python-container-security.yml`) - Trivy container image scanning and Hadolint Dockerfile linting
+- **[Container Security](docs/workflows/python-container-security.md)** (`python-container-security.yml`) - Trivy container image scanning and Hadolint Dockerfile linting
+- **[Container CVE Revisit Tracker](docs/workflows/python-container-revisit.md)** (`python-container-revisit.yml`) - Weekly tracker holding unfixed container CVEs to a revisit deadline
 - **[Docker Build](.github/workflows/python-docker.yml)** (`python-docker.yml`) - Multi-platform Docker image builds with GHCR publishing
 - **[FIPS Compatibility](docs/workflows/python-fips-compatibility.md)** (`python-fips-compatibility.yml`) - FIPS 140-2/140-3 compliance checks for code and dependencies
 - **[Mutation Testing](.github/workflows/python-mutation.yml)** (`python-mutation.yml`) - Validates test suite effectiveness using mutmut mutation testing
