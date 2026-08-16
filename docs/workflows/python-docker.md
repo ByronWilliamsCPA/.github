@@ -24,6 +24,7 @@ generation, SLSA provenance attestation, and PR comments with build info.
 | `enable-trivy-scan` | boolean | no | `true` | Enable Trivy vulnerability scanning |
 | `trivy-severity` | string | no | `CRITICAL,HIGH` | Trivy severity threshold (CRITICAL,HIGH,MEDIUM,LOW) |
 | `trivy-fail-on-vuln` | boolean | no | `false` | Fail build if vulnerabilities found |
+| `trivy-ignore-unfixed` | boolean | no | `false` | Ignore vulnerabilities that have no available fix. Set to `${{ github.event_name == 'pull_request' }}` to keep unactionable base-image CVEs out of the PR signal while release and scheduled builds keep the full inventory. |
 | `enable-sbom` | boolean | no | `true` | Generate Software Bill of Materials |
 | `enable-provenance` | boolean | no | `true` | Generate SLSA provenance attestation |
 | `enable-pr-comment` | boolean | no | `true` | Add sticky comment to PR with build info |

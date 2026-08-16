@@ -126,6 +126,14 @@ on:
         type: boolean
         required: false
         default: false
+      # #ASSUME callers pass true on PR builds so base-image CVEs with no
+      # upstream fix stay out of the PR signal, and leave it false on scheduled
+      # or release builds that want the full inventory.
+      trivy-ignore-unfixed:
+        description: 'Ignore vulnerabilities that have no available fix'
+        type: boolean
+        required: false
+        default: false
 
       # SBOM generation
       enable-sbom:
@@ -334,6 +342,7 @@ jobs:
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: ${{ inputs.trivy-severity }}
+          ignore-unfixed: ${{ inputs.trivy-ignore-unfixed }}
           exit-code: ${{ inputs.trivy-fail-on-vuln && '1' || '0' }}
 
       - name: Run Trivy vulnerability scanner (registry image)
@@ -344,6 +353,7 @@ jobs:
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: ${{ inputs.trivy-severity }}
+          ignore-unfixed: ${{ inputs.trivy-ignore-unfixed }}
           exit-code: ${{ inputs.trivy-fail-on-vuln && '1' || '0' }}
 
       - name: Upload Trivy scan results

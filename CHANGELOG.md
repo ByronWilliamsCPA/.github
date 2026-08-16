@@ -13,6 +13,41 @@ an immutable point tag; see `USAGE_EXAMPLES.md` for the pinning guidance.
 
 ## [Unreleased]
 
+### Added
+
+- `python-container-revisit.yml`: new reusable workflow that holds container
+  CVEs with no upstream fix to a revisit deadline. It scans at full scope on the
+  weekly schedule and maintains one tracker issue where each unfixed CVE carries
+  a first-seen date and a due date (first sighting + `revisit-horizon-days`,
+  90 by default). Due dates are carried forward across runs, resolved findings
+  drop off, an empty tracker is closed, and an overdue finding fails the run.
+  Requires `issues: write` on the calling job, which is why it is a separate
+  workflow rather than another job in `python-container-security.yml`.
+- `python-container-security.yml`: `ignore-unfixed` input (default `false`).
+  Callers set it to `${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}`
+  so pull requests gate on fixable findings only while push, schedule, and
+  manual runs keep the full inventory in the Security tab.
+- `python-container-security.yml`: `enforce-ignore-expiry` (default `true`),
+  `ignore-expiry-horizon-days` (default `90`), `allow-legacy-trivyignore`
+  (default `false`), and `central-checker-ref` inputs, plus a new
+  `Suppression Revisit Dates` job. Every `.trivyignore.yaml` entry must carry a
+  `statement` and an `expired_at` revisit date within the horizon; a plain-text
+  `.trivyignore`, which cannot express an expiry at all, fails the job unless
+  explicitly allowed.
+- `python-docker.yml`: `trivy-ignore-unfixed` input (default `false`) for the
+  same PR-versus-scheduled split.
+
+### Fixed
+
+- `python-container-security.yml`: the Trivy steps now pass a detected
+  `.trivyignore.yaml` (or `.trivyignore.yml`) to the scanner. Trivy's default
+  ignore file is the plain-text `.trivyignore` and the YAML variant is not
+  auto-detected, so a YAML suppression file previously had no effect on the
+  scan. The repository is also checked out unconditionally now, so suppressions
+  apply to registry-image scans (`build-image: false`) as well.
+- `scripts/check_trivy_ignore_expiry.py` and `scripts/track_unfixed_cves.py`,
+  with test suites in `tests/python/`.
+
 ### Changed
 
 - **BREAKING** `python-fips-compatibility.yml`: the checker CLI contract now

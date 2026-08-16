@@ -92,6 +92,8 @@ jobs:
           enable-cache: true
 
       - name: Run pytest
-        # pytest is pinned to an exact version (SonarCloud S8544: unpinned
-        # installs resolve to whatever PyPI serves at run time).
-        run: uvx --with 'pytest==9.0.3' pytest tests/python/ -v
+        # pytest and pyyaml are pinned to exact versions (SonarCloud S8544:
+        # unpinned installs resolve to whatever PyPI serves at run time).
+        # pyyaml backs check_trivy_ignore_expiry.py, which parses
+        # .trivyignore.yaml suppression files.
+        run: uvx --with 'pytest==9.0.3' --with 'pyyaml==6.0.2' pytest tests/python/ -v

@@ -1,0 +1,364 @@
+# ============================================================================
+# Reusable Container CVE Revisit Tracker
+# ============================================================================
+# Tracks container vulnerabilities that have NO available fix and holds each
+# one to a revisit date.
+#
+# Why this exists: python-container-security.yml runs pull requests with
+# `ignore-unfixed: true` so unactionable base-image CVEs do not block a merge.
+# On its own that is an unbounded suppression. This workflow runs on the weekly
+# schedule, scans with the full scope, and maintains a single tracker issue in
+# which every unfixed CVE carries a first-seen date and a revisit deadline
+# (first sighting + revisit-horizon-days). Once a deadline passes the run
+# fails, which forces an explicit decision instead of silence.
+#
+# Usage from downstream repos:
+#   jobs:
+#     container-revisit:
+#       if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+#       uses: ByronWilliamsCPA/.github/.github/workflows/python-container-revisit.yml@<sha> # vX.Y.Z
+#       permissions:
+#         contents: read
+#         issues: write
+#
+# #CRITICAL this workflow needs `issues: write` on the CALLER. A reusable
+# workflow cannot hold a permission its caller did not grant, so the tracker
+# lives here rather than as another job inside python-container-security.yml:
+# adding issues: write there would break every existing caller that grants only
+# contents: read and security-events: write.
+# ============================================================================
+
+name: Container CVE Revisit Tracker (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      image-ref:
+        description: 'Container image reference to scan (e.g., myapp:latest or ghcr.io/org/app:v1)'
+        type: string
+        required: false
+        default: ''
+
+      build-image:
+        description: 'Build image from Dockerfile before scanning'
+        type: boolean
+        required: false
+        default: true
+
+      dockerfile-path:
+        description: 'Path to Dockerfile'
+        type: string
+        required: false
+        default: './Dockerfile'
+
+      build-context:
+        description: 'Docker build context path'
+        type: string
+        required: false
+        default: '.'
+
+      image-tag:
+        description: 'Tag for built image (used when build-image is true)'
+        type: string
+        required: false
+        default: 'revisit-scan:latest'
+
+      severity-threshold:
+        description: 'Severities to track (CRITICAL, HIGH, MEDIUM, LOW)'
+        type: string
+        required: false
+        default: 'CRITICAL,HIGH'
+
+      revisit-horizon-days:
+        description: 'Days from first sighting to the revisit deadline'
+        type: number
+        required: false
+        default: 90
+
+      fail-on-overdue:
+        description: 'Fail the run when a tracked CVE is past its revisit date'
+        type: boolean
+        required: false
+        default: true
+
+      issue-label:
+        description: 'Label identifying the tracker issue'
+        type: string
+        required: false
+        default: 'trivy-unfixed-revisit'
+
+      issue-title:
+        description: 'Title of the tracker issue'
+        type: string
+        required: false
+        default: 'Unfixed container CVEs: revisit tracker'
+
+      enable-dhi-login:
+        description: 'Enable login to Docker Hardened Images (dhi.io) registry'
+        type: boolean
+        required: false
+        default: true
+
+      # SUPPLY-CHAIN NOTE: 'main' is a FLOATING ref, chosen so tracker logic
+      # rolls out fleet-wide without a per-repo edit. Pin an immutable point
+      # tag or full SHA for supply-chain rigor.
+      central-checker-ref:
+        description: 'Ref of ByronWilliamsCPA/.github supplying the tracker script'
+        type: string
+        required: false
+        default: 'main'
+
+    secrets:
+      DHI_USERNAME:
+        description: 'Docker Hardened Images registry username'
+        required: false
+      DHI_PAT:
+        description: 'Docker Hardened Images registry personal access token'
+        required: false
+
+permissions: {}
+
+jobs:
+  revisit-tracker:
+    name: Unfixed CVE Revisit Tracker
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    timeout-minutes: 25
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+
+      # Same shell-based form as python-container-security.yml: the login
+      # action errors loudly when secrets are absent, and --password-stdin
+      # keeps the PAT out of process listings.
+      - name: Login to DHI Registry
+        if: inputs.enable-dhi-login
+        env:
+          DHI_USERNAME: ${{ secrets.DHI_USERNAME }}
+          DHI_PAT: ${{ secrets.DHI_PAT }}
+        run: |
+          if [ -z "${DHI_USERNAME}" ] || [ -z "${DHI_PAT}" ]; then
+            echo "::notice::DHI credentials not configured; skipping dhi.io login (unauthenticated public pulls only)"
+            exit 0
+          fi
+          echo "${DHI_PAT}" | docker login dhi.io -u "${DHI_USERNAME}" --password-stdin
+        continue-on-error: true
+
+      # #CRITICAL Trivy's default ignorefile is `.trivyignore` only; the YAML
+      # variant is not auto-detected and must be passed explicitly. Honouring it
+      # here keeps the two revisit mechanisms disjoint: an explicitly suppressed
+      # CVE is governed by its own `expired_at`, so it must not also appear in
+      # this tracker under a second, unrelated deadline.
+      - name: Detect Trivy ignore file
+        id: ignorefile
+        run: |
+          if [ -f .trivyignore.yaml ]; then
+            echo "path=.trivyignore.yaml" >> $GITHUB_OUTPUT
+          elif [ -f .trivyignore.yml ]; then
+            echo "path=.trivyignore.yml" >> $GITHUB_OUTPUT
+          else
+            echo "path=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check Dockerfile exists
+        if: ${{ inputs.build-image }}
+        id: check-dockerfile
+        env:
+          DOCKERFILE_PATH: ${{ inputs.dockerfile-path }}
+        run: |
+          if [ -f "$DOCKERFILE_PATH" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "::warning::Dockerfile not found at $DOCKERFILE_PATH, skipping build"
+          fi
+
+      - name: Build container image
+        if: ${{ inputs.build-image && steps.check-dockerfile.outputs.exists == 'true' }}
+        env:
+          DOCKERFILE_PATH: ${{ inputs.dockerfile-path }}
+          IMAGE_TAG: ${{ inputs.image-tag }}
+          BUILD_CONTEXT: ${{ inputs.build-context }}
+        run: |
+          docker build \
+            -f "$DOCKERFILE_PATH" \
+            -t "$IMAGE_TAG" \
+            "$BUILD_CONTEXT"
+
+      - name: Determine image to scan
+        id: image
+        env:
+          IMAGE_TAG: ${{ inputs.image-tag }}
+          IMAGE_REF: ${{ inputs.image-ref }}
+          BUILD_IMAGE: ${{ inputs.build-image }}
+          EXISTS: ${{ steps.check-dockerfile.outputs.exists }}
+        run: |
+          if [ "$BUILD_IMAGE" == "true" ] && [ "$EXISTS" == "true" ]; then
+            echo "ref=$IMAGE_TAG" >> $GITHUB_OUTPUT
+          elif [ -n "$IMAGE_REF" ]; then
+            echo "ref=$IMAGE_REF" >> $GITHUB_OUTPUT
+          else
+            echo "ref=" >> $GITHUB_OUTPUT
+            echo "::warning::No image to scan"
+          fi
+
+      # #CRITICAL ignore-unfixed is deliberately absent (Trivy defaults to
+      # false). This scan is the full-scope one: the unfixed findings ARE the
+      # subject of the tracker, so suppressing them here would empty it.
+      - name: Trivy full scan (JSON)
+        if: steps.image.outputs.ref != ''
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        with:
+          image-ref: ${{ steps.image.outputs.ref }}
+          format: 'json'
+          output: 'trivy-full-results.json'
+          severity: ${{ inputs.severity-threshold }}
+          scanners: 'vuln'
+          trivyignores: ${{ steps.ignorefile.outputs.path }}
+          exit-code: '0'  # Gating is the tracker's job, not this step's
+
+      - name: Read existing tracker issue
+        if: steps.image.outputs.ref != ''
+        id: existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_LABEL: ${{ inputs.issue-label }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # The label is this tracker's own: the workflow creates it and no
+          # other process writes it, so the first open issue carrying it is
+          # the tracker. #ASSUME nobody hand-applies the label to an unrelated
+          # issue; the body-file update would overwrite it.
+          number=$(gh issue list \
+            --label "$ISSUE_LABEL" \
+            --state open \
+            --limit 1 \
+            --json number \
+            --jq '.[0].number // empty')
+
+          if [ -n "$number" ]; then
+            echo "number=$number" >> $GITHUB_OUTPUT
+            gh issue view "$number" --json body --jq '.body' > existing-body.md
+            echo "Found tracker issue #$number"
+          else
+            echo "number=" >> $GITHUB_OUTPUT
+            echo "No existing tracker issue"
+          fi
+
+      # Fetched AFTER the image build on purpose: the build context is the
+      # working tree, and a Dockerfile with `COPY . .` would otherwise bake the
+      # checker clone into the very image this job scans.
+      # #ASSUME ByronWilliamsCPA/.github is public; the public cross-repo
+      # checkout needs no token beyond the caller's default GITHUB_TOKEN.
+      - name: Fetch org-central tracker script
+        if: steps.image.outputs.ref != ''
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+        with:
+          repository: ByronWilliamsCPA/.github
+          ref: ${{ inputs.central-checker-ref }}
+          path: .trivy-revisit-checker
+          persist-credentials: false
+
+      - name: Set up Python
+        if: steps.image.outputs.ref != ''
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: '3.12'
+
+      # Renders the new issue body and exits non-zero on overdue findings, so
+      # this step must run BEFORE the issue is written: the body has to reach
+      # the issue even when the run fails. continue-on-error keeps the write
+      # steps reachable; the gate step at the end re-raises the failure.
+      - name: Build revisit tracker body
+        if: steps.image.outputs.ref != ''
+        id: tracker
+        continue-on-error: true
+        env:
+          TRIVY_JSON: trivy-full-results.json
+          EXISTING_BODY_PATH: existing-body.md
+          OUTPUT_BODY_PATH: tracker-body.md
+          REVISIT_HORIZON_DAYS: ${{ inputs.revisit-horizon-days }}
+          IMAGE_REF: ${{ steps.image.outputs.ref }}
+          SEVERITIES: ${{ inputs.severity-threshold }}
+          FAIL_ON_OVERDUE: ${{ inputs.fail-on-overdue }}
+        run: python .trivy-revisit-checker/scripts/track_unfixed_cves.py
+
+      - name: Create tracker issue
+        # tracked is empty when the tracker step died before rendering a body;
+        # creating an issue from a missing file would fail the step with a
+        # confusing error, so both write paths require a rendered count.
+        if: ${{ steps.image.outputs.ref != '' && steps.existing.outputs.number == '' && steps.tracker.outputs.tracked != '' && steps.tracker.outputs.tracked != '0' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_LABEL: ${{ inputs.issue-label }}
+          ISSUE_TITLE: ${{ inputs.issue-title }}
+        run: |
+          # --create-label is not a flag on `issue create`; create the label
+          # up front and ignore the "already exists" case.
+          gh label create "$ISSUE_LABEL" \
+            --description "Unfixed container CVEs awaiting revisit" \
+            --color BFD4F2 2>/dev/null || true
+          gh issue create \
+            --title "$ISSUE_TITLE" \
+            --label "$ISSUE_LABEL" \
+            --body-file tracker-body.md
+
+      - name: Update tracker issue
+        if: ${{ steps.image.outputs.ref != '' && steps.existing.outputs.number != '' && steps.tracker.outputs.tracked != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ steps.existing.outputs.number }}
+        run: gh issue edit "$ISSUE_NUMBER" --body-file tracker-body.md
+
+      # Close the tracker once the fleet catches up: an empty tracked set means
+      # every previously unfixed CVE now has a fix or is gone from the image.
+      - name: Close tracker issue when clear
+        if: ${{ steps.image.outputs.ref != '' && steps.existing.outputs.number != '' && steps.tracker.outputs.tracked == '0' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE_NUMBER: ${{ steps.existing.outputs.number }}
+        run: |
+          gh issue close "$ISSUE_NUMBER" \
+            --comment "No unfixed vulnerabilities at the tracked severities. Closing; the weekly scan reopens a tracker if any return."
+
+      - name: Revisit tracker summary
+        if: always()
+        env:
+          TRACKED: ${{ steps.tracker.outputs.tracked }}
+          OVERDUE: ${{ steps.tracker.outputs.overdue }}
+          DUE_SOON: ${{ steps.tracker.outputs.due_soon }}
+          HORIZON: ${{ inputs.revisit-horizon-days }}
+        run: |
+          echo "## Unfixed CVE Revisit Tracker" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -z "${TRACKED}" ]; then
+            echo "No image was scanned; tracker not updated." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
+            echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| Tracked unfixed CVEs | ${TRACKED} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Due within 14 days | ${DUE_SOON} |" >> $GITHUB_STEP_SUMMARY
+            echo "| Overdue | ${OVERDUE} |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Revisit horizon: ${HORIZON} days from first sighting." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      # Re-raise the tracker's verdict after the issue has been written.
+      - name: Gate on overdue findings
+        if: ${{ steps.image.outputs.ref != '' && steps.tracker.outcome == 'failure' }}
+        env:
+          OVERDUE: ${{ steps.tracker.outputs.overdue }}
+        run: |
+          echo "::error::${OVERDUE:-Unknown number of} unfixed CVE(s) are past their revisit date. See the tracker issue for the list."
+          exit 1
