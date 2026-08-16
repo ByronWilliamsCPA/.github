@@ -52,12 +52,10 @@ on:
   # #VERIFY same procedure as python-ci.yml's CRITICAL block; tracked in #154.
   merge_group:
 
-# Workflow-level block is the default for jobs that do not set their own; the
-# container-revisit job below overrides it to add issues: write, which only the
-# weekly tracker needs.
-permissions:
-  contents: read
-  security-events: write
+# Deny by default at workflow scope; each job opts into the minimum it needs.
+# A future job added here without its own permissions block therefore inherits
+# nothing rather than silently inheriting contents/security-events.
+permissions: {}
 
 jobs:
   container-security:

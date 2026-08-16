@@ -122,6 +122,14 @@ jobs:
   revisit-tracker:
     name: Unfixed CVE Revisit Tracker
     runs-on: ubuntu-latest
+    # #CRITICAL serialize tracker writes. Two runs (the weekly cron and a
+    # manual dispatch, say) could otherwise both find no open issue and both
+    # create one; later runs select a single issue with --limit 1, leaving the
+    # duplicate unmanaged and its deadlines unenforced. Queue rather than
+    # cancel: a cancelled run would skip the update, not just delay it.
+    concurrency:
+      group: container-cve-revisit-${{ github.repository }}
+      cancel-in-progress: false
     permissions:
       contents: read
       issues: write
@@ -135,6 +143,10 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+        with:
+          # gh authenticates from GH_TOKEN in the step env, not from
+          # .git/config, so the persisted credential is dead weight.
+          persist-credentials: false
 
       # Same shell-based form as python-container-security.yml: the login
       # action errors loudly when secrets are absent, and --password-stdin
@@ -161,11 +173,11 @@ jobs:
         id: ignorefile
         run: |
           if [ -f .trivyignore.yaml ]; then
-            echo "path=.trivyignore.yaml" >> $GITHUB_OUTPUT
+            echo "path=.trivyignore.yaml" >> "$GITHUB_OUTPUT"
           elif [ -f .trivyignore.yml ]; then
-            echo "path=.trivyignore.yml" >> $GITHUB_OUTPUT
+            echo "path=.trivyignore.yml" >> "$GITHUB_OUTPUT"
           else
-            echo "path=" >> $GITHUB_OUTPUT
+            echo "path=" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Check Dockerfile exists
@@ -175,9 +187,9 @@ jobs:
           DOCKERFILE_PATH: ${{ inputs.dockerfile-path }}
         run: |
           if [ -f "$DOCKERFILE_PATH" ]; then
-            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "exists=true" >> "$GITHUB_OUTPUT"
           else
-            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "exists=false" >> "$GITHUB_OUTPUT"
             echo "::warning::Dockerfile not found at $DOCKERFILE_PATH, skipping build"
           fi
 
@@ -202,11 +214,11 @@ jobs:
           EXISTS: ${{ steps.check-dockerfile.outputs.exists }}
         run: |
           if [ "$BUILD_IMAGE" == "true" ] && [ "$EXISTS" == "true" ]; then
-            echo "ref=$IMAGE_TAG" >> $GITHUB_OUTPUT
+            echo "ref=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
           elif [ -n "$IMAGE_REF" ]; then
-            echo "ref=$IMAGE_REF" >> $GITHUB_OUTPUT
+            echo "ref=$IMAGE_REF" >> "$GITHUB_OUTPUT"
           else
-            echo "ref=" >> $GITHUB_OUTPUT
+            echo "ref=" >> "$GITHUB_OUTPUT"
             echo "::warning::No image to scan"
           fi
 
@@ -245,11 +257,11 @@ jobs:
             --jq '.[0].number // empty')
 
           if [ -n "$number" ]; then
-            echo "number=$number" >> $GITHUB_OUTPUT
+            echo "number=$number" >> "$GITHUB_OUTPUT"
             gh issue view "$number" --json body --jq '.body' > existing-body.md
             echo "Found tracker issue #$number"
           else
-            echo "number=" >> $GITHUB_OUTPUT
+            echo "number=" >> "$GITHUB_OUTPUT"
             echo "No existing tracker issue"
           fi
 
@@ -340,19 +352,22 @@ jobs:
           DUE_SOON: ${{ steps.tracker.outputs.due_soon }}
           HORIZON: ${{ inputs.revisit-horizon-days }}
         run: |
-          echo "## Unfixed CVE Revisit Tracker" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [ -z "${TRACKED}" ]; then
-            echo "No image was scanned; tracker not updated." >> $GITHUB_STEP_SUMMARY
-          else
-            echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
-            echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-            echo "| Tracked unfixed CVEs | ${TRACKED} |" >> $GITHUB_STEP_SUMMARY
-            echo "| Due within 14 days | ${DUE_SOON} |" >> $GITHUB_STEP_SUMMARY
-            echo "| Overdue | ${OVERDUE} |" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Revisit horizon: ${HORIZON} days from first sighting." >> $GITHUB_STEP_SUMMARY
-          fi
+          # Single grouped redirect rather than one per line (SC2129).
+          {
+            echo "## Unfixed CVE Revisit Tracker"
+            echo ""
+            if [ -z "${TRACKED}" ]; then
+              echo "No image was scanned; tracker not updated."
+            else
+              echo "| Metric | Count |"
+              echo "|--------|-------|"
+              echo "| Tracked unfixed CVEs | ${TRACKED} |"
+              echo "| Due within 14 days | ${DUE_SOON} |"
+              echo "| Overdue | ${OVERDUE} |"
+              echo ""
+              echo "Revisit horizon: ${HORIZON} days from first sighting."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
       # Re-raise the tracker's verdict after the issue has been written.
       - name: Gate on overdue findings

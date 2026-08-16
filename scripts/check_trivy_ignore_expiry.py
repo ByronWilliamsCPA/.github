@@ -41,10 +41,10 @@ from typing import Any
 try:
     import yaml
 except ModuleNotFoundError:  # pragma: no cover - exercised only without PyYAML
-    sys.exit(
-        "::error::PyYAML is required to validate .trivyignore.yaml. Install it"
-        " (pip install 'pyyaml==6.0.2') before running this checker."
-    )
+    # Recorded, not raised, at import time: raising here would turn a missing
+    # dependency into a collection error for anything that merely imports this
+    # module. main() reports it at the call site instead.
+    yaml = None  # type: ignore[assignment]
 
 # Trivy's suppression file groups entries by finding kind.  Any other
 # top-level key is a typo or a format Trivy does not read, which would make
@@ -262,6 +262,12 @@ def run_check(
 
 def main() -> None:
     """Entry point: read env vars, validate suppressions, and exit."""
+    if yaml is None:
+        sys.exit(
+            "::error::PyYAML is required to validate .trivyignore.yaml. Install"
+            " it (pip install 'pyyaml==6.0.2') before running this checker."
+        )
+
     path = os.environ.get("TRIVYIGNORE_PATH", ".trivyignore.yaml").strip()
     legacy_path = os.environ.get("LEGACY_TRIVYIGNORE_PATH", ".trivyignore").strip()
     max_horizon_days = _positive_int("MAX_HORIZON_DAYS", 90)

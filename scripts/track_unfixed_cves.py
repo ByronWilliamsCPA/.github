@@ -292,10 +292,12 @@ def main() -> None:
             with open(existing_path, encoding="utf-8") as handle:
                 existing_body = handle.read()
         except OSError as exc:
-            # Failing closed here would block the weekly run on a transient
-            # read error, but proceeding silently would reset every deadline.
-            # Warn loudly and restart the clocks; the next run reconciles.
-            print(f"::warning::Cannot read existing tracker body: {exc}")
+            # Fail closed. Continuing with an empty body would treat every
+            # tracked CVE as newly seen, silently reset its deadline to
+            # today + horizon, and write that reset back to the issue: an
+            # overdue finding would drop out of the gate entirely. A tracker
+            # that cannot be read is a hard stop, not a warning.
+            sys.exit(f"::error::Cannot read existing tracker body: {exc}")
 
     report = load_report(report_path)
     unfixed = extract_unfixed(report, severities)

@@ -63,7 +63,10 @@ on:
 
 jobs:
   container-security:
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-container-security.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
+    # Pin the first release that contains `ignore-unfixed`. The SHA below
+    # predates the input; copying it verbatim yields an "unexpected input"
+    # error.
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-container-security.yml@<sha> # vX.Y.Z
     with:
       severity-threshold: CRITICAL,HIGH
       fail-on-vulnerabilities: true
@@ -105,11 +108,14 @@ The job fails when an entry:
 
 Entries due within 14 days are reported as warnings, not failures.
 
-The scan steps detect `.trivyignore.yaml` (or `.trivyignore.yml`) in the
-repository root and pass it to Trivy explicitly. This is required: Trivy's
-default ignore file is the plain-text `.trivyignore` and it does not
-auto-detect the YAML variant, so a dated suppression file that is not passed
-through would be silently inert.
+Both spellings are covered. The scan steps and the validation job each detect
+`.trivyignore.yaml`, falling back to `.trivyignore.yml`, and use the same
+resolved path, so a suppression cannot be honoured at scan time while escaping
+the revisit-date check.
+
+Passing the file explicitly is required: Trivy's default ignore file is the
+plain-text `.trivyignore` and it does not auto-detect the YAML variant, so a
+dated suppression file that is not passed through would be silently inert.
 
 The legacy plain-text `.trivyignore` has no expiry field at all, so its presence
 fails the job. Migrate the entries to `.trivyignore.yaml` with a date on each,

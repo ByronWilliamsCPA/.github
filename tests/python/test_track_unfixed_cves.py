@@ -214,6 +214,33 @@ def test_corrupt_existing_row_restarts_clock(
     assert "| 2026-08-16 | 2026-11-14 |" in body
 
 
+def test_unreadable_existing_body_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An unreadable tracker must stop the run, not reset every deadline.
+
+    Continuing with an empty body would treat each tracked CVE as newly seen,
+    write today + horizon back to the issue, and drop an overdue finding out of
+    the gate. The body must not be rendered at all on this path.
+    """
+    # A directory at the tracker path exists but cannot be read as a file, so
+    # open() raises IsADirectoryError (an OSError). Unlike a chmod-based
+    # fixture, this holds when the suite runs as root, as it does in CI
+    # containers.
+    unreadable = tmp_path / "existing.md"
+    unreadable.mkdir()
+    report = write_report(tmp_path, vuln("CVE-2026-1021"))
+    with pytest.raises(SystemExit) as exc:
+        run(
+            monkeypatch,
+            tmp_path,
+            report,
+            EXISTING_BODY_PATH=str(unreadable),
+        )
+    assert "Cannot read existing tracker body" in str(exc.value)
+    assert not (tmp_path / "body.md").exists()
+
+
 def test_missing_existing_body_is_not_fatal(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

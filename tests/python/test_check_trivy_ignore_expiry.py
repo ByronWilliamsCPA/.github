@@ -90,6 +90,29 @@ vulnerabilities:
     assert "All 1 Trivy suppression(s)" in capsys.readouterr().out
 
 
+def test_yml_suffixed_file_is_validated(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The .yml spelling gets the same enforcement as .yaml.
+
+    Trivy honours either name, so the workflow detects both and passes the
+    detected path here. A checker that only understood .yaml would leave the
+    .yml variant applied at scan time but never checked for expired_at.
+    """
+    path = write_yaml(
+        tmp_path,
+        """
+vulnerabilities:
+  - id: CVE-2026-0020
+    statement: Accepted risk.
+""",
+        name=".trivyignore.yml",
+    )
+    with pytest.raises(SystemExit):
+        run(monkeypatch, TRIVYIGNORE_PATH=path, _tmp=str(tmp_path))
+    assert "missing `expired_at`" in capsys.readouterr().out
+
+
 def test_empty_document_passes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
