@@ -11,9 +11,9 @@ files) that other repos consume via `uses:` and `with:`. Those are documented in
 under `docs/workflows/*.md` using a "how a caller uses this" template: inputs, secrets,
 outputs, and a consumer integration example.
 
-The 16 workflows covered here are different: they are this repo's own internal CI/CD,
+The 14 workflows covered here are different: they are this repo's own internal CI/CD,
 triggered by `push`, `pull_request`, `schedule`, or `merge_group` against this repo's own
-commits and PRs. Nobody `uses:` them externally. A few (`qlty.yml`, `codeql.yml`,
+commits and PRs. Nobody `uses:` them externally. A few (`qlty.yml`,
 `dependency-provenance-weekly.yml`, `sbom-nightly.yml`, `snyk-weekly.yml`,
 `security-analysis.yml`, `scorecard.yml`) are thin callers into this repo's own reusable
 workflows, but the caller file itself only exists to exercise and validate that reusable
@@ -58,16 +58,6 @@ checks a contributor sees fail directly on their own PR.
   log. If the run fails earlier at `Install pre-commit` or `Create virtual environment`,
   check that `uv venv` ran before `uv pip install` (pre-commit requires an existing `.venv`,
   see issue #106).
-
-### dependency-review.yml
-
-- Trigger: `pull_request: branches: [main]`.
-- Purpose: blocks a PR that introduces a dependency with a high-or-above severity advisory
-  or a disallowed license.
-- Where to look when red: the `Dependency Review` step. `fail-on-severity: high` is the
-  severity gate; `allow-licenses` lists the approved licenses (MIT, Apache-2.0,
-  BSD-2-Clause, BSD-3-Clause, ISC, CC0-1.0, CC-BY-4.0). A red run names the offending
-  package and its advisory or license directly in the action's summary.
 
 ### reuse.yml
 
@@ -154,28 +144,18 @@ rather than PR content in the conventional-commits/license sense above.
 
 Vulnerability, SAST, and provenance scans. Most run primarily on `schedule`, deliberately
 off the `pull_request` path where noted (metering or noise reasons), with a few exceptions
-(`codeql.yml`, `security-analysis.yml`) that also gate `push`/`pull_request` directly.
-
-### codeql.yml
-
-- Trigger: `push: branches: [main, master]`; `pull_request: branches: [main, master]`;
-  `schedule: cron '0 7 * * 1'` (Monday 07:00 UTC); `workflow_dispatch:`.
-- Purpose: CodeQL SAST on the `actions` language (this repo's workflow YAML), using the
-  `security-extended,security-and-quality` query suites.
-- Where to look when red: `CodeQL Analyze` job, `Initialize CodeQL` or `Perform CodeQL
-  Analysis` steps. If the whole job fails oddly (SARIF upload rejected), check that
-  GitHub's Code Scanning "default setup" is still disabled in Settings > Code security >
-  Code scanning: default setup and this repo's advanced configuration cannot both upload
-  SARIF, per the file's own header comment.
+(`security-analysis.yml`) that also gates `push`/`pull_request` directly.
 
 ### security-analysis.yml
 
 - Trigger: `merge_group:`; `push: branches: [main, master]`; `pull_request: branches:
   [main, master]`; `schedule: cron '0 9 * * 1'`; `workflow_dispatch:`.
-- Purpose: caller into the reusable `python-security-analysis.yml`, but with
-  `run-codeql`, `run-dependency-review`, `run-osv`, and `run-bandit` all set `false` (those
-  scans run elsewhere in this list); `security-gate-validation` then hard-fails the run if
-  the `security` job's result is not `success`.
+- Purpose: caller into the reusable `python-security-analysis.yml`, but with `run-osv`
+  and `run-bandit` set `false` (those scans run elsewhere in this list);
+  `security-gate-validation` then hard-fails the run if the `security` job's result is not
+  `success`. `run-codeql` and `run-dependency-review` are still passed as `false` only
+  until the `uses:` pin is bumped past the commit that deleted those jobs from the
+  reusable workflow; they are inert no-op inputs there now.
 - Where to look when red: `Security Gate Validation` job first (fails if `needs.security.
   result != 'success'`); trace into the `security` job's own reusable-workflow run to find
   which sub-check inside `python-security-analysis.yml` actually failed, since the obvious

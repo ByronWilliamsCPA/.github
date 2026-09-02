@@ -13,6 +13,37 @@ an immutable point tag; see `USAGE_EXAMPLES.md` for the pinning guidance.
 
 ## [Unreleased]
 
+### Removed
+
+- CodeQL code scanning and GitHub's dependency-review action are removed
+  fleet-wide. Both require GitHub Advanced Security (Code Security), which
+  GitHub now bills separately, so neither functioned any longer.
+- Deleted `.github/workflows/codeql.yml` (repo-local CodeQL SAST on the
+  `actions` language) and `.github/workflows/dependency-review.yml`
+  (repo-local PR dependency and license gate).
+- `python-security-analysis.yml`: deleted the `codeql` and `dependency-review`
+  jobs, dropped both from the `security-gate` job's `needs:` list, and dropped
+  their result checks from the gate's validation script. The `security-gate`
+  job keeps its `name: Security Gate Validation`, which is a required status
+  check in the org branch ruleset. The `security-events: write`, `actions:
+  read`, and `pull-requests: write` grants went away with the jobs that
+  requested them; the caller permission contract is now `contents: read` plus
+  `pull-requests: read`.
+- `workflow-templates/python-security-analysis.yml`: deleted the
+  `codeql-analysis` and `dependency-security` jobs and pruned them from the
+  `security-gate` aggregator. The `owasp-dependency-check` job and its SARIF
+  upload are unchanged.
+
+### Deprecated
+
+- `python-security-analysis.yml`: the `run-codeql` and `run-dependency-review`
+  inputs are retained as inert no-ops and their defaults changed from `true` to
+  `false`. No job reads either one. They are kept only because sixteen caller
+  repositories still pass them, and GitHub hard-fails a `workflow_call` when a
+  caller passes an undeclared input, so deleting them now would break CI in
+  sixteen repositories at once. A follow-up change removes them once every
+  caller has dropped them from its `with:` block.
+
 ### Added
 
 - `python-container-revisit.yml`: new reusable workflow that holds container
