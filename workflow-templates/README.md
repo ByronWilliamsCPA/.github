@@ -42,19 +42,19 @@ Secure coverage reporting workflow:
 ### 3. Security Analysis (`python-security-analysis.yml`)
 
 Full security scanning suite:
-- **CodeQL analysis** with security-extended queries
 - **Bandit** for Python-specific security issues
-- **Safety** for dependency vulnerability scanning
 - **OSV Scanner** for known vulnerabilities
 - **OWASP Dependency Check** with SARIF reporting
-- **Dependency Review** on pull requests
 - **Smart change detection** to optimize scan execution
+
+CodeQL analysis and Dependency Review were removed from this template: both
+require GitHub Advanced Security (Code Security), which GitHub now bills
+separately, so neither runs on these repositories.
 
 **Use when:** Implementing security scanning for Python projects
 
 **Requirements:**
 - Python dependencies declared in `pyproject.toml` or `poetry.lock`
-- CodeQL compatible Python code
 
 ---
 

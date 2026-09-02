@@ -469,7 +469,7 @@ Exclude generated code, migrations, and test fixtures from analysis.
 
 ## Related Workflows
 
-- **[Python Security Analysis](python-security-analysis.md)** - CodeQL, Bandit, Safety
+- **[Python Security Analysis](python-security-analysis.md)** - Bandit, OSV-Scanner
 - **[Python CI](python-ci.md)** - Testing and linting
 - **[Qlty Coverage](python-qlty-coverage.md)** - Alternative coverage tracking
 

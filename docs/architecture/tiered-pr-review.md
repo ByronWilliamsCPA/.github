@@ -25,8 +25,9 @@ is written for all parties that review PRs in this org:
 Every PR in this repo currently gets, in rough order:
 
 1. Static CI: pre-commit lint suite, actionlint plus shellcheck self-test,
-   Bats and pytest suites, conventional-commit title validation, CodeQL,
-   secret scanning.
+   Bats and pytest suites, conventional-commit title validation, secret
+   scanning. (CodeQL was removed from this stack: it requires GitHub
+   Advanced Security, which is now billed.)
 2. Async AI reviewers: Copilot code review (auto-enrolled) and CodeRabbit
    comment on the diff.
 3. Optionally, the deep pass: the maintainer manually runs the

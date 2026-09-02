@@ -4,38 +4,39 @@
 
 **Workflow**: `.github/workflows/python-security-analysis.yml`
 **Type**: Reusable (`workflow_call`)
-**Security**: CodeQL, Bandit, OSV-Scanner, and Dependency Review, each independently
-toggleable; CodeQL uploads SARIF to code scanning
+**Security**: Bandit and OSV-Scanner, each independently toggleable
 
 ## Purpose
 
-`python-security-analysis.yml` runs a bundle of four independent security scanners against
-a caller repository: CodeQL static analysis, Bandit SAST, OSV-Scanner dependency
-vulnerability scanning, and (on pull requests) GitHub's Dependency Review action. Each
+`python-security-analysis.yml` runs a bundle of two independent security scanners against
+a caller repository: Bandit SAST and OSV-Scanner dependency vulnerability scanning. Each
 scanner is gated behind its own boolean input, so callers can disable any scanner that
 duplicates a tool they already run elsewhere.
 
-CodeQL and Bandit additionally only run when a `detect-changes` path filter finds a Python
-source file, workflow file, or dependency manifest changed in the diff, so unrelated pushes
-do not burn CI minutes on a full scan. A final `security-gate` job aggregates the result of
-every scanner job (treating `skipped` as acceptable) and fails the run if any enabled
-scanner failed.
+A `detect-changes` path filter runs first, so unrelated pushes do not burn CI minutes on a
+full scan. A final `security-gate` job aggregates the result of every scanner job (treating
+`skipped` as acceptable) and fails the run if any enabled scanner failed.
+
+CodeQL static analysis and GitHub's Dependency Review action were removed from this
+workflow. Both require GitHub Advanced Security (Code Security), which GitHub now bills
+separately, so neither functioned any longer. The `run-codeql` and `run-dependency-review`
+inputs are still declared as inert no-ops; see [Inputs](#inputs).
 
 ## When to use this workflow
 
 Use `python-security-analysis.yml` for any Python repository that manages dependencies with
-`uv` (a `pyproject.toml`, ideally with a committed `uv.lock`) and wants CodeQL, Bandit, and
+`uv` (a `pyproject.toml`, ideally with a committed `uv.lock`) and wants Bandit and
 OSV-Scanner coverage without hand-rolling each tool separately.
 
 ## When NOT to use it
 
-- **Poetry repositories are not supported.** The `codeql` and `python-security` jobs detect
-  a `poetry.lock` or a `[tool.poetry]` table in `pyproject.toml` and fail fast with an
+- **Poetry repositories are not supported.** The `python-security` job detects a
+  `poetry.lock` or a `[tool.poetry]` table in `pyproject.toml` and fails fast with an
   actionable `::error::` message rather than attempting to scan. Convert the repo to `uv`
   first.
-- Repositories with no `pyproject.toml` at the repo root skip CodeQL and Bandit with a
-  step-summary notice (not a failure); remove the caller entirely if the repo does not need
-  Python security scanning.
+- Repositories with no `pyproject.toml` at the repo root skip Bandit with a step-summary
+  notice (not a failure); remove the caller entirely if the repo does not need Python
+  security scanning.
 - If your workflow already runs an equivalent scanner (Safety, Trivy, Snyk, etc.), disable
   the redundant input rather than running both. Note that the `run-safety` input is a
   deprecated no-op (see Inputs below); it does not control anything.
@@ -55,9 +56,7 @@ jobs:
     uses: ByronWilliamsCPA/.github/.github/workflows/python-security-analysis.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     permissions:
       contents: read
-      security-events: write  # codeql job (SARIF upload)
-      actions: read           # codeql job
-      pull-requests: write    # dependency-review job (PR comment summary)
+      pull-requests: read     # detect-changes path filter
     with:
       source-directory: 'src'
       fail-on-high: true
@@ -72,8 +71,8 @@ jobs:
 | `python-version` | string | `3.12` | Python version for scanning |
 | `fail-on-high` | boolean | `true` | Fail the build on HIGH/CRITICAL vulnerabilities (OSV-Scanner) |
 | `fail-on-medium` | boolean | `false` | Fail the build on MEDIUM vulnerabilities (OSV-Scanner) |
-| `run-codeql` | boolean | `true` | Run CodeQL analysis |
-| `run-dependency-review` | boolean | `true` | Run Dependency Review (pull requests only) |
+| `run-codeql` | boolean | `false` | Deprecated no-op. The CodeQL job was removed because it requires GitHub Advanced Security, which is now billed. No job reads it; remove it from your `with:` block |
+| `run-dependency-review` | boolean | `false` | Deprecated no-op. The Dependency Review job was removed for the same reason. No job reads it; remove it from your `with:` block |
 | `run-bandit` | boolean | `true` | Run Bandit static analysis |
 | `run-osv` | boolean | `true` | Run OSV Scanner |
 | `no-build` | boolean | `true` | Pass `--no-build` to `uv sync`/`uv run`; disable for projects using a build backend such as hatchling |
@@ -85,15 +84,13 @@ None.
 
 ## Required Permissions
 
-SARIF upload (CodeQL) and the Dependency Review PR comment summary both need scopes beyond
-the read-only default, so the caller must grant them explicitly:
+The `detect-changes` path filter reads pull request metadata, so the caller must grant
+`pull-requests: read` alongside `contents: read`:
 
 ```yaml
 permissions:
   contents: read
-  security-events: write  # codeql job: upload SARIF results to code scanning
-  actions: read            # codeql job: required by github/codeql-action
-  pull-requests: write     # dependency-review job: post PR comment summary
+  pull-requests: read      # detect-changes job: dorny/paths-filter
 ```
 
 Grant these at the calling job level (tighter, and preferred when the caller workflow has
@@ -102,9 +99,11 @@ job's permission requests against the caller's grant at workflow parse/startup t
 called job that requests a scope the caller did not grant fails the entire run at startup
 (`startup_failure`), before any job executes, not just the job that needed the extra scope.
 
-If you disable `run-codeql` and rely on a separate `codeql.yml`, you may omit `actions:
-read` and `security-events: write`. If you disable `run-dependency-review`, you may omit
-`pull-requests: write`. When in doubt, grant all four.
+No job requests `security-events: write`, `actions: read`, or `pull-requests: write` any
+more; those were needed only by the removed CodeQL and Dependency Review jobs. Callers that
+still grant them keep working, because over-granting is not a startup failure, but the grant
+should be trimmed to the two scopes above. Do not narrow below `contents: read` plus
+`pull-requests: read`.
 
 ## Troubleshooting
 
@@ -118,11 +117,11 @@ This run likely failed due to a workflow file issue.
 
 **Solutions**:
 
-1. Confirm the caller's `permissions:` block grants all four scopes shown in
+1. Confirm the caller's `permissions:` block grants both scopes shown in
    [Required Permissions](#required-permissions).
-2. If you intentionally disabled a scanner (`run-codeql: false` or
-   `run-dependency-review: false`), you may narrow the grant accordingly; otherwise grant
-   all four.
+2. If the caller is still pinned to a SHA from before the CodeQL and Dependency Review jobs
+   were deleted, that older callee still requests `security-events: write`, `actions: read`,
+   and `pull-requests: write`. Either keep granting those four scopes or bump the pin first.
 3. Verify with:
 
    ```bash
@@ -133,30 +132,17 @@ This run likely failed due to a workflow file issue.
    A `startup_failure` conclusion means the grant is still insufficient; any run that starts
    confirms the grant passed validation.
 
-### CodeQL scan runs but no code scanning alerts appear
+### Bandit job reports `skipped` on every run
 
-**Symptoms**: the `codeql` job succeeds, but no SARIF results show up under the repository's
-Security > Code scanning alerts tab.
-
-**Solutions**:
-
-1. Confirm the caller granted both `security-events: write` and `actions: read`; the
-   `github/codeql-action/analyze` step needs both to upload results even though the scan
-   itself can complete without them.
-2. If the repository is private, confirm GitHub Advanced Security is enabled; without it,
-   code scanning is unavailable regardless of workflow permissions.
-
-### CodeQL and Bandit jobs report `skipped` on every run
-
-**Symptoms**: the `codeql` and `python-security` jobs consistently show `skipped`, and
-`security-gate` still passes.
+**Symptoms**: the `python-security` job consistently shows `skipped`, and `security-gate`
+still passes.
 
 **Solutions**:
 
 1. This is expected when the diff does not touch any of the paths the `detect-changes`
    filter watches: `**/*.py`, `.github/workflows/**`, `pyproject.toml`, `poetry.lock`,
    `uv.lock`, or `requirements*.txt`. A PR that only touches docs or non-Python config
-   legitimately skips both, and `security-gate` treats `skipped` as passing.
+   legitimately skips it, and `security-gate` treats `skipped` as passing.
 2. If you need scans to run unconditionally, this workflow does not currently expose an
    override for the path filter; rely on the scheduled run (as in the minimal usage example)
    for periodic full coverage instead.
@@ -177,7 +163,5 @@ uv-only by org policy. Convert this repo to uv before re-enabling Python securit
 
 ## Additional Resources
 
-- [CodeQL documentation](https://codeql.github.com/docs/)
 - [Bandit documentation](https://bandit.readthedocs.io/)
 - [OSV-Scanner documentation](https://google.github.io/osv-scanner/)
-- [Dependency Review Action](https://github.com/actions/dependency-review-action)

@@ -1,5 +1,13 @@
 # Python Security Analysis - Reusable Workflow
-# Comprehensive security scanning with CodeQL, Bandit, OSV-Scanner, and Dependency-Review
+# Comprehensive security scanning with Bandit and OSV-Scanner
+#
+# The CodeQL and Dependency Review jobs were removed: both depend on GitHub
+# Advanced Security (Code Security), which GitHub now bills separately, so
+# neither functions on these repositories. Remaining coverage is Bandit
+# (Python SAST) and OSV-Scanner (dependency CVEs) here, plus Snyk, Trivy,
+# SonarCloud, OpenSSF Scorecard, and GitGuardian in their own workflows.
+# The run-codeql and run-dependency-review inputs are retained as inert
+# no-ops; see their declarations below.
 #
 # Usage from downstream repos:
 #   jobs:
@@ -7,16 +15,14 @@
 #       uses: ByronWilliamsCPA/.github/.github/workflows/python-security-analysis.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
 #       permissions:
 #         contents: read
-#         security-events: write  # codeql job (SARIF upload)
-#         actions: read           # codeql job
-#         pull-requests: write    # dependency-review PR comment summary
+#         pull-requests: read     # detect-changes path filter
 #       with:
 #         source-directory: 'src'
 #         fail-on-high: true
 #
 # Caller permission contract:
 # #CRITICAL: reusable caller/callee permission inheritance
-# #ASSUME: callers grant at least the four scopes shown above, at workflow or
+# #ASSUME: callers grant at least the two scopes shown above, at workflow or
 #   calling-job level (calling-job level is tighter and preferred when the
 #   caller's workflow has other jobs that need narrower grants). GitHub
 #   validates called-job permission requests against the caller's grant at
@@ -31,12 +37,14 @@
 #   shows only generic pass/fail. security-analysis.yml is the caller's
 #   own workflow filename in current caller repos; substitute if a caller
 #   names its file differently.)
-# #EDGE: callers that disable codeql (run-codeql: false) and rely on a
-#   dedicated codeql.yml may omit actions: read and security-events: write
-#   only if no other job here requests them; likewise pull-requests: write
-#   is needed only by dependency-review. When in doubt, grant all four.
-# #VERIFY: after omitting any scope under the #EDGE rule, trigger one caller
-#   run and confirm gh run view <run-id> --json conclusion does not report
+# #EDGE: no job here requests security-events: write, actions: read, or
+#   pull-requests: write any more; those three were needed only by the
+#   removed CodeQL and Dependency Review jobs. Callers that still grant them
+#   keep working, because over-granting is not a startup failure, but they
+#   should trim the grant to the two scopes above. Do not narrow below
+#   contents: read plus pull-requests: read.
+# #VERIFY: after narrowing a caller's grant, trigger one caller run and
+#   confirm gh run view <run-id> --json conclusion does not report
 #   "startup_failure".
 
 name: Python Security Analysis (Reusable)
@@ -68,17 +76,32 @@ on:
         required: false
         default: false
 
+      # DEPRECATED no-op. The codeql job was removed because CodeQL code
+      # scanning requires GitHub Advanced Security (Code Security), which is
+      # now billed. This input has no effect; no job reads it. It is retained
+      # only so the sixteen caller repos that still pass run-codeql do not
+      # startup-fail, because GitHub hard-fails a workflow_call when a caller
+      # passes an undeclared input. A follow-up change removes the input once
+      # every caller has dropped it from its with: block.
       run-codeql:
-        description: 'Run CodeQL analysis'
+        description: 'DEPRECATED no-op. CodeQL was removed (GitHub Advanced Security is billed); input kept only so existing callers do not startup-fail. Remove from your with: block.'
         type: boolean
         required: false
-        default: true
+        default: false
 
+      # DEPRECATED no-op. The dependency-review job was removed because
+      # actions/dependency-review-action requires GitHub Advanced Security
+      # (Code Security), which is now billed. This input has no effect; no job
+      # reads it. It is retained only so the sixteen caller repos that still
+      # pass run-dependency-review do not startup-fail, because GitHub
+      # hard-fails a workflow_call when a caller passes an undeclared input. A
+      # follow-up change removes the input once every caller has dropped it
+      # from its with: block.
       run-dependency-review:
-        description: 'Run dependency review (PRs only)'
+        description: 'DEPRECATED no-op. Dependency Review was removed (GitHub Advanced Security is billed); input kept only so existing callers do not startup-fail. Remove from your with: block.'
         type: boolean
         required: false
-        default: true
+        default: false
 
       run-bandit:
         description: 'Run Bandit static analysis'
@@ -147,145 +170,6 @@ jobs:
               - 'uv.lock'
               - 'requirements*.txt'
 
-  # CodeQL Analysis
-  # Gates on (a) caller opt-in via run-codeql AND (b) at least one security-
-  # relevant file changed in the diff. The detect-changes filter checks Python
-  # sources, workflow files, and dependency manifests; if none changed,
-  # CodeQL is skipped to save CI minutes.
-  codeql:
-    name: CodeQL Analysis
-    if: ${{ inputs.run-codeql && needs.detect-changes.outputs.security_files == 'true' }}
-    runs-on: ubuntu-latest
-    needs: detect-changes
-    timeout-minutes: 20
-    env:
-      NO_BUILD_FLAG: ${{ inputs.no-build && '--no-build' || '' }}
-    permissions:
-      contents: read
-      security-events: write
-      actions: read
-
-    steps:
-      - name: Harden Runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
-        with:
-          egress-policy: audit
-
-      - name: Checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
-
-      - name: Setup Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
-        with:
-          python-version: ${{ inputs.python-version }}
-
-      - name: Install UV
-        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9  # v9.0.0
-        with:
-          enable-cache: true
-
-      # Detect the repo state before attempting uv sync. The reusable workflow is uv-only
-      # by org policy (poetry repos are being converted to uv in separate work), but it is
-      # still called by some repos that don't have a pyproject.toml (template / docs-only
-      # forks like DeQA-Doc) and by uv-managed repos that haven't yet committed a uv.lock.
-      # Hardcoding `uv sync --frozen` failed for both categories. Auto-detection skips
-      # cleanly when pyproject is absent and drops --frozen when no lockfile exists yet.
-      # Poetry repos are explicitly rejected with an actionable error.
-      # Mirrored in the python-security job below; keep both blocks in sync.
-      - name: Detect repo state
-        id: detect
-        run: |
-          if [ ! -f pyproject.toml ]; then
-            echo "state=skip" >> $GITHUB_OUTPUT
-            echo "::notice::No pyproject.toml found at repo root; CodeQL analysis will be skipped. Remove the python-security-analysis.yml caller from this repo if it does not need Python security scanning."
-          elif [ -f poetry.lock ] || grep -qE '^\[tool\.poetry(\.|])' pyproject.toml; then
-            echo "state=poetry-not-supported" >> $GITHUB_OUTPUT
-            echo "::error::This repo uses Poetry. The python-security-analysis.yml reusable workflow is uv-only by org policy. Convert this repo to uv before re-enabling Python security analysis."
-            exit 1
-          elif [ -f uv.lock ]; then
-            echo "state=uv-locked" >> $GITHUB_OUTPUT
-            echo "Detected: uv with lockfile"
-          else
-            echo "state=uv-no-lock" >> $GITHUB_OUTPUT
-            echo "Detected: uv without lockfile (PEP 621 pyproject.toml only); will sync without --frozen"
-          fi
-        shell: bash
-
-      - name: Install dependencies (uv with lockfile)
-        if: steps.detect.outputs.state == 'uv-locked'
-        run: uv sync --no-dev --frozen $NO_BUILD_FLAG
-        shell: bash
-
-      # SonarCloud cannot follow the $NO_BUILD_FLAG env-var indirection (set at the workflow
-      # env from the `no-build` input per PR #112), and by design no uv.lock exists yet on
-      # this path until this step generates one. S8541 (--no-build) and S8544 (lockfile) are
-      # suppressed inline with rationale; the uv-locked install step above keeps the literal
-      # --frozen so the scanner can see it.
-      - name: Install dependencies (uv without lockfile)
-        if: steps.detect.outputs.state == 'uv-no-lock'
-        run: uv sync --no-dev $NO_BUILD_FLAG  # NOSONAR(S8541,S8544): --no-build opt-out via `no-build` input; no uv.lock by design on this path
-        shell: bash
-
-      - name: Skip notice (no pyproject.toml)
-        if: steps.detect.outputs.state == 'skip'
-        run: |
-          echo "## CodeQL Analysis Skipped" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "No pyproject.toml at repo root, nothing to analyze." >> $GITHUB_STEP_SUMMARY
-
-      - name: Initialize CodeQL
-        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
-        uses: github/codeql-action/init@99df26d4f13ea111d4ec1a7dddef6063f76b97e9  # v4.37.0
-        with:
-          languages: python
-          queries: security-extended,security-and-quality
-          config: |
-            paths:
-              - ${{ inputs.source-directory }}
-            paths-ignore:
-              - tests
-              - validation
-              - scripts
-
-      - name: Build CodeQL Database
-        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
-        uses: github/codeql-action/autobuild@99df26d4f13ea111d4ec1a7dddef6063f76b97e9  # v4.37.0
-
-      - name: Perform CodeQL Analysis
-        if: steps.detect.outputs.state == 'uv-locked' || steps.detect.outputs.state == 'uv-no-lock'
-        uses: github/codeql-action/analyze@99df26d4f13ea111d4ec1a7dddef6063f76b97e9  # v4.37.0
-        with:
-          category: "/language:python"
-          upload: true
-
-  # Dependency Review (PRs only)
-  dependency-review:
-    name: Dependency Review
-    if: ${{ inputs.run-dependency-review && github.event_name == 'pull_request' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    needs: detect-changes
-    permissions:
-      contents: read
-      pull-requests: write
-
-    steps:
-      - name: Harden Runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
-        with:
-          egress-policy: audit
-
-      - name: Checkout Repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
-
-      - name: Dependency Review
-        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294  # v5.0.0
-        with:
-          fail-on-severity: moderate
-          license-check: true
-          comment-summary-in-pr: always
-          deny-licenses: GPL-2.0, GPL-3.0
-
   # Python security scanning (Bandit)
   python-security:
     name: Python SAST (Bandit)
@@ -318,8 +202,13 @@ jobs:
         with:
           enable-cache: true
 
-      # Detect repo state. Same logic as the codeql job above; each job runs
-      # on its own runner so the detect step must be repeated per job.
+      # Detect the repo state before attempting uv sync. This reusable workflow is
+      # uv-only by org policy (poetry repos are being converted to uv in separate work),
+      # but it is still called by some repos that don't have a pyproject.toml (template /
+      # docs-only forks like DeQA-Doc) and by uv-managed repos that haven't yet committed
+      # a uv.lock. Hardcoding `uv sync --frozen` failed for both categories.
+      # Auto-detection skips cleanly when pyproject is absent and drops --frozen when no
+      # lockfile exists yet. Poetry repos are explicitly rejected with an actionable error.
       - name: Detect repo state
         id: detect
         run: |
@@ -532,7 +421,7 @@ jobs:
     name: Security Gate Validation
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [detect-changes, codeql, dependency-review, python-security, osv-scanner]
+    needs: [detect-changes, python-security, osv-scanner]
     if: always()
     permissions:
       contents: read
@@ -545,14 +434,10 @@ jobs:
 
       - name: Validate Security Results
         env:
-          RESULT_CODEQL: ${{ needs.codeql.result }}
-          RESULT_DEP_REVIEW: ${{ needs.dependency-review.result }}
           RESULT_PYTHON_SECURITY: ${{ needs.python-security.result }}
           RESULT_OSV_SCANNER: ${{ needs.osv-scanner.result }}
         run: |
           echo "🔒 Security Analysis Results:"
-          echo "CodeQL: $RESULT_CODEQL"
-          echo "Dependency Review: $RESULT_DEP_REVIEW"
           echo "Python Security: $RESULT_PYTHON_SECURITY"
           echo "OSV Scanner: $RESULT_OSV_SCANNER"
 
@@ -560,9 +445,7 @@ jobs:
             [[ "$1" == "success" || "$1" == "skipped" ]]
           }
 
-          if is_acceptable "$RESULT_CODEQL" && \
-             is_acceptable "$RESULT_DEP_REVIEW" && \
-             is_acceptable "$RESULT_PYTHON_SECURITY" && \
+          if is_acceptable "$RESULT_PYTHON_SECURITY" && \
              is_acceptable "$RESULT_OSV_SCANNER"; then
             echo "✅ Security gate passed"
             echo "🔐 All security checks completed successfully"

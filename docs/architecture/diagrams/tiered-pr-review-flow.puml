@@ -13,7 +13,7 @@ start
 partition "Static CI (always runs, blocking)" {
   :pre-commit, actionlint + shellcheck self-test,
 Bats and pytest suites, conventional-commit
-title validation, CodeQL, secret scanning;
+title validation, secret scanning;
 }
 
 partition "Async AI Reviewers (always runs, non-blocking)" {

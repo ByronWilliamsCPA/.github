@@ -17,6 +17,17 @@ permissions: {}
 jobs:
   security:
     name: Security Analysis
+    # #CRITICAL: this caller is pinned to a callee SHA that still contains the
+    #   CodeQL and Dependency Review jobs. Those jobs request security-events:
+    #   write, actions: read, and pull-requests: write, and GitHub validates a
+    #   called workflow's job permission requests against this grant at startup,
+    #   before any job runs and regardless of job-level if: conditions. Narrowing
+    #   this grant before the pin below is bumped past the commit that deleted
+    #   those jobs would startup-fail the whole run.
+    # #VERIFY: after Renovate bumps the pin below, narrow this grant to
+    #   contents: read plus pull-requests: read and confirm one run reports a
+    #   conclusion other than "startup_failure" via
+    #   gh run view <run-id> --json conclusion.
     permissions:
       contents: read
       security-events: write
@@ -25,6 +36,18 @@ jobs:
     uses: ByronWilliamsCPA/.github/.github/workflows/python-security-analysis.yml@7d12f5486ab5c856397ebaa4acd3c99ca385227c # v9.0.0
     with:
       python-version: "3.12"
+      # #CRITICAL: these two inputs must keep being passed as false until the
+      #   pin above is bumped past the commit that deleted the callee's CodeQL
+      #   and Dependency Review jobs. At the currently pinned SHA both inputs
+      #   still default to true, so dropping them here would run CodeQL and
+      #   Dependency Review, both of which now fail because GitHub bills
+      #   Advanced Security. That failure propagates through the callee's
+      #   security-gate into this workflow's Security Gate Validation job,
+      #   which is a required status check in the org ruleset, making the
+      #   repository unmergeable. Passing false is harmless against the new
+      #   callee too, where both inputs are inert no-ops defaulting to false.
+      # #VERIFY: after the pin is bumped, delete these two lines and confirm
+      #   Security Gate Validation reports success on the next pull request.
       run-codeql: false
       run-dependency-review: false
       run-osv: false

@@ -75,7 +75,7 @@ Calling repos must provide:
 
 - **[Python CI](USAGE_EXAMPLES.md#python-ci)** (`python-ci.yml`) - Comprehensive CI with testing, linting, type checking across multiple Python versions
 - **[PyPI Publishing](USAGE_EXAMPLES.md#pypi-publishing)** (`python-publish-pypi.yml`) - OIDC-authenticated publishing (no secrets!)
-- **[Security Analysis](USAGE_EXAMPLES.md#security-analysis)** (`python-security-analysis.yml`) - CodeQL, Bandit, Safety, OSV Scanner
+- **[Security Analysis](USAGE_EXAMPLES.md#security-analysis)** (`python-security-analysis.yml`) - Bandit, OSV Scanner
 - **[Fuzzing](docs/workflows/python-fuzzing.md)** (`python-fuzzing.yml`) - ClusterFuzzLite continuous fuzzing for security vulnerabilities
 - **[Performance Regression](docs/workflows/python-performance-regression.md)** (`python-performance-regression.yml`) - Automated performance testing with baseline comparison
 - **[SonarCloud](docs/workflows/python-sonarcloud.md)** (`python-sonarcloud.yml`) - Code quality and security analysis with SonarCloud

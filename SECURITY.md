@@ -66,8 +66,13 @@ tool runs in every repo; the list reflects what is wired up in this
 repository's workflows and pre-commit hooks, which downstream repos
 inherit via the reusable workflows.
 
-- Static analysis: CodeQL (org-wide), SonarCloud (SAST); downstream Python
-  repos add Ruff and Bandit via the Python reusable workflows
+- Static analysis: SonarCloud (SAST) and Snyk Code; downstream Python
+  repos add Ruff and Bandit via the Python reusable workflows. CodeQL code
+  scanning was retired because it requires GitHub Advanced Security (Code
+  Security), which GitHub bills separately.
+- Dependency vulnerability scanning: OSV-Scanner, OWASP Dependency-Check,
+  and Snyk. GitHub's dependency-review action was retired with CodeQL for
+  the same reason; Dependabot alerts remain available where enabled.
 - Dependency pinning and Renovate-driven updates
 - Container scanning with Trivy (Docker and SBOM workflows)
 - SBOM generation for tagged releases
