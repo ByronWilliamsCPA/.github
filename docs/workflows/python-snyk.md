@@ -9,7 +9,7 @@ when `SNYK_TOKEN` is absent.
 ## What it runs
 
 - `detect-config` - checks for `SNYK_TOKEN` and detects repo state (uv-locked, uv-no-lock, poetry-not-supported, or skip)
-- `snyk-code` - Snyk Code (SAST); cross-file dataflow analysis, uploads SARIF to the Security tab
+- `snyk-code` - Snyk Code (SAST); cross-file dataflow analysis, publishes SARIF as a workflow artifact
 - `snyk-oss` - Snyk Open Source (SCA cross-check); advisory and `continue-on-error`, never fails the build
 - `snyk-aibom` - generates a CycloneDX AI-BOM and uploads it as a build artifact
 - `snyk-gate` - aggregates results; gates on Snyk Code only (OSS is advisory and excluded from the decision)
@@ -22,7 +22,6 @@ jobs:
     uses: ByronWilliamsCPA/.github/.github/workflows/python-snyk.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
     permissions:
       contents: read
-      security-events: write   # SARIF upload to the Security tab
     with:
       source-directory: 'src'
       run-code: true           # Snyk Code (SAST)
@@ -56,11 +55,10 @@ jobs:
 The caller must grant the following at the workflow or calling-job level:
 
 - `contents: read`
-- `security-events: write`
 
-Omitting `security-events: write` causes a startup failure (`startup_failure` /
-generic "workflow file issue") before any job runs, because a called workflow's
-token is bounded by the caller's permissions.
+No elevated permissions are required; SARIF results are published as
+workflow artifacts rather than uploaded to the Security tab (that path
+required paid GitHub Advanced Security and has been removed).
 
 ## Operator setup
 
@@ -115,8 +113,9 @@ token is bounded by the caller's permissions.
 
 ### Snyk Code (SAST)
 
-SARIF results appear in the repository's Security tab under Code Scanning. Each
-finding includes:
+SARIF results are published as the `snyk-code-sarif` workflow artifact.
+Security tab upload was removed (it required paid GitHub Advanced Security);
+download the artifact from the run's Actions summary. Each finding includes:
 
 - **Severity**: CRITICAL, HIGH, MEDIUM, or LOW, based on Snyk Code's severity rating
 - **Rule**: the Snyk Code rule that fired (e.g., `python/SqlInjection`)
@@ -138,8 +137,9 @@ Renovate's advisories trail NVD by design, so a Snyk OSS finding with
 `exploitMaturity: Functional` and no CVE yet is a genuine early-warning signal worth
 acting on rather than waiting for a Renovate fix-PR.
 
-Results appear in the Snyk dashboard (app.snyk.io) under the connected project, not
-in the GitHub Security tab (OSS findings are not uploaded as SARIF).
+Results appear in the Snyk dashboard (app.snyk.io) under the connected project, and
+SARIF output is published as the `snyk-oss-sarif` workflow artifact (Security tab
+upload was removed; it required paid GitHub Advanced Security).
 
 See [ADR-003](../architecture/adr-003-snyk-ai-code-security.md) for the adoption
 rationale.

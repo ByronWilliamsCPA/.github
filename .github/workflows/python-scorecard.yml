@@ -8,7 +8,6 @@
 #     scorecard:
 #       uses: ByronWilliamsCPA/.github/.github/workflows/python-scorecard.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
 #       permissions:
-#         security-events: write
 #         contents: read
 #         actions: read
 #       with:
@@ -20,7 +19,8 @@
 #
 # Features:
 #   - OpenSSF Scorecard security analysis
-#   - SARIF upload to GitHub Security tab
+#   - SARIF results published as a workflow artifact (Security tab upload
+#     removed; it required paid GitHub Advanced Security)
 #   - Supply chain security assessment
 #   - Branch protection verification
 #
@@ -61,7 +61,7 @@ on:
         default: 0
 
       upload-sarif:
-        description: 'Upload SARIF results to GitHub Security tab'
+        description: 'Deprecated: SARIF upload to the GitHub Security tab has been removed (it required paid GitHub Advanced Security). This input is accepted for backward compatibility but no longer has any effect; SARIF results are always published as a workflow artifact.'
         type: boolean
         required: false
         default: true
@@ -85,7 +85,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      security-events: write
       contents: read
       actions: read
 
@@ -137,13 +136,6 @@ jobs:
             exit 1
           fi
           echo "SARIF file generated: $(wc -l < scorecard-results.sarif) lines, $(wc -c < scorecard-results.sarif) bytes"
-
-      - name: Upload Scorecard SARIF to Security tab
-        if: ${{ inputs.upload-sarif }}
-        uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9  # v4.37.0
-        with:
-          sarif_file: scorecard-results.sarif
-          category: scorecard
 
       - name: Upload Scorecard artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1

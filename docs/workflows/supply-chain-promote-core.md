@@ -84,15 +84,15 @@ jobs:
 ```yaml
 permissions:
   contents: read
-  security-events: write   # scan job: SARIF upload
   packages: write           # publish job: push to GHCR
   id-token: write           # publish job: cosign keyless signing
   attestations: write       # publish job: build provenance attestation
   pull-requests: write      # update-lock job: opens the lock PR
 ```
 
-Job-level grants differ by job on purpose: `scan` gets only `contents: read` and
-`security-events: write` (no publish credentials reach the scan stage); `publish` adds
+Job-level grants differ by job on purpose: `scan` gets only `contents: read`
+(no publish credentials reach the scan stage, and the Grype SARIF is published
+as a workflow artifact rather than uploaded to the Security tab); `publish` adds
 `packages: write`, `id-token: write`, `attestations: write`; `update-lock` uses
 `contents: write` and `pull-requests: write` and runs only when `write_lock: true`,
 `publish` succeeded, and `github.ref == 'refs/heads/main'`.
@@ -113,9 +113,10 @@ hand-construct a tag-based ref, since that bypasses the verified-digest trust mo
 
 Grype's `--fail-on <grype_fail_on>` or Snyk's `--severity-threshold=<snyk_threshold>` exits
 non-zero when a vulnerability at or above the configured severity is found in the candidate
-image, before anything is pushed. The Grype SARIF is still uploaded to the Security tab even
-on a failing run for review. Either remediate the finding in the base/build, or (with
-appropriate approval) raise `grype_fail_on`/`snyk_threshold` for that specific promotion.
+image, before anything is pushed. The Grype SARIF is still published as the
+`grype-<image_id>-sarif` workflow artifact even on a failing run for review. Either
+remediate the finding in the base/build, or (with appropriate approval) raise
+`grype_fail_on`/`snyk_threshold` for that specific promotion.
 
 ### GHCR digest has unexpected shape
 

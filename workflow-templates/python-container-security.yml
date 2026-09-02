@@ -5,7 +5,8 @@
 #   - Scans container images with Trivy
 #   - Lints Dockerfiles with Hadolint
 #   - Generates container SBOM (optional)
-#   - Uploads SARIF to GitHub Security tab
+#   - Publishes SARIF results as workflow artifacts (Security tab upload
+#     removed; it required paid GitHub Advanced Security)
 #
 # Scan scope by trigger:
 #   - pull_request / merge_group: fixable vulnerabilities only. Base-image CVEs
@@ -78,14 +79,12 @@ jobs:
       run-hadolint: true
       hadolint-failure-threshold: 'error'
       generate-sbom: true
-      upload-sarif: true
       # Every .trivyignore.yaml entry must carry an expired_at revisit date no
       # more than 90 days out, so no suppression outlives its justification.
       enforce-ignore-expiry: true
       ignore-expiry-horizon-days: 90
     permissions:
       contents: read
-      security-events: write
 
   # Weekly revisit tracker for CVEs with no upstream fix. Separate job because
   # it needs issues: write, which the PR-path scan deliberately does not carry.

@@ -23,7 +23,7 @@ for Dockerfile linting and optionally generates a container SBOM.
 | `run-hadolint` | boolean | no | `true` | Run Hadolint Dockerfile linting |
 | `hadolint-failure-threshold` | string | no | `error` | Hadolint severity to treat as failure (error, warning, info, style, ignore, none) |
 | `generate-sbom` | boolean | no | `false` | Generate container SBOM |
-| `upload-sarif` | boolean | no | `true` | Upload SARIF results to GitHub Security tab |
+| `upload-sarif` | boolean | no | `true` | Deprecated: SARIF upload to the GitHub Security tab was removed (it required paid GitHub Advanced Security). Accepted for backward compatibility; no longer has any effect. SARIF results are always published as workflow artifacts. |
 | `artifact-retention-days` | number | no | `30` | Days to retain security scan artifacts |
 | `enable-dhi-login` | boolean | no | `true` | Enable login to Docker Hardened Images (dhi.io) registry |
 
@@ -76,13 +76,17 @@ jobs:
 - **Pull request and merge queue:** `ignore-unfixed: true`. Only findings with
   an available fix block the merge.
 - **Push to main, weekly cron, manual dispatch:** `ignore-unfixed: false`. The
-  full inventory is scanned and uploaded, so unfixed base-image CVEs stay
-  visible in the Security tab and in the weekly run summary.
+  full inventory is scanned; the SARIF report is published as the
+  `container-security-reports` workflow artifact and in the weekly run
+  summary.
 
-Keep push-to-main on the full scan. SARIF uploads replace the previous results
-for a given category and ref, so a reduced-scope scan uploading against the
-default branch would retire the unfixed alerts under `trivy-container` until
-the next full run re-opened them.
+Keep push-to-main on the full scan so unfixed base-image CVEs stay visible in
+the default-branch artifact record, not just in the reduced PR-scope scan.
+
+SARIF results are published as a workflow artifact (`container-security-reports`
+for Trivy, `hadolint-results` for Hadolint), not uploaded to the GitHub
+Security tab. That upload path required paid GitHub Advanced Security and has
+been removed.
 
 ## Suppression revisit dates
 

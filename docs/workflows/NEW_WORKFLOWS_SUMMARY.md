@@ -197,7 +197,8 @@ on:
 - [ ] Create `fuzz/` directory with fuzzing harnesses
 - [ ] Add `atheris` dependency to `pyproject.toml`
 - [ ] Configure weekly schedule in workflow
-- [ ] Enable SARIF upload for Security tab
+- [ ] Download the SARIF workflow artifact to review findings (Security tab
+      upload was removed; it required paid GitHub Advanced Security)
 
 ### 2. Performance Regression
 

@@ -10,11 +10,11 @@
 #       with:
 #         fuzz-seconds: 1200
 #         sanitizer: 'address'
-#         upload-sarif: true
 #
 # ClusterFuzzLite provides:
 #   - Continuous fuzzing for security vulnerabilities
-#   - Integration with GitHub Security tab (SARIF)
+#   - SARIF results published as a workflow artifact (Security tab upload
+#     removed; it required paid GitHub Advanced Security)
 #   - Crash artifact collection and retention
 #   - Customizable fuzzing duration and sanitizers
 #   - Support for Atheris (Python fuzzing engine)
@@ -48,7 +48,7 @@ on:
         default: 'address'
 
       upload-sarif:
-        description: 'Upload SARIF results to GitHub Security'
+        description: 'Deprecated: SARIF upload to the GitHub Security tab has been removed (it required paid GitHub Advanced Security). This input is accepted for backward compatibility but no longer has any effect; SARIF results are always published as a workflow artifact.'
         type: boolean
         required: false
         default: true
@@ -104,7 +104,6 @@ jobs:
     timeout-minutes: ${{ inputs.timeout-minutes }}
     permissions:
       contents: read
-      security-events: write
 
     steps:
       - name: Harden Runner
@@ -186,7 +185,9 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           fuzz-seconds: ${{ inputs.fuzz-seconds }}
           language: python
-          output-sarif: ${{ inputs.upload-sarif }}
+          # Always generated (no longer gated on the deprecated upload-sarif
+          # input) so findings are still archived via the artifact step below.
+          output-sarif: true
           sanitizer: ${{ inputs.sanitizer }}
 
       - name: Prune Corpus
@@ -263,12 +264,14 @@ jobs:
           path: out/artifacts
           retention-days: ${{ inputs.crash-retention-days }}
 
-      - name: Upload SARIF Report
-        if: inputs.upload-sarif && always() && steps.build.outcome == 'success'
-        uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9  # v4.37.0
+      - name: Upload SARIF artifact
+        if: always() && steps.build.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          sarif_file: sarif/cifuzz.sarif
-        continue-on-error: true
+          name: fuzzing-sarif-${{ github.run_id }}-${{ inputs.sanitizer }}
+          path: sarif/cifuzz.sarif
+          retention-days: ${{ inputs.crash-retention-days }}
+          if-no-files-found: ignore
 
       - name: Fuzzing Summary
         if: always()
