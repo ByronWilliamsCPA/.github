@@ -16,7 +16,8 @@
 #   - Grype vulnerability scanning (gating, SBOM-ingest)
 #   - OSV-Scanner vulnerability scanning (fast keyless gate, SBOM-ingest)
 #   - License compliance checking
-#   - SARIF upload to GitHub Security tab
+#   - SARIF results published as workflow artifacts (Security tab upload
+#     removed; it required paid GitHub Advanced Security)
 # ============================================================================
 
 name: Python SBOM (Reusable)
@@ -251,7 +252,6 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
-      security-events: write  # Required for SARIF upload
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
@@ -357,10 +357,9 @@ jobs:
           output-format: table
           config: ${{ steps.grypeconfig.outputs.exists == 'true' && inputs.grype-config-path || '' }}
 
-      # Distinct SARIF category `grype-runtime-deps` keeps Grype's findings in
-      # their own Security-tab partition, separate from the OSV-Scanner upload
-      # below (`osv-runtime-deps`); a shared category would make one
-      # codeql-action/upload-sarif call overwrite the other.
+      # SARIF report is published as its own workflow artifact (see the Upload
+      # Grype SARIF artifact step below); the Security tab upload was removed
+      # since it required paid GitHub Advanced Security.
       - name: Grype SBOM scan (runtime - SARIF report)
         id: grype-sarif
         if: always()
@@ -372,13 +371,14 @@ jobs:
           output-format: sarif
           config: ${{ steps.grypeconfig.outputs.exists == 'true' && inputs.grype-config-path || '' }}
 
-      - name: Upload Grype results to GitHub Security tab
+      - name: Upload Grype SARIF artifact
         if: always() && steps.grype-sarif.outputs.sarif != ''
-        uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9  # v4.37.0
-        continue-on-error: true  # Don't fail if Code Scanning not enabled on repo
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          sarif_file: ${{ steps.grype-sarif.outputs.sarif }}
-          category: grype-runtime-deps
+          name: grype-runtime-sarif
+          path: ${{ steps.grype-sarif.outputs.sarif }}
+          retention-days: ${{ inputs.artifact-retention-days }}
+          if-no-files-found: warn
 
   # ============================================================================
   # Job 2b: Scan Runtime Dependencies (OSV-Scanner - fast keyless gate)
@@ -390,11 +390,8 @@ jobs:
   # NVD, GitHub Advisory, PyPI Advisory) that catches transitives sometimes
   # missed by Snyk free tier. Gating by default; opt out with run-osv: false.
   #
-  # #CRITICAL: security-events: write is required for upload-sarif. This
-  # permission is inherited by the caller in a reusable workflow context.
-  # #VERIFY: confirm `osv-sbom-runtime-deps` category appears separately in
-  # Security > Code scanning alerts after the first run alongside the Grype
-  # category.
+  # #VERIFY: confirm the `osv-sbom-sarif` artifact is attached to the run
+  # summary alongside the `grype-runtime-sarif` artifact.
   # ============================================================================
   scan-runtime-osv:
     name: Scan Runtime Dependencies (OSV-Scanner)
@@ -404,7 +401,6 @@ jobs:
     timeout-minutes: 5
     permissions:
       contents: read
-      security-events: write
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
@@ -435,8 +431,8 @@ jobs:
           scan-args: |-
             -L sbom-runtime.cdx.json
 
-      # Secondary SARIF run: always non-gating; output written to file for
-      # Security tab upload. Runs even if the gating step above failed.
+      # Secondary SARIF run: always non-gating; output written to file for the
+      # artifact upload below. Runs even if the gating step above failed.
       - name: OSV-Scanner SBOM scan (runtime - SARIF report)
         id: osv-sarif
         if: always()
@@ -447,14 +443,6 @@ jobs:
             -L sbom-runtime.cdx.json
             --format=sarif
             --output=osv-sbom-runtime.sarif
-
-      - name: Upload OSV-Scanner results to GitHub Security tab
-        if: always()
-        uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9  # v4.37.0
-        continue-on-error: true
-        with:
-          sarif_file: osv-sbom-runtime.sarif
-          category: osv-sbom-runtime-deps
 
       - name: Upload OSV-Scanner SARIF artifact
         if: always()

@@ -33,6 +33,28 @@ an immutable point tag; see `USAGE_EXAMPLES.md` for the pinning guidance.
   `codeql-analysis` and `dependency-security` jobs and pruned them from the
   `security-gate` aggregator. The `owasp-dependency-check` job and its SARIF
   upload are unchanged.
+- **BREAKING** All `github/codeql-action/upload-sarif` call sites removed
+  fleet-wide: `python-container-security.yml` (2), `python-fuzzing.yml` (1),
+  `python-sbom.yml` (2), `python-scorecard.yml` (1), `python-snyk-iac.yml` (3),
+  `python-snyk.yml` (2), `python-docker.yml` (1),
+  `supply-chain-promote-core.yml` (1), and the `python-cifuzzy.yml` workflow
+  template (1). `upload-sarif` is GitHub's generic SARIF-ingestion endpoint
+  into the Security tab, used by every non-CodeQL scanner in this repo
+  (Trivy, Hadolint, Grype, OSV-Scanner, Snyk Code/IaC, ClusterFuzzLite,
+  OpenSSF Scorecard); it is not CodeQL scanning and does not remove any
+  scanner. GitHub now requires paid GitHub Advanced Security for SARIF
+  ingestion into the Security tab, so these uploads no longer publish
+  anywhere. Every scanner still runs; SARIF output is now published as a
+  plain `actions/upload-artifact` workflow artifact instead (added where no
+  equivalent artifact already existed) so findings remain retrievable from
+  the run. Callers no longer need to grant `security-events: write` to these
+  reusable workflows; that permission has been pruned from job- and
+  workflow-level `permissions:` blocks that no longer consume it, including
+  `sbom-nightly.yml` and the `python-scorecard.yml` / `python-container-security.yml`
+  workflow templates. The `upload-sarif` input on `python-container-security.yml`,
+  `python-fuzzing.yml`, and `python-scorecard.yml` is kept for backward
+  compatibility but is now a no-op (deprecated, matching the existing
+  `publish-results` precedent in `python-scorecard.yml`).
 
 ### Deprecated
 

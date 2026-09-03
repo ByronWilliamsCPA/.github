@@ -1,7 +1,8 @@
 # python-scorecard.yml -- Reusable OpenSSF Scorecard workflow
 
-Evaluates repository security health using OpenSSF Scorecard and uploads the
-SARIF result to the GitHub Security tab.
+Evaluates repository security health using OpenSSF Scorecard and publishes the
+SARIF result as a workflow artifact. GitHub Security tab upload was removed;
+that path required paid GitHub Advanced Security.
 
 > `publish-results` is always treated as false by this workflow. See the
 > workflow file's Known Limitations and ADR-001 for the rationale.
@@ -18,10 +19,7 @@ on:
 jobs:
   scorecard:
     uses: ByronWilliamsCPA/.github/.github/workflows/python-scorecard.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
-    with:
-      upload-sarif: true
     permissions:
-      security-events: write
       contents: read
       actions: read
 ```

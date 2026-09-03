@@ -8,7 +8,6 @@
 #       uses: ByronWilliamsCPA/.github/.github/workflows/python-snyk.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
 #       permissions:
 #         contents: read
-#         security-events: write   # SARIF upload to the Security tab
 #       with:
 #         source-directory: 'src'
 #         run-code: true           # Snyk Code (SAST)
@@ -24,12 +23,10 @@
 # org reference caller is snyk-weekly.yml.
 #
 # Caller permission contract:
-# #CRITICAL: reusable caller/callee permission inheritance. Callers MUST grant
-#   security-events: write at workflow or calling-job level, or the run fails at
-#   startup ("startup_failure" / generic "workflow file issue") before any job runs.
+# No elevated permissions are required from callers; SARIF results are
+# published as workflow artifacts rather than uploaded to the Security tab
+# (that path required paid GitHub Advanced Security and has been removed).
 # #ASSUME: SNYK_TOKEN may be absent; the workflow no-ops cleanly when it is.
-# #VERIFY: after changing permissions or the secrets block, trigger one caller run and
-#   confirm `gh run view <id> --json conclusion` is not "startup_failure".
 
 name: Python Snyk (Reusable)
 
@@ -136,7 +133,6 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
-      security-events: write
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
@@ -171,13 +167,12 @@ jobs:
             echo "gate=fail" >> "$GITHUB_OUTPUT"
           fi
           exit 0
-      - name: Upload Snyk Code SARIF
+      - name: Upload Snyk Code SARIF artifact
         if: always() && hashFiles('snyk-code.sarif') != ''
-        uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9  # v4.37.0
-        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          sarif_file: snyk-code.sarif
-          category: snyk-code
+          name: snyk-code-sarif
+          path: snyk-code.sarif
       - name: Enforce gate
         if: steps.code.outputs.gate == 'fail'
         run: exit 1
@@ -195,7 +190,6 @@ jobs:
     continue-on-error: true
     permissions:
       contents: read
-      security-events: write
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
@@ -229,13 +223,12 @@ jobs:
             --sarif-file-output=snyk-oss.sarif
           # Advisory: do not propagate the exit code.
           exit 0
-      - name: Upload Snyk OSS SARIF
+      - name: Upload Snyk OSS SARIF artifact
         if: always() && hashFiles('snyk-oss.sarif') != ''
-        uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9  # v4.37.0
-        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          sarif_file: snyk-oss.sarif
-          category: snyk-oss
+          name: snyk-oss-sarif
+          path: snyk-oss.sarif
 
   snyk-aibom:
     name: Snyk AI-BOM
@@ -308,6 +301,6 @@ jobs:
           if is_ok "$R_DETECT" && is_ok "$R_CODE" && is_ok "$R_AIBOM"; then
             echo "Snyk gate passed"
           else
-            echo "Snyk gate failed - review Snyk findings in the Security tab"
+            echo "Snyk gate failed - review Snyk findings in the workflow artifacts"
             exit 1
           fi

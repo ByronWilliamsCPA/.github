@@ -9,7 +9,6 @@
 #       uses: ByronWilliamsCPA/.github/.github/workflows/python-snyk-iac.yml@d5cf99101d4150ae5832d154cb42993705a09e31 # v7.0.1
 #       permissions:
 #         contents: read
-#         security-events: write   # required for SARIF upload
 #       with:
 #         terraform-dirs: 'infra'
 #         k8s-dirs: 'k8s manifests'  # space-separated; empty = skip
@@ -23,9 +22,9 @@
 # pull_request. The org reference caller is snyk-weekly.yml.
 #
 # Caller permission contract:
-# #CRITICAL: callers MUST grant security-events: write at workflow or calling-job
-#   level, or the run fails at startup ("startup_failure") before any job runs.
-#   See memory entry "Reusable startup_failure causes".
+# No elevated permissions are required from callers; SARIF results are
+# published as workflow artifacts rather than uploaded to the Security tab
+# (that path required paid GitHub Advanced Security and has been removed).
 # #ASSUME: SNYK_TOKEN may be absent; the workflow no-ops cleanly when it is.
 # #ASSUME: directory paths do not contain spaces (org policy; IFS splitting on
 #   space-separated input would break paths with spaces).
@@ -166,7 +165,6 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
-      security-events: write
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
@@ -202,13 +200,12 @@ jobs:
             echo "gate=fail" >> "$GITHUB_OUTPUT"
           fi
           exit 0
-      - name: Upload Terraform SARIF
+      - name: Upload Terraform SARIF artifact
         if: always() && hashFiles('iac-terraform.sarif') != ''
-        uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9  # v4.37.0
-        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          sarif_file: iac-terraform.sarif
-          category: snyk-iac-terraform
+          name: snyk-iac-terraform-sarif
+          path: iac-terraform.sarif
       - name: Enforce gate
         if: steps.terraform.outputs.gate == 'fail'
         run: exit 1
@@ -224,7 +221,6 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
-      security-events: write
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
@@ -259,13 +255,12 @@ jobs:
             echo "gate=fail" >> "$GITHUB_OUTPUT"
           fi
           exit 0
-      - name: Upload Kubernetes SARIF
+      - name: Upload Kubernetes SARIF artifact
         if: always() && hashFiles('iac-k8s.sarif') != ''
-        uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9  # v4.37.0
-        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          sarif_file: iac-k8s.sarif
-          category: snyk-iac-kubernetes
+          name: snyk-iac-kubernetes-sarif
+          path: iac-k8s.sarif
       - name: Enforce gate
         if: steps.kubernetes.outputs.gate == 'fail'
         run: exit 1
@@ -281,7 +276,6 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
-      security-events: write
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
@@ -316,13 +310,12 @@ jobs:
             echo "gate=fail" >> "$GITHUB_OUTPUT"
           fi
           exit 0
-      - name: Upload Docker Compose SARIF
+      - name: Upload Docker Compose SARIF artifact
         if: always() && hashFiles('iac-compose.sarif') != ''
-        uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9  # v4.37.0
-        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          sarif_file: iac-compose.sarif
-          category: snyk-iac-compose
+          name: snyk-iac-compose-sarif
+          path: iac-compose.sarif
       - name: Enforce gate
         if: steps.compose.outputs.gate == 'fail'
         run: exit 1
@@ -352,6 +345,6 @@ jobs:
           if is_ok "$R_TERRAFORM" && is_ok "$R_K8S" && is_ok "$R_COMPOSE"; then
             echo "Snyk IaC gate passed"
           else
-            echo "Snyk IaC gate failed - review IaC findings in the Security tab"
+            echo "Snyk IaC gate failed - review IaC findings in the workflow artifacts"
             exit 1
           fi

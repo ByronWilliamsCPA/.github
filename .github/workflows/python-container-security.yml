@@ -14,7 +14,8 @@
 # Features:
 #   - Trivy container image vulnerability scanning
 #   - Hadolint Dockerfile best practices linting
-#   - SARIF upload to GitHub Security tab
+#   - SARIF and SBOM results published as workflow artifacts (Security tab
+#     upload removed; it required paid GitHub Advanced Security)
 #   - Configurable severity thresholds
 #   - Optional container SBOM generation
 # ============================================================================
@@ -137,7 +138,7 @@ on:
 
       # Artifact configuration
       upload-sarif:
-        description: 'Upload SARIF results to GitHub Security tab'
+        description: 'Deprecated: SARIF upload to the GitHub Security tab has been removed (it required paid GitHub Advanced Security). This input is accepted for backward compatibility but no longer has any effect; SARIF results are always published as a workflow artifact.'
         type: boolean
         required: false
         default: true
@@ -173,7 +174,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      security-events: write
     timeout-minutes: 10
 
     steps:
@@ -206,13 +206,14 @@ jobs:
           format: sarif
           output-file: hadolint-results.sarif
 
-      - name: Upload Hadolint SARIF
-        if: ${{ inputs.upload-sarif && steps.check-dockerfile.outputs.exists == 'true' }}
-        uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9  # v4.37.0
+      - name: Upload Hadolint SARIF artifact
+        if: steps.check-dockerfile.outputs.exists == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          sarif_file: hadolint-results.sarif
-          category: hadolint
-        continue-on-error: true
+          name: hadolint-results
+          path: hadolint-results.sarif
+          retention-days: ${{ inputs.artifact-retention-days }}
+          if-no-files-found: ignore
 
       - name: Hadolint Summary
         if: always() && steps.check-dockerfile.outputs.exists == 'true'
@@ -322,7 +323,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      security-events: write
     timeout-minutes: 20
 
     steps:
@@ -430,8 +430,11 @@ jobs:
           trivyignores: ${{ steps.ignorefile.outputs.path }}
           exit-code: ${{ inputs.fail-on-vulnerabilities && '1' || '0' }}
 
+      # Generated unconditionally (no longer gated on the deprecated
+      # upload-sarif input) so the SARIF report always lands in the
+      # "Upload container security artifacts" step below.
       - name: Trivy SARIF report
-        if: ${{ inputs.upload-sarif && steps.image.outputs.ref != '' }}
+        if: ${{ steps.image.outputs.ref != '' }}
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
         with:
           image-ref: ${{ steps.image.outputs.ref }}
@@ -440,14 +443,6 @@ jobs:
           scanners: 'vuln'  # Only scan for vulnerabilities, not licenses
           ignore-unfixed: ${{ inputs.ignore-unfixed }}
           trivyignores: ${{ steps.ignorefile.outputs.path }}
-
-      - name: Upload Trivy SARIF
-        if: ${{ inputs.upload-sarif && steps.image.outputs.ref != '' }}
-        uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9  # v4.37.0
-        with:
-          sarif_file: trivy-container-results.sarif
-          category: trivy-container
-        continue-on-error: true
 
       - name: Generate container SBOM
         if: ${{ inputs.generate-sbom && steps.image.outputs.ref != '' }}

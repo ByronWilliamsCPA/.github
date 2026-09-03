@@ -71,7 +71,6 @@ jobs:
     with:
       fuzz-seconds: 1200  # 20 minutes
       sanitizer: 'address'
-      upload-sarif: true
 ```
 
 ## Configuration Options
@@ -82,7 +81,7 @@ jobs:
 |-------|------|---------|-------------|
 | `fuzz-seconds` | number | 600 | Duration to run fuzzers (in seconds) |
 | `sanitizer` | string | 'address' | Sanitizer to use (address, undefined, memory) |
-| `upload-sarif` | boolean | true | Upload SARIF results to GitHub Security |
+| `upload-sarif` | boolean | true | Deprecated: SARIF upload to the GitHub Security tab was removed (it required paid GitHub Advanced Security). Accepted for backward compatibility; no longer has any effect. SARIF results are always published as a workflow artifact. |
 | `crash-retention-days` | number | 14 | Days to retain crash artifacts |
 | `python-version` | string | '3.12' | Python version for fuzzing |
 | `dry-run` | boolean | false | Build fuzzers only, no execution |
@@ -150,7 +149,6 @@ jobs:
     with:
       fuzz-seconds: 1200  # Extended 20-minute run
       sanitizer: 'address'
-      upload-sarif: true
       crash-retention-days: 30
 ```
 
@@ -328,16 +326,12 @@ project/
 
 ## Security Integration
 
-### SARIF Upload
+### SARIF Reporting
 
-Results automatically upload to GitHub Security tab:
-
-```yaml
-with:
-  upload-sarif: true  # Default
-```
-
-View findings at: `https://github.com/<owner>/<repo>/security/code-scanning`
+SARIF results are published as the `fuzzing-sarif-<run-id>-<sanitizer>`
+workflow artifact. Security tab upload was removed (it required paid GitHub
+Advanced Security); download the artifact from the run's Actions summary to
+review findings.
 
 ### Crash Artifacts
 

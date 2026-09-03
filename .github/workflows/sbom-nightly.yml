@@ -52,16 +52,12 @@ on:
 # #CRITICAL: a called (reusable) workflow runs with a GITHUB_TOKEN bounded by
 # the CALLER job's permissions. The caller sets the ceiling; a callee job that
 # requests a scope the caller did not grant fails at startup (startup_failure),
-# before any job runs. This is the opposite of the earlier assumption that the
-# callee's own per-job permissions blocks are self-sufficient. The reusable's
-# scan jobs declare security-events: write to upload SARIF, so this caller must
-# grant contents: read + security-events: write on the sbom job, matching the
-# python-standard-stack.yml caller. Setting permissions: {} here (as before)
-# made every scheduled run startup_failure.
-# #VERIFY: confirm the next scheduled run's conclusion is no longer
-# startup_failure (gh run list --workflow=sbom-nightly.yml), and that
-# upload-sarif succeeds (Security > Code scanning alerts shows nightly-triggered
-# entries on a distinct ref/sha from PR-triggered ones).
+# before any job runs. python-sbom.yml's scan jobs no longer upload SARIF to
+# the Security tab (that path required paid GitHub Advanced Security and has
+# been removed), so security-events: write is no longer part of the ceiling
+# this caller needs to grant; contents: read is sufficient.
+# #VERIFY: confirm the next scheduled run's conclusion is not startup_failure
+# (gh run list --workflow=sbom-nightly.yml).
 permissions: {}
 
 jobs:
@@ -70,7 +66,6 @@ jobs:
     # below supply the production defaults. workflow_dispatch overrides them.
     permissions:
       contents: read
-      security-events: write  # ceiling for the reusable's SARIF-upload jobs
     uses: ./.github/workflows/python-sbom.yml
     with:
       python-version: ${{ inputs.python-version || '3.12' }}
