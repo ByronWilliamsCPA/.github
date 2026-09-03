@@ -143,16 +143,46 @@ jobs:
           LINK_CHECK_EXCLUDE_PATTERNS: ${{ inputs.link-check-exclude-patterns }}
         run: |
           # Convert comma-separated patterns to --exclude args
+          #
+          # #CRITICAL: LINK_CHECK_EXCLUDE_PATTERNS is a caller-supplied
+          # `workflow_call` input, and its value ends up in a `>> "$GITHUB_OUTPUT"`
+          # write. GITHUB_OUTPUT is newline-delimited `key=value`, so a pattern
+          # containing a newline lets a caller append arbitrary EXTRA outputs to
+          # this step, which the next step then interpolates onto the lychee
+          # command line. Every pattern is therefore shape-checked BEFORE it can
+          # reach the write, and a bad one fails the job loudly instead of being
+          # silently dropped.
+          # #VERIFY: pass a caller input containing a literal newline followed by
+          # `args=pwned` and confirm this step exits non-zero rather than emitting
+          # a second `args=` line.
+          set -euo pipefail
           EXCLUDE_ARGS=""
           IFS=',' read -ra PATTERNS <<< "$LINK_CHECK_EXCLUDE_PATTERNS"
           for pattern in "${PATTERNS[@]}"; do
             pattern=$(echo "$pattern" | xargs)  # Trim whitespace
-            if [ -n "$pattern" ]; then
-              EXCLUDE_ARGS="$EXCLUDE_ARGS --exclude '$pattern'"
+            if [ -z "$pattern" ]; then
+              continue
             fi
+            # Reject control characters (newline and carriage return included) and
+            # the single quote, which would otherwise close the quoting used below.
+            if printf '%s' "$pattern" | LC_ALL=C grep -qE "[[:cntrl:]']"; then
+              echo "::error::link-check-exclude-patterns contains a control character or a single quote, which is not allowed."
+              exit 1
+            fi
+            EXCLUDE_ARGS="$EXCLUDE_ARGS --exclude '$pattern'"
           done
-          echo "args=$EXCLUDE_ARGS" >> $GITHUB_OUTPUT
+          echo "args=$EXCLUDE_ARGS" >> "$GITHUB_OUTPUT"
 
+      # Do not reintroduce `--exclude-mail` here. lychee removed that flag; the
+      # current binary (v0.24.2, shipped by lychee-action v2.9.0) rejects it with
+      # `error: unexpected argument '--exclude-mail' found` and exits non-zero, so
+      # every caller's "Documentation Links" job fails before a single link is
+      # checked. Skipping mail addresses is now the DEFAULT and checking them is
+      # opt-in via `--include-mail`, so removing the flag preserves the original
+      # intent rather than changing it. #EDGE
+      # #VERIFY: `args:` is a YAML folded scalar, so a `#` comment placed INSIDE it
+      # would reach lychee as a literal argument. Keep notes above the step, never
+      # between the `args: >-` lines.
       - name: Check documentation links
         uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8  # v2.9.0
         with:
@@ -160,7 +190,6 @@ jobs:
             --verbose
             --no-progress
             --accept 200,204,206,301,302,403,429
-            --exclude-mail
             ${{ steps.exclude-args.outputs.args }}
             ${{ inputs.link-check-paths }}
           fail: ${{ inputs.link-check-fail }}
