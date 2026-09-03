@@ -1099,17 +1099,48 @@ jobs:
         run: |
           echo "::group::LLM Anti-Pattern Detection"
 
+          # `grep -r` prefixes every hit with "path:", so a filter anchored with
+          # `^[[:space:]]*#` can never match and silently excluded nothing. Anchor
+          # after the path separator instead. #EDGE
+          # #VERIFY: a commented-out assignment must not be reported by any
+          # check in this step. Reproduce with a one-line .py file containing a
+          # commented assignment and confirm no output.
+          COMMENT_LINE=':[[:space:]]*#'
+
           # Hardcoded localhost/URLs
           echo "Checking for hardcoded localhost/URLs..."
           if grep -rE "(localhost|127\.0\.0\.1|http://|https://)" --include="*.py" "$SRC_DIR"/ | \
-             grep -v "#LLM-PLACEHOLDER" | grep -v "^[[:space:]]*#"; then
+             grep -v "#LLM-PLACEHOLDER" | grep -vE "$COMMENT_LINE"; then
             echo "::warning::Found hardcoded URLs without #LLM-PLACEHOLDER tag"
           fi
 
-          # Hardcoded secrets patterns
+          # Hardcoded secrets patterns.
+          #
+          # This is the only check in this step that fails the build, so its false
+          # positive rate matters. Two exclusions keep it honest without weakening it:
+          #
+          #   Test code. An assertion like `OpenAIModelProvider(api_key="test-key")`
+          #   is a fixture, not a leaked credential. Scanning tests produced dozens of
+          #   hard failures across the fleet with zero true positives. Renaming those
+          #   fixtures to dodge a keyword regex would be evasion, not a fix.
+          #
+          #   Obvious placeholder values. A literal that says it is fake is not a
+          #   secret. A real credential that happens to contain one of these words is
+          #   not something this heuristic could ever have caught anyway.
+          #
+          # #CRITICAL: this step is the only automated secret gate in python-ci.yml.
+          # #VERIFY: after any edit here, confirm a genuine-looking literal such as
+          # `api_key = "sk-live-0000000000"` in source (not tests) still exits 1.
           echo "Checking for potential hardcoded secrets..."
-          if grep -rE "(api_key|password|secret|token)\s*=\s*[\"'][^\"']+[\"']" --include="*.py" "$SRC_DIR"/ | \
-             grep -v "#LLM-PLACEHOLDER" | grep -v "^[[:space:]]*#"; then
+          PLACEHOLDER_VALUE='(test|fake|dummy|sample|example|placeholder|redacted|changeme|xxx+|your[-_]|<[^>]*>)'
+          if grep -rE "(api_key|password|secret|token)\s*=\s*[\"'][^\"']+[\"']" \
+               --include="*.py" \
+               --exclude-dir=tests --exclude-dir=test --exclude-dir=testing \
+               --exclude='test_*.py' --exclude='*_test.py' --exclude=conftest.py \
+               "$SRC_DIR"/ | \
+             grep -v "#LLM-PLACEHOLDER" | \
+             grep -vE "$COMMENT_LINE" | \
+             grep -viE "=\s*[\"']$PLACEHOLDER_VALUE"; then
             echo "::error::Potential hardcoded secret detected"
             exit 1
           fi
@@ -1118,7 +1149,7 @@ jobs:
           echo "Checking for magic numbers..."
           MAGIC_NUMBERS=$(grep -rE "\b[0-9]{2,}\b" --include="*.py" "$SRC_DIR"/ | \
                           grep -v "#LLM-PLACEHOLDER" | \
-                          grep -v "^[[:space:]]*#" | \
+                          grep -vE "$COMMENT_LINE" | \
                           wc -l || echo "0")
 
           if [ "$MAGIC_NUMBERS" -gt 10 ]; then
