@@ -88,6 +88,15 @@ on:
         required: false
         default: false
 
+      skip-schedule-if-idle-days:
+        description: >-
+          On schedule events only, skip the matrix when the default branch has
+          had no commit in this many days. 0 disables the check. Push and
+          pull_request runs are never skipped.
+        type: number
+        required: false
+        default: 14
+
       source-directory:
         description: 'Source code directory'
         type: string
@@ -164,12 +173,67 @@ jobs:
     timeout-minutes: 5
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
+      skip: ${{ steps.idle-check.outputs.skip }}
 
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
         with:
           egress-policy: audit
+
+      # Skip the scheduled matrix on a repository nobody is committing to.
+      #
+      # This workflow answers "does this code still work on these Python
+      # versions and operating systems". That answer is a pure function of the
+      # commit under test, so re-running it weekly against an unchanged default
+      # branch re-derives an identical result at full matrix cost. It is NOT
+      # the same as a vulnerability scan, which resolves a frozen lockfile
+      # against a live CVE feed and so genuinely can change with zero commits.
+      # Those workflows must keep their schedules; this one need not.
+      #
+      # The gate is self-healing rather than a cron deletion: the moment
+      # somebody commits, the next scheduled run covers the full matrix again,
+      # with no caller change required. Push and pull_request runs are never
+      # affected.
+      #
+      # #ASSUME the GITHUB_TOKEN reaching this reusable workflow can read the
+      # calling repository's commits; `contents: read` is declared on this job.
+      # #VERIFY if this step ever fails, it emits skip=false and the matrix runs
+      # as before, so a token or API problem costs minutes but never silently
+      # drops coverage.
+      - name: Check repository activity
+        id: idle-check
+        if: ${{ github.event_name == 'schedule' && inputs.skip-schedule-if-idle-days > 0 }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IDLE_DAYS: ${{ inputs.skip-schedule-if-idle-days }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          REPO: ${{ github.repository }}
+        run: |
+          LAST=$(gh api "repos/${REPO}/commits/${DEFAULT_BRANCH}" \
+                   --jq '.commit.committer.date' 2>/dev/null || echo "")
+          if [ -z "$LAST" ]; then
+            echo "Could not read last commit date; running the matrix." >&2
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          AGE=$(( ( $(date -u +%s) - $(date -u -d "$LAST" +%s) ) / 86400 ))
+          echo "Default branch ${DEFAULT_BRANCH} last commit: $LAST (${AGE} days ago)"
+          if [ "$AGE" -ge "$IDLE_DAYS" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Python Compatibility skipped"
+              echo
+              echo "No commit on \`${DEFAULT_BRANCH}\` in ${AGE} days" \
+                   "(threshold ${IDLE_DAYS}). The matrix result cannot have" \
+                   "changed since the last run, so it was not re-run."
+              echo
+              echo "It resumes automatically on the next commit. Set" \
+                   "\`skip-schedule-if-idle-days: 0\` to disable this."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Build matrix configuration
         id: set-matrix
@@ -230,8 +294,11 @@ jobs:
       NO_BUILD_FLAG: ${{ inputs.no-build && '--no-build' || '' }}
     permissions:
       contents: read
-    # Skip expensive matrix on draft PRs unless explicitly disabled
-    if: ${{ !(inputs.skip-on-draft && github.event.pull_request.draft) }}
+    # Skip expensive matrix on draft PRs, and on scheduled runs against a
+    # repository that has not been committed to (see the idle-check step).
+    if: >-
+      ${{ !(inputs.skip-on-draft && github.event.pull_request.draft)
+          && needs.build-matrix.outputs.skip != 'true' }}
 
     strategy:
       fail-fast: ${{ inputs.fail-fast }}
