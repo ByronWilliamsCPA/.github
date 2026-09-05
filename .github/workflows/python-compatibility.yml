@@ -22,7 +22,13 @@
 #
 # Cost Optimization:
 #   - Draft PRs: Skips matrix testing by default (92% reduction)
-#   - Ready PRs: Runs full matrix for comprehensive validation
+#   - Pull requests: Linux only. macOS and Windows are dropped from the matrix
+#     on pull_request events even when include-macos / include-windows are set,
+#     because GitHub bills macOS at 10x Linux and Windows at 2x while those jobs
+#     finish in 1-2 minutes. The weekly schedule still runs the full matrix, so
+#     cross-platform coverage is unchanged; only the per-PR repetition is gone.
+#     Opt back in per caller with include-macos-on-pr / include-windows-on-pr.
+#   - Scheduled, push, and workflow_dispatch runs: full matrix, unchanged.
 #   - Override: Set skip-on-draft: false to force matrix on drafts
 #
 # System Dependencies Example (for packages like python-magic):
@@ -62,6 +68,22 @@ on:
 
       include-macos:
         description: 'Include macOS in the matrix'
+        type: boolean
+        required: false
+        default: false
+
+      include-windows-on-pr:
+        description: >-
+          Also run Windows on pull_request events. Off by default: Windows
+          bills at 2x Linux, and the weekly schedule already covers it.
+        type: boolean
+        required: false
+        default: false
+
+      include-macos-on-pr:
+        description: >-
+          Also run macOS on pull_request events. Off by default: macOS bills
+          at 10x Linux, and the weekly schedule already covers it.
         type: boolean
         required: false
         default: false
@@ -156,11 +178,32 @@ jobs:
           PYTHON_INPUT: ${{ inputs.python-versions }}
           INCLUDE_WINDOWS: ${{ inputs.include-windows }}
           INCLUDE_MACOS: ${{ inputs.include-macos }}
+          WINDOWS_ON_PR: ${{ inputs.include-windows-on-pr }}
+          MACOS_ON_PR: ${{ inputs.include-macos-on-pr }}
+          IS_PULL_REQUEST: ${{ github.event_name == 'pull_request' }}
         run: |
           # Start with the provided operating systems
           OS_LIST="$OS_INPUT"
 
-          # Add additional platforms if requested
+          # Add additional platforms if requested.
+          #
+          # Windows bills at 2x Linux and macOS at 10x, and in practice these
+          # jobs finish in 1-2 wall-clock minutes, so the multiplier is nearly
+          # the whole cost. On a pull_request they are also pure repetition:
+          # every caller of this workflow also runs it on a weekly schedule,
+          # which still builds the full matrix. So a PR gets Linux only unless
+          # the caller opts back in.
+          #
+          # #ASSUME every caller triggers this workflow on `schedule` as well as
+          # `pull_request`, so cross-platform coverage survives this gate.
+          # #VERIFY before adding a caller that runs on pull_request ONLY: such a
+          # caller must set include-macos-on-pr / include-windows-on-pr, or it
+          # silently loses cross-platform testing entirely.
+          if [ "$IS_PULL_REQUEST" == "true" ]; then
+            [ "$WINDOWS_ON_PR" == "true" ] || INCLUDE_WINDOWS=false
+            [ "$MACOS_ON_PR" == "true" ]   || INCLUDE_MACOS=false
+          fi
+
           if [ "$INCLUDE_WINDOWS" == "true" ]; then
             OS_LIST=$(echo "$OS_LIST" | jq '. + ["windows-latest"] | unique')
           fi
