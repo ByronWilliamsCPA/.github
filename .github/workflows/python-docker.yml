@@ -328,6 +328,21 @@ jobs:
       # non-amd64 image, replace the hardcoded linux/amd64 above with a
       # dedicated platform input; confirm no current caller expects
       # arm64-specific local-scan coverage before making that change.
+
+      # #CRITICAL: external resources: docker/build-push-action requires at
+      # least one fully qualified tag when pushing to a registry. If a caller
+      # disables tag-sha, tag-pr, and tag-semver, uses a non-default branch
+      # (disabling tag-latest), and leaves additional-tags empty, the
+      # metadata-action step above produces no tags at all, and build-push
+      # fails downstream with the generic "tag is needed when pushing to
+      # registry" error. This guard turns that into a clear, targeted message
+      # at the actual point of misconfiguration.
+      - name: Verify at least one image tag was generated
+        if: steps.push-check.outputs.push == 'true' && steps.meta.outputs.tags == ''
+        run: |
+          echo "::error::docker/metadata-action produced no tags. Enable at least one of tag-sha, tag-pr, or tag-semver, use the default branch for tag-latest, or set additional-tags, before pushing to a registry."
+          exit 1
+
       - name: Build and push Docker image
         id: build-push
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a  # v7.3.0
@@ -369,18 +384,19 @@ jobs:
           ignore-unfixed: ${{ inputs.trivy-ignore-unfixed }}
           exit-code: ${{ inputs.trivy-fail-on-vuln && '1' || '0' }}
 
-      # #CRITICAL: external-resources: image-ref must be a tag actually pushed
+      # #CRITICAL: external resources: image-ref must be a tag actually pushed
       # by the build step above. type=sha,enable=${{ inputs.tag-sha }} produces
       # `sha-<short-sha>` (metadata-action's default short format), not the
       # raw `github.sha`, so reconstructing the tag from github.sha here
       # pointed at a manifest that was never pushed and failed every
       # registry-image scan with "manifest unknown". Reading the first tag
-      # out of steps.meta.outputs.json instead guarantees this always matches
-      # whatever tags/format inputs.tag-sha, inputs.tag-latest, etc. actually
-      # produced, the same tag the local-image scan step already keys off of.
-      # #VERIFY: if tag-sha is ever disabled and no other tag is enabled,
-      # tags[0] would be empty; callers are expected to keep at least one tag
-      # input enabled, matching this workflow's existing defaults.
+      # out of steps.meta.outputs.json instead matches whatever tags/format
+      # inputs.tag-sha, inputs.tag-latest, etc. actually produced, the same
+      # tag the local-image scan step already keys off of.
+      # #VERIFY: the "Verify at least one image tag was generated" guard,
+      # right after the metadata step earlier in this job, fails the job
+      # before build-push runs if metadata-action produced no tags, so
+      # tags[0] is guaranteed non-empty by the time this step executes.
       - name: Run Trivy vulnerability scanner (registry image)
         if: inputs.enable-trivy-scan && steps.push-check.outputs.push == 'true'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
