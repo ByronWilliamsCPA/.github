@@ -304,14 +304,31 @@ jobs:
             # Additional custom tags
             ${{ inputs.additional-tags }}
 
+      # #CRITICAL: external-resources: the local-scan path below (push=false,
+      # enable-trivy-scan=true) needs this build to end up in the runner's
+      # local Docker image store, since "Export local image for scanning"
+      # does `docker save` on it. buildx only populates that store when
+      # `load: true` is set; without it, the image exists only in the build
+      # cache and docker save fails with "reference does not exist". Loading
+      # also requires a single-platform build (the docker exporter cannot
+      # materialize a multi-arch manifest list locally), so this path is
+      # pinned to linux/amd64 rather than the multi-arch default. The
+      # push=true path is untouched: it keeps full multi-platform builds and
+      # scans the pushed registry image instead (see the two Trivy steps
+      # below), so this only changes behavior on a path that previously
+      # failed on every single invocation.
+      # #VERIFY: if a downstream repo ever needs local scanning of a
+      # non-amd64 image, this will need a platform input instead of a
+      # hardcoded value.
       - name: Build and push Docker image
         id: build-push
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a  # v7.3.0
         with:
           context: ${{ inputs.context }}
           file: ${{ inputs.dockerfile }}
-          platforms: ${{ inputs.platforms }}
+          platforms: ${{ (inputs.enable-trivy-scan && steps.push-check.outputs.push != 'true') && 'linux/amd64' || inputs.platforms }}
           push: ${{ steps.push-check.outputs.push }}
+          load: ${{ inputs.enable-trivy-scan && steps.push-check.outputs.push != 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: ${{ inputs.build-args }}
