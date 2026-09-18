@@ -369,11 +369,23 @@ jobs:
           ignore-unfixed: ${{ inputs.trivy-ignore-unfixed }}
           exit-code: ${{ inputs.trivy-fail-on-vuln && '1' || '0' }}
 
+      # #CRITICAL: external-resources: image-ref must be a tag actually pushed
+      # by the build step above. type=sha,enable=${{ inputs.tag-sha }} produces
+      # `sha-<short-sha>` (metadata-action's default short format), not the
+      # raw `github.sha`, so reconstructing the tag from github.sha here
+      # pointed at a manifest that was never pushed and failed every
+      # registry-image scan with "manifest unknown". Reading the first tag
+      # out of steps.meta.outputs.json instead guarantees this always matches
+      # whatever tags/format inputs.tag-sha, inputs.tag-latest, etc. actually
+      # produced, the same tag the local-image scan step already keys off of.
+      # #VERIFY: if tag-sha is ever disabled and no other tag is enabled,
+      # tags[0] would be empty; callers are expected to keep at least one tag
+      # input enabled, matching this workflow's existing defaults.
       - name: Run Trivy vulnerability scanner (registry image)
         if: inputs.enable-trivy-scan && steps.push-check.outputs.push == 'true'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
         with:
-          image-ref: ${{ steps.image-name.outputs.name }}:${{ github.sha }}
+          image-ref: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
           format: 'sarif'
           output: 'trivy-results.sarif'
           severity: ${{ inputs.trivy-severity }}
