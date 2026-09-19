@@ -33,7 +33,7 @@ jobs:
       security-events: write
       pull-requests: write
       actions: read
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-security-analysis.yml@7d12f5486ab5c856397ebaa4acd3c99ca385227c # v9.0.0
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-security-analysis.yml@50e3c9783a7f43613651d5c5688d99cb748a8a22 # v9.1.1
     with:
       python-version: "3.12"
       # #CRITICAL: these two inputs must keep being passed as false until the
@@ -61,7 +61,7 @@ jobs:
     if: always()
     steps:
       - name: Harden runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1  # v2.21.1
         with:
           egress-policy: audit
       - name: Check security scan results
