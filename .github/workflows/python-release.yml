@@ -139,12 +139,12 @@ jobs:
       NO_BUILD_FLAG: ${{ inputs.no-build && '--no-build' || '' }}
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1  # v2.21.1
         with:
           egress-policy: audit
 
       - name: Checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           fetch-depth: 0
 
@@ -258,7 +258,7 @@ jobs:
 
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1  # v2.21.1
         with:
           egress-policy: audit
 
@@ -286,7 +286,7 @@ jobs:
           echo "Pre-release tests skipped intentionally. Reason: $SKIP_TESTS_REASON"
 
       - name: Checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           fetch-depth: 0
           token: ${{ github.token }}
@@ -372,7 +372,7 @@ jobs:
         # working tree when commit is disabled; the build below depends on it.
         # #ASSUME github.token has contents: write (granted at job level above).
         # #VERIFY: caller must pass contents: write in their permissions block.
-        uses: python-semantic-release/python-semantic-release@39dd2052f2ce8282a5d932c31d58a2ca06d2550e  # v10.6.1
+        uses: python-semantic-release/python-semantic-release@9a026e9303981c866c3425723009becb2437c757  # v10.6.2
         with:
           github_token: ${{ github.token }}
           git_committer_name: "github-actions[bot]"
@@ -488,7 +488,7 @@ jobs:
         # potential future provenance use.
         # #VERIFY: if Sigstore bundle uploads fail, check the id-token and contents
         # grants, not attestations.
-        uses: sigstore/gh-action-sigstore-python@5b79a39c381910c090341a2c9b0bf022c8b387e1  # v3.4.0
+        uses: sigstore/gh-action-sigstore-python@790bc6befb9d733738f18d8f895854b453640ec9  # v3.5.0
         with:
           inputs: ./dist/*.tar.gz ./dist/*.whl
           release-signing-artifacts: true
@@ -520,7 +520,7 @@ jobs:
 
       - name: Create GitHub Release (Manual)
         if: ${{ !inputs.semantic-release }}
-        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b  # v3.0.1
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64  # v3.0.3
         with:
           tag_name: ${{ steps.manual-release.outputs.tag }}
           generate_release_notes: true
@@ -579,7 +579,7 @@ jobs:
       url: https://pypi.org/project/${{ inputs.pypi-package-name }}/
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1  # v2.21.1
         with:
           egress-policy: audit
 
