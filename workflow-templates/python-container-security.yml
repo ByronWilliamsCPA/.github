@@ -61,7 +61,7 @@ permissions: {}
 jobs:
   container-security:
     name: Container Security Scan
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-container-security.yml@7d12f5486ab5c856397ebaa4acd3c99ca385227c # v9.0.0
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-container-security.yml@b7c661ec3bfeb04370ce3a9c748bd8c4e93bfe89 # v10.1.9
     with:
       dockerfile-path: './Dockerfile'
       build-image: true
@@ -97,7 +97,7 @@ jobs:
     # follows v9.0.0. Advance this pin to that release SHA before adopting the
     # template downstream; a pin at v9.0.0 resolves to a workflow that does not
     # exist there and the job errors at run time.
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-container-revisit.yml@7d12f5486ab5c856397ebaa4acd3c99ca385227c # v9.0.0
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-container-revisit.yml@b7c661ec3bfeb04370ce3a9c748bd8c4e93bfe89 # v10.1.9
     with:
       dockerfile-path: './Dockerfile'
       build-image: true
