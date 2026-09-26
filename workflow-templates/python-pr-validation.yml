@@ -33,7 +33,7 @@ permissions:
 jobs:
   pr-validation:
     name: PR Validation
-    uses: ByronWilliamsCPA/.github/.github/workflows/python-pr-validation.yml@7d12f5486ab5c856397ebaa4acd3c99ca385227c # v9.0.0
+    uses: ByronWilliamsCPA/.github/.github/workflows/python-pr-validation.yml@50e3c9783a7f43613651d5c5688d99cb748a8a22 # v9.1.1
     with:
       python-version: '3.12'
       source-directory: 'src'

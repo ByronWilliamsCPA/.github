@@ -109,12 +109,12 @@ jobs:
       id-token: write
     steps:
       - name: Harden runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1  # v2.21.1
         with:
           egress-policy: audit
 
       - name: Checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           # #ASSUME: depth 1 suffices; the reviewer reads PR state through
           # the gh CLI, not local git history.
@@ -138,7 +138,7 @@ jobs:
         run: git submodule update --init --recursive
 
       - name: Run baseline triage review
-        uses: anthropics/claude-code-action@e90deca47693f9457b72f2b53c17d7c445a87342  # v1.0.171
+        uses: anthropics/claude-code-action@8cf3482550831fb35a4fc3fbf7ca139cf8028b4c  # v1.0.233
         with:
           # #CRITICAL: secret reference; ANTHROPIC_API_KEY must exist as a
           # repository or organization secret or this step fails at startup.
