@@ -110,12 +110,12 @@ jobs:
       state: ${{ steps.detect.outputs.state }}
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1  # v2.21.1
         with:
           egress-policy: audit
 
       - name: Checkout repository
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
@@ -254,7 +254,7 @@ jobs:
       contents: read
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1  # v2.21.1
         with:
           egress-policy: audit
 
@@ -286,7 +286,7 @@ jobs:
       # The sparse-checkout uses the caller-configured grype-config-path so a custom
       # path (e.g., configs/.grype.yaml) is fetched too. Path is validated above.
       - name: Checkout repository (for grype config and SARIF context)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           sparse-checkout: |
             ${{ inputs.grype-config-path }}
@@ -349,7 +349,7 @@ jobs:
       # caller's required check. Setting it false makes the scan advisory.
       - name: Grype SBOM scan (runtime)
         id: grype-table
-        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2  # v7.4.0
+        uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439  # v7.4.2
         with:
           sbom: sbom-runtime.cdx.json
           fail-build: ${{ inputs.fail-on-vulnerabilities }}
@@ -363,7 +363,7 @@ jobs:
       - name: Grype SBOM scan (runtime - SARIF report)
         id: grype-sarif
         if: always()
-        uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2  # v7.4.0
+        uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439  # v7.4.2
         with:
           sbom: sbom-runtime.cdx.json
           fail-build: false
@@ -403,12 +403,12 @@ jobs:
       contents: read
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1  # v2.21.1
         with:
           egress-policy: audit
 
       - name: Checkout repository (for SARIF context)
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           sparse-checkout: |
             .git
@@ -425,7 +425,7 @@ jobs:
       # clean, 127 for unexpected error. continue-on-error only suppresses
       # non-zero exits; step-level failure is still visible in the log.
       - name: OSV-Scanner SBOM scan (runtime)
-        uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2  # v2.3.8
+        uses: google/osv-scanner-action/osv-scanner-action@a345acffa64b0eaede81a3d9aae6141214d9c8fc  # v2.6.0
         continue-on-error: ${{ !inputs.fail-on-vulnerabilities }}
         with:
           scan-args: |-
@@ -436,7 +436,7 @@ jobs:
       - name: OSV-Scanner SBOM scan (runtime - SARIF report)
         id: osv-sarif
         if: always()
-        uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2  # v2.3.8
+        uses: google/osv-scanner-action/osv-scanner-action@a345acffa64b0eaede81a3d9aae6141214d9c8fc  # v2.6.0
         continue-on-error: true
         with:
           scan-args: |-
@@ -466,7 +466,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1  # v2.21.1
         with:
           egress-policy: audit
 
@@ -499,7 +499,7 @@ jobs:
       # #VERIFY: on first caller run, confirm the checked-out script SHA matches
       # the called workflow ref in the job log.
       - name: Checkout license checker script
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
           repository: ${{ job.workflow_repository }}
           ref: ${{ job.workflow_sha }}
