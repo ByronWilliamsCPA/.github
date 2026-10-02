@@ -377,7 +377,7 @@ jobs:
           github_token: ${{ github.token }}
           git_committer_name: "github-actions[bot]"
           git_committer_email: "github-actions[bot]@users.noreply.github.com"
-          force_level: ${{ inputs.force-release }}
+          force: ${{ inputs.force-release }}
           # Branch ruleset blocks direct commits; tag refs are exempt. Skipping
           # the version-bump commit means PSR only pushes a tag, which succeeds
           # without any bypass actor.
