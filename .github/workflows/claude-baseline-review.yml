@@ -109,7 +109,7 @@ jobs:
       id-token: write
     steps:
       - name: Harden runner
-        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25  # v2.22.1
+        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2  # v2.22.2
         with:
           egress-policy: audit
 
@@ -138,7 +138,7 @@ jobs:
         run: git submodule update --init --recursive
 
       - name: Run baseline triage review
-        uses: anthropics/claude-code-action@5eb090f3c3afd701a0672cd32981197ca27688f6  # v1.0.253
+        uses: anthropics/claude-code-action@db77d4d3c98f3f6380e7cd45ffba2342a3dbde3c  # v1.0.254
         with:
           # #CRITICAL: secret reference; ANTHROPIC_API_KEY must exist as a
           # repository or organization secret or this step fails at startup.
