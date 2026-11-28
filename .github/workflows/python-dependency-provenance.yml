@@ -102,7 +102,7 @@ jobs:
       any: ${{ steps.detect.outputs.any }}
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2  # v2.22.2
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
         with:
           egress-policy: audit
       - name: Checkout repository
@@ -188,7 +188,7 @@ jobs:
       ECOSYSTEMS: ${{ needs.detect-config.outputs.ecosystems }}
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2  # v2.22.2
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
         with:
           egress-policy: audit
 
@@ -196,13 +196,13 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
 
       - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
         with:
           python-version: ${{ inputs.python-version }}
 
       - name: Install UV
         if: env.PYTHON_STATE != 'skip'
-        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
         with:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
@@ -239,7 +239,7 @@ jobs:
       - name: Run OSV-Scanner (Python)
         if: env.PYTHON_STATE != 'skip'
         continue-on-error: true
-        uses: google/osv-scanner-action/osv-scanner-action@b1d267aea5211fa648d9d442fa64b90dbdcbdd36  # v2.7.0
+        uses: google/osv-scanner-action/osv-scanner-action@32d3cd482bdadfb38b186c0ad1b031902d55d932  # v2.7.1
         with:
           scan-args: |-
             --lockfile=${{ steps.python-inputs.outputs.osv-target }}
@@ -346,7 +346,7 @@ jobs:
       issues: write
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2  # v2.22.2
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
         with:
           egress-policy: audit
 
@@ -422,7 +422,7 @@ jobs:
       contents: read
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2  # v2.22.2
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
         with:
           egress-policy: audit
       - name: Validate job results

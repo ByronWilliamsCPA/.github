@@ -42,7 +42,7 @@ jobs:
 
     steps:
       - name: Harden the runner (Audit outbound calls)
-        uses: step-security/harden-runner@dc2769abcc0fcfbadfc1df54081c1608579ef6b2  # v2.22.2
+        uses: step-security/harden-runner@1d88384fd173af6ecb012dfd0264a306b711241a  # v2.22.4
         with:
           egress-policy: audit
 
@@ -96,7 +96,7 @@ jobs:
       # valid rules. Note that args: is a folded block scalar: keep each value space-free,
       # because YAML joins these lines with spaces and the scanner splits on whitespace.
       - name: SonarCloud Scan
-        uses: SonarSource/sonarqube-scan-action@4d1dc0c91ee400dcf8a6dddf2f705ac36542e304 # v8
+        uses: SonarSource/sonarqube-scan-action@70bad232163b09d998ea0707ee80c0ec80798c16 # v8
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed for PR decoration
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}      # SonarCloud authentication
